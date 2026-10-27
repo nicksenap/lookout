@@ -111,6 +111,33 @@ describe("stack contents", () => {
     expect(e.some((l) => l.includes("fixture · done"))).toBe(true);
   });
 
+  test("claims: a contradicted claim shows on its card and in the header; c opens the claims view with door and radius; esc returns", async () => {
+    const { app, screen } = await mount("review-c", 110, 32);
+    const s = screen();
+    expect(s[0]).toContain("1 claim ✗");
+    expect(s.some((l) => l.includes("2 claims ✗"))).toBe(true);
+    expect(s.some((l) => l.includes("✗ contradicted 88%") && l.includes("Shell variables"))).toBe(true);
+    expect(s.some((l) => l.includes("tests touched"))).toBe(true);
+    expect(s.some((l) => l.includes("covers card 1"))).toBe(true);
+    expect(s.at(-1)).toContain("c claims");
+    app.stdin.write("c");
+    await tick();
+    const c = screen();
+    expect(c.some((l) => l.startsWith("claims (4)"))).toBe(true);
+    expect(c.some((l) => l.includes("∅ not in diff") && l.includes("PATH"))).toBe(true);
+    expect(c.some((l) => l.includes("diff says two-way") && l.includes("author says two-way"))).toBe(true);
+    expect(c.some((l) => l.startsWith("radius") && l.includes("2 importers") && l.includes('"minimal"'))).toBe(true);
+    expect(widest(c)).toBeLessThanOrEqual(110);
+    app.stdin.write("\x1b");
+    await tick();
+    expect(screen().some((l) => l.startsWith("claims (4)"))).toBe(false);
+    app.stdin.write("\r");
+    await tick();
+    const e = screen();
+    expect(e.some((l) => l.startsWith("claims (2)"))).toBe(true);
+    expect(e.some((l) => l.startsWith("tests  touched by Test user environment"))).toBe(true);
+  });
+
   test("a without dispatchers shows a notice in the footer, not a crash", async () => {
     const { app, screen } = await mount("review-b", 100, 30, { dispatchable: false });
     app.stdin.write("a");

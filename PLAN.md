@@ -69,8 +69,8 @@ Rule: **deterministic where it can be, Decisions where a typed answer will do, L
 | 3 | Group blocks into logical changes: kind first; punctuation-only orphans join their hunk neighbour; mechanical kinds form one card per kind across files; others merge by hunk proximity or a shared changed identifier | rules | 0 |
 | 4 | Mechanical cards (typing/rename/move): deterministic title and one-line paragraph | rules | 0 |
 | 5 | Title + ≤3-sentence paragraph per non-mechanical card, from its own edits only, cached by card id | llm (reasoning low) | N, parallel |
-| 6 | Extract claims from the PR body; template-aware for `/pr` bodies (Summary, Evidence, Merge Danger) | llm | 1 |
-| 7 | Ground each claim: `supported \| contradicted \| not-in-diff`; evidence = `choice` over cards | decide | 1 batched |
+| 6 | Claims = the body's `- ` bullets, tagged by section; `Door:` and `Blast Radius:` lines of a `/pr` body. The model is asked only when the summary has no bullets (prose, a diagram or diff sketch) | rules, llm fallback | 0–1 |
+| 7 | Ground each claim: `supported \| contradicted \| not-in-diff`; evidence = `choice` over cards; confidence gate (✗ needs ≥ 0.7, anything < 0.4 is `unclear`). The door claim is judged by rules against the diff's one-way signals | decide | 1 batched |
 | 8 | Card risk: sensitive? behavior change? reversible? test-covered? → color; merged with rule floors; tier + humans derived | decide | 1 batched |
 | 9 | Proposer agents per card (on demand or by depth) | agents | existing runner |
 | 10 | Verifier: evidence or reject per finding; Decisions scores confidence; gate | agents + decide | per finding |
@@ -125,14 +125,16 @@ fixtures/     real diffs, PR bodies (incl. /pr template), recorded agent outputs
 ```ts
 EditBlock  { id, path, hunkId, from, to (index range into hunk.lines), oldRange?, newRange?, labels, attention, score }   // lives on Hunk.blocks; hunk labels/attention/score derive from its blocks
 Card       { id, title, color: red|amber|green|grey, kind, flags, areas: string[], blockIds, paragraph?,
-             claimIds, unmentioned: boolean, findings: Finding[], questions: Question[], testsTouched: boolean }
-Claim      { id, text, section?: summary|evidence|door|radius, status: supported|contradicted|not-in-diff, cardId? }
+             claimIds, unmentioned: boolean, testsTouched: boolean, covers?: cardId[], doorSignals?: DoorSignal[], findings: Finding[], questions: Question[] }
+Claim      { id, text, section: summary|evidence|door|radius, status?: supported|contradicted|not-in-diff|unclear, confidence?, cardId? }
+Door       { author?: one-way|two-way, computed: one-way|two-way, signals: DoorSignal[] }   // DoorSignal { kind, path, line?, text }
+Radius     { author?: string, areas: string[], importers?: string[], warning? }
 Finding    { id, severity, title, body, anchor?, dispatcher, status: proposed|confirmed|rejected|unsure,
              evidence?, verifierNote?, preExisting: boolean }
 Question   { id, text, answer?: yes|no|unsure }
 Verdict    { tier: low|medium|high, requiredHumans: 0|1|2, reasons: string[] }
-Review     { changeSet, cards, verdict, untouched: string[], claims, dispatches, depth, rankedBy, timing, warning? }
-ReviewEvent   { type: card.updated | finding.added | claim.updated | dispatch.output | verdict.updated | done, id?, patch? }
+Review     { changeSet, cards, verdict, untouched: string[], claims, door, radius, dispatches, depth, rankedBy, timing, warning? }
+ReviewEvent   { type: card.updated | finding.added | claim.updated | claims.replaced | evidence.updated | dispatch.output | verdict.updated | done, id?, patch? }
 ReviewCommand { type: dispatchCard | dispatchAll | cancel | answerQuestion | setDepth | refresh, ... }
 ```
 

@@ -4776,7 +4776,10 @@
       "attention": "needs-eyes",
       "score": 0.738,
       "blockKind": "behavior",
-      "paragraph": "`parseDiff` now splits each hunk into contiguous changed-line blocks, and `applyRules` and model scoring rank blocks individually before `deriveHunk` aggregates their labels, attention, and score. `inert-audit.ts` reports inert edit blocks instead of hunks, while `rankWithModel` uses `Result` helpers to capture scoring failures and cache-save errors."
+      "paragraph": "`parseDiff` now splits each hunk into contiguous changed-line blocks, and `applyRules` and model scoring rank blocks individually before `deriveHunk` aggregates their labels, attention, and score. `inert-audit.ts` reports inert edit blocks instead of hunks, while `rankWithModel` uses `Result` helpers to capture scoring failures and cache-save errors.",
+      "testsTouched": true,
+      "claimIds": [],
+      "unmentioned": false
     },
     {
       "id": "a4430321ec76",
@@ -4791,7 +4794,10 @@
       "attention": "needs-eyes",
       "score": 0.611,
       "blockKind": "types",
-      "paragraph": "`Hunk` now includes derived `blocks`, `labels`, `attention`, and `score` fields. The new `EditBlock` type records each contiguous run of changed lines by ID, hunk ID, path, line-index bounds, optional old/new line ranges, labels, attention, and score."
+      "paragraph": "`Hunk` now includes derived `blocks`, `labels`, `attention`, and `score` fields. The new `EditBlock` type records each contiguous run of changed lines by ID, hunk ID, path, line-index bounds, optional old/new line ranges, labels, attention, and score.",
+      "testsTouched": true,
+      "claimIds": [],
+      "unmentioned": false
     },
     {
       "id": "ebaa2960cd7e",
@@ -4815,7 +4821,10 @@
       "score": 0.444,
       "blockKind": "typing-refactor",
       "paragraph": "9 edits change types, annotations or function form only (Hunk, blocks, hunk); runtime behaviour is unchanged.",
-      "mechanical": true
+      "mechanical": true,
+      "testsTouched": true,
+      "claimIds": [],
+      "unmentioned": false
     },
     {
       "id": "5644666f2732",
@@ -4838,7 +4847,16 @@
       "attention": "routine",
       "score": 0.425,
       "blockKind": "test",
-      "paragraph": "Tests verify that hunks split into edit blocks with correct ranges and stable IDs, and that `isolateBlock`, `blockText`, and `deriveHunk` handle block content and aggregate rankings. Model-ranking tests now expect questions and attention scores per edit block, while checking that each hunk inherits its highest-ranked block."
+      "paragraph": "Tests verify that hunks split into edit blocks with correct ranges and stable IDs, and that `isolateBlock`, `blockText`, and `deriveHunk` handle block content and aggregate rankings. Model-ranking tests now expect questions and attention scores per edit block, while checking that each hunk inherits its highest-ranked block.",
+      "testsTouched": false,
+      "covers": [
+        "eec352001524",
+        "a4430321ec76",
+        "ebaa2960cd7e",
+        "96af4f057c13"
+      ],
+      "claimIds": [],
+      "unmentioned": false
     },
     {
       "id": "96af4f057c13",
@@ -4860,7 +4878,10 @@
       "score": 0.413,
       "blockKind": "rename",
       "paragraph": "7 edits rename identifiers (block, hunks, refs); behaviour is unchanged.",
-      "mechanical": true
+      "mechanical": true,
+      "testsTouched": true,
+      "claimIds": [],
+      "unmentioned": false
     },
     {
       "id": "c8af32f3d31b",
@@ -4877,7 +4898,10 @@
       "attention": "routine",
       "score": 0.254,
       "blockKind": "docs",
-      "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes."
+      "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes.",
+      "testsTouched": false,
+      "claimIds": [],
+      "unmentioned": false
     },
     {
       "id": "7bc35c9c049f",
@@ -4895,7 +4919,10 @@
       "attention": "routine",
       "score": 0.14,
       "blockKind": "docs",
-      "paragraph": "The data model now places `EditBlock`s on `Hunk.blocks`, with `from` and `to` indexing `hunk.lines` and optional `oldRange` and `newRange`; hunk labels, attention, and score derive from its blocks. `Review` no longer includes a separate `blocks` field."
+      "paragraph": "The data model now places `EditBlock`s on `Hunk.blocks`, with `from` and `to` indexing `hunk.lines` and optional `oldRange` and `newRange`; hunk labels, attention, and score derive from its blocks. `Review` no longer includes a separate `blocks` field.",
+      "testsTouched": false,
+      "claimIds": [],
+      "unmentioned": false
     },
     {
       "id": "clean",
@@ -4911,7 +4938,10 @@
       ],
       "attention": "inert",
       "score": 0.175,
-      "fixed": "clean"
+      "fixed": "clean",
+      "testsTouched": false,
+      "claimIds": [],
+      "unmentioned": false
     }
   ],
   "untouched": [
@@ -4921,6 +4951,14 @@
     "infra",
     "prompts"
   ],
+  "claims": [],
+  "door": {
+    "computed": "two-way",
+    "signals": []
+  },
+  "radius": {
+    "areas": []
+  },
   "dispatches": [],
   "rankedBy": "rules+openai:gpt-6-luna"
 }

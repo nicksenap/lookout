@@ -35,6 +35,7 @@ screens = {"stack": last_screen()}
 key("j"); key("j"); key("\r", 0.4); screens["expanded"] = last_screen()
 key("J"); key("G"); key("\x1b", 0.3); screens["back"] = last_screen()
 key("?", 0.3); screens["help"] = last_screen(); key("\x1b")
+key("c", 0.3); screens["claims"] = last_screen(); key("\x1b")
 fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0)); os.kill(pid, signal.SIGWINCH); pump(0.6)
 screens["resized"] = last_screen()
 key("q", 1.5)
@@ -51,6 +52,7 @@ checks = {
     "expanded shows a hunk header": "@@" in screens["expanded"],
     "back to stack": "┃" in screens["back"] and "@@" not in screens["back"].split("\n")[2],
     "help listed": "review this card" in screens["help"],
+    "claims view has door and radius": "door" in screens["claims"] and "radius" in screens["claims"],
     "usable after resize": "┃" in screens["resized"],
     "alt screen left": "\x1b[?1049l" in text,
     "cursor shown": "\x1b[?25h" in text,

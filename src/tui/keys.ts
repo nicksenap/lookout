@@ -1,6 +1,6 @@
 import type { Key } from "ink";
 
-export type Mode = "stack" | "expanded";
+export type Mode = "stack" | "expanded" | "claims";
 
 export type Action =
   | { type: "move"; delta: 1 | -1 }
@@ -8,6 +8,7 @@ export type Action =
   | { type: "edge"; to: "top" | "bottom" }
   | { type: "expand" }
   | { type: "back" }
+  | { type: "claims" }
   | { type: "review" }
   | { type: "reviewAll" }
   | { type: "cancel" }
@@ -24,6 +25,7 @@ export function keyAction(input: string, key: Key): Action | undefined {
   if (key.return || input === "l" || key.rightArrow) return { type: "expand" };
   if (key.escape || input === "h" || key.leftArrow) return { type: "back" };
   if (input === "a") return { type: "review" };
+  if (input === "c") return { type: "claims" };
   if (input === "A") return { type: "reviewAll" };
   if (input === "x") return { type: "cancel" };
   if (input === "?") return { type: "help" };
@@ -36,12 +38,14 @@ export interface KeyHelp {
   label: string;
 }
 
-export function keyHelp(mode: Mode, running: boolean, dispatchable: boolean): KeyHelp[] {
+export function keyHelp(mode: Mode, running: boolean, dispatchable: boolean, claims = false): KeyHelp[] {
   const out: KeyHelp[] = [];
   if (mode === "stack") {
     out.push({ keys: "j/k", label: "card" }, { keys: "enter", label: "expand" });
     if (dispatchable) out.push({ keys: "a", label: "review card" }, { keys: "A", label: "review all" });
-  } else {
+    if (claims) out.push({ keys: "c", label: "claims" });
+  } else if (mode === "claims") out.push({ keys: "j/k", label: "scroll" }, { keys: "esc", label: "back" });
+  else {
     out.push({ keys: "j/k", label: "scroll" }, { keys: "J/K", label: "page" }, { keys: "esc", label: "back" });
     if (dispatchable) out.push({ keys: "a", label: "review card" });
   }
@@ -56,6 +60,7 @@ export const HELP_LINES: readonly string[] = [
   "g/G          first / last",
   "enter l →    expand the card: its diff, findings, agent log",
   "esc h ←      back to the stack",
+  "c            claims: the PR description against the diff, door and blast radius",
   "a            review this card with the default agent (proposer)",
   "A            review every red and amber card, one after another",
   "x            cancel the running review",

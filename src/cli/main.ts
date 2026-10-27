@@ -57,6 +57,7 @@ async function main(): Promise<number> {
   const session = new LocalSession({
     config: config.value,
     changeSet: loaded.value,
+    repo,
     runner: (store) => (runner = new DispatchRunner(store, { repo, config: config.value })),
   });
 

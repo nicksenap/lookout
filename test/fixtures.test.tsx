@@ -69,6 +69,23 @@ describe.each(names)("fixture %s", (name) => {
     expect(untouchedAreas(review.changeSet, DEFAULT_POLICY)).toEqual(review.untouched);
   });
 
+  test("evidence fields are consistent: claim cards exist, card claim ids are claims, covers point at non-test cards, door matches its signals", async () => {
+    const review = await load(name);
+    const ids = new Set(review.cards.map((c) => c.id));
+    const claimIds = new Set(review.claims.map((c) => c.id));
+    for (const claim of review.claims) if (claim.cardId) expect(ids.has(claim.cardId)).toBe(true);
+    for (const c of review.cards) {
+      expect(c.claimIds.every((id) => claimIds.has(id))).toBe(true);
+      expect(c.claimIds).toEqual(review.claims.filter((k) => k.cardId === c.id).map((k) => k.id));
+      for (const id of c.covers ?? []) expect(review.cards.find((x) => x.id === id)!.covers).toBeUndefined();
+      if (c.covers) expect(c.testsTouched).toBe(false);
+      if (c.fixed) expect(c.unmentioned).toBe(false);
+    }
+    expect(review.door.computed).toBe(review.door.signals.length > 0 ? "one-way" : "two-way");
+    const grounded = review.claims.some((c) => (c.section === "summary" || c.section === "evidence") && c.status !== undefined);
+    if (!grounded) expect(review.cards.every((c) => !c.unmentioned)).toBe(true);
+  });
+
   test("titles are distinct across cards and paragraphs are at most four sentences", async () => {
     const review = await load(name);
     const titles = review.cards.filter((c) => !c.fixed).map((c) => c.title.toLowerCase().replace(/[^a-z]/g, ""));

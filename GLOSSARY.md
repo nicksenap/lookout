@@ -16,7 +16,7 @@
 
 **Area** — a named set of sensitive paths in a repo's policy (e.g. `auth`, `billing`). Used for floors on color and tier, and for the *untouched* card.
 
-**Claim** — one checkable statement the author makes about the change. Grounded as `supported`, `contradicted` or `not-in-diff`.
+**Claim** — one checkable statement the author makes about the change: a `- ` bullet of the PR body, or the `Door:` / `Blast Radius:` line of a `/pr` body. Grounded as `supported`, `contradicted` or `not-in-diff`; `unclear` when the model's confidence is below the gate (0.7 for contradicted, 0.4 otherwise).
 
 **Unmentioned** — a card no claim points to: the change does something the author did not describe.
 
@@ -30,8 +30,8 @@
 
 **Question** — a yes/no prompt for the human reviewer, chosen per card from a tier-specific bank.
 
-**Door** — whether the change is easy to undo (two-way) or not (one-way).
+**Door** — whether the change is easy to undo (two-way) or not (one-way). Rules compute it from one-way *signals* in the diff (migration, destructive SQL, data write, removed public export or route, contract change); the author's word is compared, never trusted.
 
-**Blast radius** — what the change can affect: the areas it touches and who imports the changed files.
+**Blast radius** — what the change can affect: the areas it touches and the *importers*, files in the repo that import a changed file and are not themselves changed.
 
 **Depth** — how much agent work runs: `quick` (none), `standard`, `deep`.

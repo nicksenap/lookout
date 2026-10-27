@@ -2,7 +2,7 @@ import { Box, render, Text, useApp, useInput, useStdout } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cardDispatches, cardFindings, type ReviewSession } from "../core/session.ts";
 import type { Card, Dispatch, Review } from "../core/types.ts";
-import { type CardContext, cardLines, expandedLines, fit, type Line, plural, Row, sides } from "./Card.tsx";
+import { type CardContext, cardLines, claimsLines, expandedLines, fit, type Line, plural, Row, sides } from "./Card.tsx";
 import { HELP_LINES, keyAction, keyHelp, type Mode } from "./keys.ts";
 import { theme } from "./theme.ts";
 
@@ -114,7 +114,10 @@ export function App({ session, dispatchable, size: sizeOverride, frame: frameOve
     return out;
   }, [review, sel, w, frame, pending]);
 
-  const bodyLines = useMemo(() => (mode === "expanded" && card ? [...cardLines(card, sel, true, w, ctxFor(card)), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctxFor(card))] : stackLines), [mode, card, stackLines, w, frame]);
+  const bodyLines = useMemo(
+    () => (mode === "expanded" && card ? [...cardLines(card, sel, true, w, ctxFor(card)), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctxFor(card))] : mode === "claims" ? claimsLines(review, w) : stackLines),
+    [mode, card, stackLines, w, frame],
+  );
   const windowTop = mode === "stack" ? windowLines(bodyLines, sel, bodyH, top) : Math.max(0, Math.min(scroll, bodyLines.length - bodyH));
   useEffect(() => {
     if (mode === "stack" && windowTop !== top) setTop(windowTop);
@@ -148,10 +151,13 @@ export function App({ session, dispatchable, size: sizeOverride, frame: frameOve
         return;
       case "back":
         return setMode("stack");
+      case "claims":
+        setScroll(0);
+        return setMode(mode === "claims" ? "stack" : "claims");
       case "move":
       case "page":
       case "edge": {
-        if (mode === "expanded") {
+        if (mode !== "stack") {
           const step = action.type === "move" ? action.delta : action.type === "page" ? action.delta * (bodyH - 1) : 0;
           const to = action.type === "edge" ? (action.to === "top" ? 0 : bodyLines.length) : scroll + step;
           return setScroll(Math.max(0, Math.min(to, Math.max(0, bodyLines.length - bodyH))));
@@ -174,9 +180,10 @@ export function App({ session, dispatchable, size: sizeOverride, frame: frameOve
 
   const v = review.verdict;
   const title = review.changeSet.intent?.title ? `${review.changeSet.target} · ${review.changeSet.intent.title}` : review.changeSet.target;
-  const headerRight = `${v.tier.toUpperCase()} · ${plural(v.requiredHumans, "human")} · ${plural(cards.length, "card")}${pending ? ` · ${theme.spinner[frame % theme.spinner.length]} ranking` : ""}`;
+  const contradicted = review.claims.filter((c) => c.status === "contradicted").length;
+  const headerRight = [v.tier.toUpperCase(), plural(v.requiredHumans, "human"), plural(cards.length, "card"), contradicted ? `${plural(contradicted, "claim")} ✗` : "", review.door.computed === "one-way" ? "one-way" : "", pending ? `${theme.spinner[frame % theme.spinner.length]} ranking` : ""].filter(Boolean).join(" · ");
   const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
-  const footerText = notice ?? review.warning ?? keyHelp(mode, running !== undefined, dispatchable).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
+  const footerText = notice ?? review.warning ?? keyHelp(mode, running !== undefined, dispatchable, review.claims.length > 0 || review.door.computed === "one-way").map((h) => `${h.keys} ${h.label}`).join("  ·  ");
   const footer: Line = { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: notice ? theme.card.amber : undefined, dim: !notice }] };
 
   return (

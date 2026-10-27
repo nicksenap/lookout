@@ -1,5 +1,5 @@
 import { Text } from "ink";
-import type { Card, Dispatch, Finding, Hunk, Review } from "../core/types.ts";
+import type { Card, Claim, ClaimStatus, Dispatch, Finding, Hunk, Review } from "../core/types.ts";
 import { COLOR_LABEL, theme } from "./theme.ts";
 
 export interface Segment {
@@ -78,6 +78,34 @@ export function filesOf(review: Review, card: Card): string[] {
   return review.changeSet.files.filter((f) => f.hunks.some((h) => h.blocks.some((b) => ids.has(b.id)))).map((f) => f.path);
 }
 
+/** Glyph and word per claim status; both so a stripped frame still reads. */
+export const CLAIM_MARK: Record<ClaimStatus, { glyph: string; word: string; color: string }> = {
+  supported: { glyph: "✓", word: "supported", color: theme.card.green },
+  contradicted: { glyph: "✗", word: "contradicted", color: theme.card.red },
+  unclear: { glyph: "~", word: "unclear", color: theme.card.amber },
+  "not-in-diff": { glyph: "∅", word: "not in diff", color: theme.dim },
+};
+
+export const cardClaims = (review: Review, card: Card): Claim[] => review.claims.filter((c) => card.claimIds.includes(c.id));
+
+/** `2 claims ✗` when one is contradicted, `~` when one is unclear, else `✓`; pending claims show no mark. */
+export function claimsBadge(claims: Claim[]): string {
+  if (claims.length === 0) return "";
+  const statuses = claims.map((c) => c.status);
+  const mark = statuses.includes("contradicted") ? " ✗" : statuses.includes("unclear") ? " ~" : statuses.every((s) => s === "supported") ? " ✓" : "";
+  return `${plural(claims.length, "claim")}${mark}`;
+}
+
+/** Evidence words on the badge line: unmentioned, a one-way signal, test coverage. */
+export function evidenceBadges(review: Review, card: Card): string[] {
+  const out: string[] = [];
+  if (card.unmentioned) out.push("unmentioned");
+  if (card.doorSignals?.length) out.push(`one-way · ${card.doorSignals[0]!.kind}`);
+  if (card.covers?.length) out.push(`covers ${card.covers.map((id) => `card ${review.cards.findIndex((c) => c.id === id) + 1}`).join(", ")}`);
+  else if (card.testsTouched) out.push("tests touched");
+  return out;
+}
+
 /** A card as it appears in the stack: badge line, title, paragraph or summary, findings, running review. */
 export function cardLines(card: Card, index: number, selected: boolean, w: number, ctx: CardContext): Line[] {
   const color = theme.card[card.color];
@@ -88,8 +116,11 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
 
   const files = filesOf(ctx.review, card);
   const badges = [COLOR_LABEL[card.color], card.kind, ...card.labels.filter((l) => l !== "test" || card.kind !== "test"), ...card.areas.map((a) => `${a}/*`)];
-  const right = `${plural(card.blockIds.length, "edit")} · ${plural(files.length, "file")}${ctx.findings.length ? ` · ${plural(ctx.findings.length, "finding")}` : ""}`;
+  const claims = cardClaims(ctx.review, card);
+  const evidence = card.fixed ? [] : evidenceBadges(ctx.review, card);
+  const right = [plural(card.blockIds.length, "edit"), plural(files.length, "file"), ctx.findings.length ? plural(ctx.findings.length, "finding") : "", claimsBadge(claims)].filter(Boolean).join(" · ");
   const badgeSegs: Segment[] = [{ text: badges[0]!, color, bold: true }, { text: badges.length > 1 ? `  ${badges.slice(1).join(" · ")}` : "", dim: true }];
+  if (evidence.length) badgeSegs.push({ text: `  ${evidence.join(" · ")}`, color: card.unmentioned ? theme.card.amber : theme.accent });
   const lines: Line[] = [row(sides(badgeSegs, right, inner, color))];
 
   if (card.fixed === "clean") {
@@ -106,6 +137,7 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   }
   for (const f of ctx.findings.slice(0, 4)) lines.push(row(findingLine(f, inner)));
   if (ctx.findings.length > 4) lines.push(row([{ text: `  +${ctx.findings.length - 4} more`, dim: true }]));
+  for (const c of claims.filter((c) => c.status === "contradicted")) lines.push(row(claimLine(c, inner)));
   const running = ctx.dispatches.find((d) => d.status === "running");
   if (running) lines.push(row([{ text: `  ${theme.spinner[ctx.frame % theme.spinner.length]} ${running.dispatcher} reviewing… ${clock(ctx.elapsed(running))}`, color: theme.accent }]));
   else {
@@ -119,6 +151,13 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
 export function findingLine(f: Finding, w: number): Segment[] {
   const where = f.anchor ? `${f.anchor.path.split("/").pop()}:${f.anchor.line}` : "";
   return sides([{ text: "  " }, { text: f.severity.toUpperCase(), color: theme.severity[f.severity], bold: true }, { text: ` ${f.title}` }], where, w);
+}
+
+/** `  ✗ contradicted  the PR says X`; a claim without a status shows as pending. */
+export function claimLine(c: Claim, w: number, right = ""): Segment[] {
+  const mark = c.status ? CLAIM_MARK[c.status] : { glyph: "…", word: "pending", color: theme.dim };
+  const pct = c.confidence !== undefined && c.confidence < 1 && c.status ? ` ${Math.round(c.confidence * 100)}%` : "";
+  return sides([{ text: "  " }, { text: `${mark.glyph} ${mark.word}${pct}`, color: mark.color, bold: c.status === "contradicted" }, { text: `  ${fit(c.text, Math.max(0, w - 24 - right.length))}` }], right, w);
 }
 
 export const clock = (ms: number) => {
@@ -160,6 +199,8 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
     push([{ text: "" }]);
   }
 
+  for (const l of evidenceLines(card, w, ctx.review)) push(l);
+
   push([{ text: `diff · ${plural(card.blockIds.length, "edit")}`, color, bold: true }, { text: "   other cards' edits in these hunks are faded", dim: true }]);
   for (const file of ctx.review.changeSet.files) {
     const hunks = file.hunks.filter((h) => h.blocks.some((b) => ids.has(b.id)));
@@ -171,6 +212,63 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
     }
     push([{ text: "" }]);
   }
+  return lines;
+}
+
+/** Evidence rows of an expanded card: its claims, test coverage and door signals. */
+export function evidenceLines(card: Card, w: number, review: Review): Segment[][] {
+  const color = theme.card[card.color];
+  const out: Segment[][] = [];
+  const claims = cardClaims(review, card);
+  if (claims.length > 0 || card.unmentioned) {
+    out.push([{ text: `claims (${claims.length})`, color, bold: true }, { text: card.unmentioned ? "   unmentioned: no claim in the PR description covers this card" : "", color: theme.card.amber }]);
+    for (const c of claims) out.push(claimLine(c, w));
+  }
+  const tests = card.covers
+    ? card.covers.length
+      ? `tests  covers ${card.covers.map((id) => titleOf(review, id)).join(", ")}`
+      : "tests  exercises no other card in this change"
+    : card.testsTouched
+      ? `tests  touched by ${review.cards.filter((c) => c.covers?.includes(card.id)).map((c) => c.title).join(", ")}`
+      : "tests  none in this change touch these files";
+  out.push([{ text: fit(tests, w), color: card.testsTouched || card.covers ? theme.card.green : theme.card.amber }]);
+  if (card.doorSignals?.length) {
+    out.push([{ text: "door   one-way", color: theme.card.red, bold: true }]);
+    for (const s of card.doorSignals) out.push([{ text: `  ${s.kind}  `, color: theme.card.red }, { text: fit(`${s.text}  ${s.path.split("/").pop()}${s.line ? `:${s.line}` : ""}`, Math.max(0, w - 20)), dim: true }]);
+  }
+  out.push([{ text: "" }]);
+  return out;
+}
+
+const titleOf = (review: Review, id: string) => review.cards.find((c) => c.id === id)?.title ?? id;
+
+/** The claims view (`c`): every claim with its status and card, then the door and radius rows. */
+export function claimsLines(review: Review, w: number): Line[] {
+  const lines: Line[] = [];
+  const push = (segs: Segment[]) => lines.push({ segments: segs });
+  const authored = review.claims.filter((c) => c.section === "summary" || c.section === "evidence");
+  push([{ text: `claims (${authored.length})`, color: theme.accent, bold: true }, { text: review.changeSet.intent ? "   from the PR description" : "   no PR description", dim: true }]);
+  for (const c of authored) push(claimLine(c, w, c.cardId ? fit(titleOf(review, c.cardId), Math.max(10, Math.floor(w / 3))) : ""));
+  const unmentioned = review.cards.filter((c) => c.unmentioned);
+  if (unmentioned.length) {
+    push([{ text: "" }]);
+    push([{ text: `unmentioned (${unmentioned.length})`, color: theme.card.amber, bold: true }, { text: "   cards no claim covers", dim: true }]);
+    for (const c of unmentioned) push([{ text: `  card ${review.cards.indexOf(c) + 1}  `, color: theme.card.amber }, { text: fit(c.title, w - 12) }]);
+  }
+  push([{ text: "" }]);
+  const door = review.door;
+  const doorColor = door.computed === "one-way" ? theme.card.red : theme.card.green;
+  push([{ text: "door", color: theme.accent, bold: true }, { text: `   diff says ${door.computed}`, color: doorColor }, { text: door.author ? `  \u00b7 author says ${door.author}` : "  \u00b7 author did not say", dim: !door.author || door.author === door.computed, color: door.author && door.author !== door.computed ? theme.card.red : undefined }]);
+  for (const s of door.signals) push([{ text: `  ${s.kind}  `, color: theme.card.red }, { text: fit(`${s.text}  ${s.path}${s.line ? `:${s.line}` : ""}`, Math.max(0, w - 20)), dim: true }]);
+  push([{ text: "" }]);
+  const r = review.radius;
+  const radiusClaim = review.claims.find((c) => c.section === "radius");
+  const importers = r.importers === undefined ? (r.warning ? "importers unknown" : "importers\u2026") : plural(r.importers.length, "importer");
+  push([{ text: "radius", color: theme.accent, bold: true }, { text: `   ${r.areas.length ? r.areas.join(", ") : "no sensitive area"} \u00b7 ${importers}` }, { text: r.author ? `  \u00b7 author says "${r.author}"` : "", dim: true }]);
+  if (r.warning) push([{ text: `  ${fit(r.warning, w - 2)}`, color: theme.card.amber }]);
+  if (radiusClaim?.status) push(claimLine(radiusClaim, w));
+  for (const f of (r.importers ?? []).slice(0, 30)) push([{ text: `  ${fit(f, w - 2)}`, dim: true }]);
+  if ((r.importers?.length ?? 0) > 30) push([{ text: `  +${r.importers!.length - 30} more`, dim: true }]);
   return lines;
 }
 

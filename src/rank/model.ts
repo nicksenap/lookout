@@ -7,7 +7,7 @@ import { createTypeSafeAi } from "@ai-sdk/typesafe-ai";
 import { createProviderRegistry, experimental_decide, type Experimental_DecisionModel, type Experimental_DecisionQuestion, generateText, type LanguageModel } from "ai";
 import { blockText, type BlockRef } from "../core/blocks.ts";
 import { attempt } from "../core/result.ts";
-import type { Intent } from "../core/types.ts";
+import type { Claim, Intent } from "../core/types.ts";
 
 export type AttentionModel = Experimental_DecisionModel;
 export type Env = Record<string, string | undefined>;
@@ -150,3 +150,83 @@ export async function scoreBlockBatch(model: AttentionModel, refs: BlockRef[], i
   }
   return out;
 }
+
+// ---------------------------------------------------------------- claims (plan step 7)
+
+export const CLAIM_STATUSES = {
+  supported: "the diff does what the claim says",
+  contradicted: "a specific edit in the diff makes the claim false: the code does the opposite or something incompatible with it. Missing or partial evidence is not contradiction, and a comment or name that merely resembles the claim's words is not evidence against it",
+  "not-in-diff": "the claim is about something the diff does not show: the state before the change, tests that were run, a screenshot, process, deployment, future work; or it cannot be checked from the diff",
+} as const;
+export type ModelClaimStatus = keyof typeof CLAIM_STATUSES;
+/** Same keys for the radius claim, judged against the computed radius rather than the diff. */
+export const RADIUS_STATUSES: Record<ModelClaimStatus, string> = {
+  supported: "the computed radius (areas touched, files importing the changed files) fits the author's description",
+  contradicted: "the computed radius is clearly wider than the author describes: more areas, or importers outside the described scope",
+  "not-in-diff": "the description is too vague, or the computed radius too empty, to compare",
+};
+
+/** A card as the grounding call sees it: prose plus its own diff. */
+export interface GroundCard {
+  id: string;
+  title: string;
+  paragraph?: string;
+  files: string[];
+  diff: string;
+}
+export interface ClaimJudgement {
+  status: ModelClaimStatus;
+  /** Probability on `status`; 1 when the model gave no distribution. */
+  confidence: number;
+  cardId?: string;
+}
+
+export const claimStatusId = (claimId: string) => `claim_status_${claimId}`;
+export const claimCardId = (claimId: string) => `claim_card_${claimId}`;
+
+/**
+ * One `decide` call grounding every claim against the cards and their diff. Two questions per
+ * claim: its status and which card is the evidence (`none` allowed). Radius claims get the status
+ * question only, judged against the computed radius in the state.
+ */
+export async function groundClaimBatch(model: AttentionModel, claims: Pick<Claim, "id" | "text" | "section">[], cards: GroundCard[], ctx: { intent?: Intent; radius?: { areas: string[]; importers?: string[] } }): Promise<Map<string, ClaimJudgement>> {
+  const questions: Record<string, Experimental_DecisionQuestion> = {};
+  const cardChoices: Record<string, string> = Object.fromEntries(cards.map((c) => [c.id, `${c.title} (${c.files.join(", ")})`]));
+  cardChoices.none = "no card is evidence for this claim";
+  for (const claim of claims) {
+    const radius = claim.section === "radius";
+    questions[claimStatusId(claim.id)] = {
+      type: "choice",
+      instructions: radius
+        ? `The author describes the blast radius as: "${claim.text}". Compare with state.radius (policy areas touched and files importing the changed files) and the cards' files.`
+        : `Claim ${claim.id}: "${claim.text}". Judge it against the cards and their diffs only. Choose contradicted only when you can point at an edit that makes it false; a claim about something outside the diff is not-in-diff.`,
+      criteria: radius ? { ...RADIUS_STATUSES } : { ...CLAIM_STATUSES },
+    };
+    if (!radius) {
+      questions[claimCardId(claim.id)] = {
+        type: "choice",
+        instructions: `Which card's edits are the evidence for or against claim ${claim.id}: "${claim.text}"? Choose none if no card is about it.`,
+        criteria: cardChoices,
+      };
+    }
+  }
+  const state = {
+    task: "Ground the author's claims about an agent-written code change against what the diff actually does.",
+    intent: ctx.intent ? { title: ctx.intent.title } : null,
+    radius: ctx.radius ?? null,
+    cards: cards.map((c) => ({ id: c.id, title: c.title, paragraph: c.paragraph ?? null, files: c.files, diff: c.diff })),
+  };
+  const result = await experimental_decide({ model, state, questions, abortSignal: AbortSignal.timeout(90_000) });
+  const answers = result.answers as Record<string, { type: string; choice?: string; probabilities?: Record<string, number> }>;
+  const out = new Map<string, ClaimJudgement>();
+  for (const claim of claims) {
+    const status = answers[claimStatusId(claim.id)];
+    if (status?.type !== "choice" || !(status.choice! in CLAIM_STATUSES)) throw new Error(`no status for claim ${claim.id}`);
+    const judgement: ClaimJudgement = { status: status.choice as ModelClaimStatus, confidence: status.probabilities?.[status.choice!] ?? 1 };
+    const card = answers[claimCardId(claim.id)];
+    if (card?.type === "choice" && card.choice && card.choice !== "none" && card.choice in cardChoices) judgement.cardId = card.choice;
+    out.set(claim.id, judgement);
+  }
+  return out;
+}
+

@@ -132,6 +132,63 @@ export interface Card {
   mechanical?: boolean;
   /** The fixed card that collects every inert block. */
   fixed?: "clean";
+  // ---- evidence (plan step 12)
+  /** Claims whose evidence choice landed on this card. */
+  claimIds: string[];
+  /** The author made claims, none of them points here, and the card needs eyes or more. */
+  unmentioned: boolean;
+  /** A test card in this change exercises this card's files (same dir, name stem or import). Test cards: false. */
+  testsTouched: boolean;
+  /** Test cards only: the non-test cards whose files they exercise. */
+  covers?: string[];
+  /** One-way door signals found in this card's edits. */
+  doorSignals?: DoorSignal[];
+}
+
+// ---------------------------------------------------------------- evidence
+
+/**
+ * One checkable statement the author makes. `status` is absent until grounded. `unclear` is the
+ * confidence gate: a `contradicted` under 0.7 or any answer under 0.4 is shown as unclear, not red.
+ */
+export type ClaimStatus = "supported" | "contradicted" | "not-in-diff" | "unclear";
+export type ClaimSection = "summary" | "evidence" | "door" | "radius";
+export interface Claim {
+  id: string;
+  text: string;
+  section: ClaimSection;
+  status?: ClaimStatus;
+  /** Probability the model put on the chosen status (1 for rule-derived statuses). */
+  confidence?: number;
+  /** The card the evidence points to, when the model picked one. */
+  cardId?: string;
+}
+
+export type DoorKind = "one-way" | "two-way";
+/** A reason the change is hard to undo, anchored to a line when it comes from the diff. */
+export interface DoorSignal {
+  kind: "migration" | "destructive-sql" | "data-write" | "removed-export" | "removed-route" | "contract";
+  path: string;
+  line?: number;
+  text: string;
+}
+export interface Door {
+  /** What the author wrote, when the body says one-way/two-way (or reversible/irreversible). */
+  author?: DoorKind;
+  /** One-way when any signal exists. Rules only. */
+  computed: DoorKind;
+  signals: DoorSignal[];
+}
+
+export interface Radius {
+  /** The author's word from a `Blast Radius:` line, when present. */
+  author?: string;
+  /** Policy areas touched by non-inert blocks (same as the classification). */
+  areas: string[];
+  /** Files in the repo that import a changed file and are not themselves changed. Absent until computed; empty when none. */
+  importers?: string[];
+  /** Why importers could not be computed. */
+  warning?: string;
 }
 
 export interface Review {
@@ -142,6 +199,9 @@ export interface Review {
   cards: Card[];
   /** Policy areas no file of the change touches. */
   untouched: string[];
+  claims: Claim[];
+  door: Door;
+  radius: Radius;
   dispatches: Dispatch[];
   rankedBy: string; // "rules" | `rules+${model}`
   warning?: string;

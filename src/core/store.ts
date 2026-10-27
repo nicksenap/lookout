@@ -1,4 +1,4 @@
-import type { Card, Classification, Dispatch, Review, Verdict } from "./types.ts";
+import type { Card, Claim, Classification, Dispatch, Door, Radius, Review, Verdict } from "./types.ts";
 
 /** Patches, not snapshots: a 40-card review streaming paragraphs never re-sends the whole Review. */
 export type ReviewEvent =
@@ -9,6 +9,10 @@ export type ReviewEvent =
   | { type: "dispatch.output"; id: string; chunk: string }
   | { type: "dispatch.finished"; dispatch: Dispatch }
   | { type: "warning"; text?: string }
+  /** The claim list changed (model extraction landed) or one claim was grounded. */
+  | { type: "claims.replaced"; claims: Claim[] }
+  | { type: "claim.updated"; id: string; patch: Partial<Claim> }
+  | { type: "evidence.updated"; door?: Door; radius?: Radius }
   /** The ranking pipeline has finished (with or without the model). */
   | { type: "done" };
 
