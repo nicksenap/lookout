@@ -29,6 +29,8 @@ export function buildCards(changeSet: ChangeSet, policy: Policy): Card[] {
           card.paragraph = text.paragraph;
           card.mechanical = true;
         }
+        // The floor depends on the kind the model gave the group, so it is set once that is known.
+        card.color = colorFloor(card);
         return card;
       })
     : [...live.reduce((m, r) => m.set(r.file.path, [...(m.get(r.file.path) ?? []), r]), new Map<string, BlockRef[]>())].map(([path, group]) => makeCard(cardId(group.map((r) => r.block.id)), path, group, policy));
@@ -71,11 +73,25 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
 /**
  * Rule-derived color. The model step (plan pipeline step 8) may only raise a card above
  * this floor, never lower it; and only rules may call a card grey.
+ *
+ * A sensitive area reddens a card only when the card changes behaviour. Tests, mechanical
+ * edits and docs inside `auth/` stay green (the area badge still shows); config plumbing
+ * there is amber. Measured on a production PR where the old rule painted 5 of 8 cards red
+ * and 3 of those were a test card, a rename and a type import. The tier floors in
+ * `policy/evaluate.ts` are untouched: a touched area still means more humans.
  */
-export function colorFloor(card: Pick<Card, "attention" | "areas" | "labels" | "kind">): CardColor {
+export function colorFloor(card: Pick<Card, "attention" | "areas" | "labels" | "kind"> & Partial<Pick<Card, "blockKind" | "mechanical">>): CardColor {
   if (card.attention === "inert") return "grey";
-  if (card.attention === "suspicious" || card.areas.length > 0 || card.labels.includes("sensitive")) return "red";
-  if (card.attention === "needs-eyes" || card.kind === "deps" || card.kind === "config" || card.kind === "ci") return "amber";
+  if (card.attention === "suspicious") return "red";
+  const sensitive = card.areas.length > 0 || card.labels.includes("sensitive");
+  const test = card.kind === "test" || card.blockKind === "test";
+  const docs = card.kind === "docs" || card.blockKind === "docs";
+  const config = card.kind === "deps" || card.kind === "config" || card.kind === "ci";
+  const plumbing = config || card.blockKind === "config";
+  if (sensitive && !test && !docs && !plumbing && !card.mechanical) return "red";
+  if (sensitive && plumbing) return "amber";
+  if (card.attention === "needs-eyes" && !test && !docs && !card.mechanical) return "amber";
+  if (config) return "amber";
   return "green";
 }
 

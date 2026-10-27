@@ -76,7 +76,7 @@ describe("buildCards", () => {
 
 describe("colorFloor", () => {
   const base: Pick<Card, "attention" | "areas" | "labels" | "kind"> = { attention: "routine", areas: [], labels: [], kind: "logic" };
-  test("grey only for inert; red for suspicious, areas, sensitive; amber for needs-eyes and deps/config/ci", () => {
+  test("grey only for inert; red for suspicious, or areas/sensitive on a behaviour card; amber for needs-eyes and deps/config/ci", () => {
     expect(colorFloor({ ...base, attention: "inert" })).toBe("grey");
     expect(colorFloor(base)).toBe("green");
     expect(colorFloor({ ...base, attention: "needs-eyes" })).toBe("amber");
@@ -84,6 +84,17 @@ describe("colorFloor", () => {
     expect(colorFloor({ ...base, attention: "suspicious" })).toBe("red");
     expect(colorFloor({ ...base, areas: ["billing"] })).toBe("red");
     expect(colorFloor({ ...base, labels: ["sensitive"] })).toBe("red");
+  });
+  test("a sensitive area does not redden tests, mechanical edits or docs; config there is amber; types follow attention; suspicious is always red", () => {
+    const auth = { ...base, areas: ["auth"], attention: "needs-eyes" as const };
+    expect(colorFloor({ ...auth, kind: "test" })).toBe("green");
+    expect(colorFloor({ ...auth, blockKind: "test" })).toBe("green");
+    expect(colorFloor({ ...auth, blockKind: "rename", mechanical: true })).toBe("green");
+    expect(colorFloor({ ...auth, kind: "docs" })).toBe("green");
+    expect(colorFloor({ ...auth, blockKind: "config" })).toBe("amber");
+    expect(colorFloor({ ...auth, kind: "additive", blockKind: "types" })).toBe("red");
+    expect(colorFloor({ ...base, attention: "needs-eyes", blockKind: "types" })).toBe("amber");
+    expect(colorFloor({ ...auth, kind: "test", attention: "suspicious" })).toBe("red");
   });
 });
 
