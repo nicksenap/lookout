@@ -1,0 +1,3980 @@
+{
+  "changeSet": {
+    "target": "3ddc924^..3ddc924",
+    "base": "34fc1496e2911d7c215eac2ca164a78359d989fa",
+    "head": "3ddc924c8da2e5968d8680370d54954e3dfefd24",
+    "files": [
+      {
+        "path": "scripts/tier-survey.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "2b387cae25e5",
+            "path": "scripts/tier-survey.ts",
+            "header": "@@ -0,0 +1,26 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 26,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "// Step 8 check: tier / humans / kind / areas per commit over the last N non-merge commits (read-only).",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "// Usage: bun scripts/tier-survey.ts <repo> [n=30]",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "import { parseDiff } from \"../src/core/diff.ts\";",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import { classify, evaluate } from \"../src/policy/evaluate.ts\";",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "import { DEFAULT_POLICY } from \"../src/policy/schema.ts\";",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "import { applyRules } from \"../src/rank/rules.ts\";",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "import { DIFF_FLAGS } from \"../src/sources/git.ts\";",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "const repo = process.argv[2];",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "const n = Number(process.argv[3] ?? 30);",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "if (!repo) throw new Error(\"usage: bun scripts/tier-survey.ts <repo> [n]\");",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "const sh = (args: string[]) => Bun.spawnSync(args, { cwd: repo, stdout: \"pipe\", stderr: \"pipe\", maxBuffer: 1 << 28 }).stdout.toString();",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "const tally: Record<string, number> = {};",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "for (const line of sh([\"git\", \"log\", `-${n}`, \"--no-merges\", \"--format=%h%x09%s\"]).trim().split(\"\\n\")) {",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "  const [sha, subject] = line.split(\"\\t\") as [string, string];",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "  const cs = applyRules({ target: sha, base: \"\", head: \"\", files: parseDiff(sh([\"git\", \"diff\", ...DIFF_FLAGS, `${sha}^`, sha, \"--\"])) });",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "  const k = classify(cs, DEFAULT_POLICY);",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "  const v = evaluate(k, DEFAULT_POLICY);",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "  tally[v.tier] = (tally[v.tier] ?? 0) + 1;",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "  const areas = k.areas.length ? ` areas=${k.areas.join(\",\")}` : \"\";",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "  const sens = k.sensitivePaths.length ? ` sensitive=${k.sensitivePaths.length}` : \"\";",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "  console.log(`${v.tier.padEnd(6)} ${v.requiredHumans}h ${k.kind.padEnd(8)} ${k.maxAttention.padEnd(10)} ${String(k.counts.files).padStart(3)}f ${String(k.counts.blocks).padStart(3)}b${areas}${sens}  ${sha} ${subject.slice(0, 60)}`);",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "  if (v.tier === \"high\") for (const r of v.reasons) console.log(`         ↳ ${r}`);",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "console.log(\"\\n\", tally);",
+                "newLine": 26
+              }
+            ],
+            "blocks": [
+              {
+                "id": "c37de64686c8",
+                "hunkId": "2b387cae25e5",
+                "path": "scripts/tier-survey.ts",
+                "from": 0,
+                "to": 26,
+                "labels": [
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.61,
+                "newRange": {
+                  "start": 1,
+                  "end": 26
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.61
+          }
+        ]
+      },
+      {
+        "path": "src/cli/main.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "fde72752da0a",
+            "path": "src/cli/main.ts",
+            "header": "@@ -1,8 +1,10 @@",
+            "oldStart": 1,
+            "oldLines": 8,
+            "newStart": 1,
+            "newLines": 10,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "import pkg from \"../../package.json\" with { type: \"json\" };",
+                "oldLine": 1,
+                "newLine": 1
+              },
+              {
+                "kind": "context",
+                "text": "import { ReviewStore } from \"../core/store.ts\";",
+                "oldLine": 2,
+                "newLine": 2
+              },
+              {
+                "kind": "del",
+                "text": "import type { Review } from \"../core/types.ts\";",
+                "oldLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import type { ChangeSet, Review } from \"../core/types.ts\";",
+                "newLine": 3
+              },
+              {
+                "kind": "context",
+                "text": "import { loadConfig } from \"../dispatch/config.ts\";",
+                "oldLine": 4,
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "import { classify, evaluate } from \"../policy/evaluate.ts\";",
+                "newLine": 5
+              },
+              {
+                "kind": "context",
+                "text": "import { rankChangeSet, rankWithModel } from \"../rank/rank.ts\";",
+                "oldLine": 5,
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "import { repoRoot } from \"../sources/git.ts\";",
+                "newLine": 7
+              },
+              {
+                "kind": "context",
+                "text": "import { loadChangeSet, resolveTarget } from \"../sources/resolve.ts\";",
+                "oldLine": 6,
+                "newLine": 8
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 7,
+                "newLine": 9
+              },
+              {
+                "kind": "context",
+                "text": "const HELP = `lookout ${pkg.version} — rank hunks that deserve attention, dispatch review agents",
+                "oldLine": 8,
+                "newLine": 10
+              }
+            ],
+            "blocks": [
+              {
+                "id": "af9901c7a4e2",
+                "hunkId": "fde72752da0a",
+                "path": "src/cli/main.ts",
+                "from": 2,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.12,
+                "oldRange": {
+                  "start": 3,
+                  "end": 3
+                },
+                "newRange": {
+                  "start": 3,
+                  "end": 3
+                },
+                "kind": "typing-refactor"
+              },
+              {
+                "id": "b7697b4aa51c",
+                "hunkId": "fde72752da0a",
+                "path": "src/cli/main.ts",
+                "from": 5,
+                "to": 6,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.161,
+                "newRange": {
+                  "start": 5,
+                  "end": 5
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "1c3033197f0c",
+                "hunkId": "fde72752da0a",
+                "path": "src/cli/main.ts",
+                "from": 7,
+                "to": 8,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.114,
+                "newRange": {
+                  "start": 7,
+                  "end": 7
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.161
+          },
+          {
+            "id": "035a7b930989",
+            "path": "src/cli/main.ts",
+            "header": "@@ -42,12 +44,16 @@ function parseArgs(argv: string[]): CliArgs {",
+            "oldStart": 42,
+            "oldLines": 12,
+            "newStart": 44,
+            "newLines": 16,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 42,
+                "newLine": 44
+              },
+              {
+                "kind": "context",
+                "text": "async function main(): Promise<void> {",
+                "oldLine": 43,
+                "newLine": 45
+              },
+              {
+                "kind": "context",
+                "text": "  const args = parseArgs(process.argv.slice(2));",
+                "oldLine": 44,
+                "newLine": 46
+              },
+              {
+                "kind": "del",
+                "text": "  const config = loadConfig();",
+                "oldLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "  const config = loadConfig(undefined, await repoRoot().catch(() => undefined));",
+                "newLine": 47
+              },
+              {
+                "kind": "context",
+                "text": "  const ruled = await rankChangeSet(await loadChangeSet(resolveTarget(args.target)));",
+                "oldLine": 46,
+                "newLine": 48
+              },
+              {
+                "kind": "del",
+                "text": "  const store = new ReviewStore({ changeSet: ruled.changeSet, dispatches: [], rankedBy: ruled.rankedBy });",
+                "oldLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "  const judge = (cs: ChangeSet) => {",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": "    const classification = classify(cs, config.policy);",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "    return { classification, verdict: evaluate(classification, config.policy) };",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "  };",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "  const store = new ReviewStore({ changeSet: ruled.changeSet, ...judge(ruled.changeSet), dispatches: [], rankedBy: ruled.rankedBy });",
+                "newLine": 53
+              },
+              {
+                "kind": "context",
+                "text": "  const modelRanking = rankWithModel(ruled.changeSet, { modelSpec: config.rank.model }).then((res) =>",
+                "oldLine": 48,
+                "newLine": 54
+              },
+              {
+                "kind": "context",
+                "text": "    store.update((r) => {",
+                "oldLine": 49,
+                "newLine": 55
+              },
+              {
+                "kind": "del",
+                "text": "      const next: Review = { ...r, changeSet: res.changeSet, rankedBy: res.rankedBy };",
+                "oldLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "      const next: Review = { ...r, changeSet: res.changeSet, ...judge(res.changeSet), rankedBy: res.rankedBy };",
+                "newLine": 56
+              },
+              {
+                "kind": "context",
+                "text": "      if (res.warning) next.warning = res.warning;",
+                "oldLine": 51,
+                "newLine": 57
+              },
+              {
+                "kind": "context",
+                "text": "      else delete next.warning;",
+                "oldLine": 52,
+                "newLine": 58
+              },
+              {
+                "kind": "context",
+                "text": "      return next;",
+                "oldLine": 53,
+                "newLine": 59
+              }
+            ],
+            "blocks": [
+              {
+                "id": "736fdd39e6f1",
+                "hunkId": "035a7b930989",
+                "path": "src/cli/main.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.358,
+                "oldRange": {
+                  "start": 45,
+                  "end": 45
+                },
+                "newRange": {
+                  "start": 47,
+                  "end": 47
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "eb6219060cac",
+                "hunkId": "035a7b930989",
+                "path": "src/cli/main.ts",
+                "from": 6,
+                "to": 12,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.385,
+                "oldRange": {
+                  "start": 47,
+                  "end": 47
+                },
+                "newRange": {
+                  "start": 49,
+                  "end": 53
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "f02af4ccb44d",
+                "hunkId": "035a7b930989",
+                "path": "src/cli/main.ts",
+                "from": 14,
+                "to": 16,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.316,
+                "oldRange": {
+                  "start": 50,
+                  "end": 50
+                },
+                "newRange": {
+                  "start": 56,
+                  "end": 56
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.385
+          }
+        ]
+      },
+      {
+        "path": "src/core/types.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "29daf8c29c3e",
+            "path": "src/core/types.ts",
+            "header": "@@ -100,7 +100,35 @@ export interface Dispatch {",
+            "oldStart": 100,
+            "oldLines": 7,
+            "newStart": 100,
+            "newLines": 35,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 100,
+                "newLine": 100
+              },
+              {
+                "kind": "context",
+                "text": "export interface Review {",
+                "oldLine": 101,
+                "newLine": 101
+              },
+              {
+                "kind": "context",
+                "text": "  changeSet: ChangeSet;",
+                "oldLine": 102,
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "  classification: Classification;",
+                "newLine": 103
+              },
+              {
+                "kind": "add",
+                "text": "  verdict: Verdict;",
+                "newLine": 104
+              },
+              {
+                "kind": "context",
+                "text": "  dispatches: Dispatch[];",
+                "oldLine": 103,
+                "newLine": 105
+              },
+              {
+                "kind": "context",
+                "text": "  rankedBy: string; // \"rules\" | `rules+${model}`",
+                "oldLine": 104,
+                "newLine": 106
+              },
+              {
+                "kind": "context",
+                "text": "  warning?: string;",
+                "oldLine": 105,
+                "newLine": 107
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 106,
+                "newLine": 108
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 109
+              },
+              {
+                "kind": "add",
+                "text": "// ---------------------------------------------------------------- change-level",
+                "newLine": 110
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 111
+              },
+              {
+                "kind": "add",
+                "text": "export type ChangeKind = \"docs\" | \"test\" | \"deps\" | \"ci\" | \"config\" | \"additive\" | \"logic\";",
+                "newLine": 112
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 113
+              },
+              {
+                "kind": "add",
+                "text": "/** What the whole change is, derived from its blocks (rules now, model later). */",
+                "newLine": 114
+              },
+              {
+                "kind": "add",
+                "text": "export interface Classification {",
+                "newLine": 115
+              },
+              {
+                "kind": "add",
+                "text": "  kind: ChangeKind;",
+                "newLine": 116
+              },
+              {
+                "kind": "add",
+                "text": "  /** Named sensitive areas (from policy) touched by any non-inert block. */",
+                "newLine": 117
+              },
+              {
+                "kind": "add",
+                "text": "  areas: string[];",
+                "newLine": 118
+              },
+              {
+                "kind": "add",
+                "text": "  /** Highest attention among blocks. */",
+                "newLine": 119
+              },
+              {
+                "kind": "add",
+                "text": "  maxAttention: Attention;",
+                "newLine": 120
+              },
+              {
+                "kind": "add",
+                "text": "  /** Blocks whose path matched the built-in sensitive-word heuristic, by path. */",
+                "newLine": 121
+              },
+              {
+                "kind": "add",
+                "text": "  sensitivePaths: string[];",
+                "newLine": 122
+              },
+              {
+                "kind": "add",
+                "text": "  counts: { files: number; blocks: number; inert: number };",
+                "newLine": 123
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 124
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 125
+              },
+              {
+                "kind": "add",
+                "text": "export type Tier = \"low\" | \"medium\" | \"high\";",
+                "newLine": 126
+              },
+              {
+                "kind": "add",
+                "text": "export const TIER_ORDER: readonly Tier[] = [\"low\", \"medium\", \"high\"];",
+                "newLine": 127
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 128
+              },
+              {
+                "kind": "add",
+                "text": "export interface Verdict {",
+                "newLine": 129
+              },
+              {
+                "kind": "add",
+                "text": "  tier: Tier;",
+                "newLine": 130
+              },
+              {
+                "kind": "add",
+                "text": "  requiredHumans: 0 | 1 | 2;",
+                "newLine": 131
+              },
+              {
+                "kind": "add",
+                "text": "  /** One line per rule or floor that contributed, most severe first. */",
+                "newLine": 132
+              },
+              {
+                "kind": "add",
+                "text": "  reasons: string[];",
+                "newLine": 133
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 134
+              }
+            ],
+            "blocks": [
+              {
+                "id": "334b24d81b1f",
+                "hunkId": "29daf8c29c3e",
+                "path": "src/core/types.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.442,
+                "newRange": {
+                  "start": 103,
+                  "end": 104
+                },
+                "kind": "types"
+              },
+              {
+                "id": "eb8e109f5889",
+                "hunkId": "29daf8c29c3e",
+                "path": "src/core/types.ts",
+                "from": 9,
+                "to": 35,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.412,
+                "newRange": {
+                  "start": 109,
+                  "end": 134
+                },
+                "kind": "types"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.442
+          }
+        ]
+      },
+      {
+        "path": "src/dispatch/config.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "ac6b3b8c93bf",
+            "path": "src/dispatch/config.ts",
+            "header": "@@ -1,6 +1,7 @@",
+            "oldStart": 1,
+            "oldLines": 6,
+            "newStart": 1,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "import { existsSync, readFileSync } from \"node:fs\";",
+                "oldLine": 1,
+                "newLine": 1
+              },
+              {
+                "kind": "context",
+                "text": "import { homedir } from \"node:os\";",
+                "oldLine": 2,
+                "newLine": 2
+              },
+              {
+                "kind": "context",
+                "text": "import { join } from \"node:path\";",
+                "oldLine": 3,
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import { DEFAULT_POLICY, type Policy, validatePolicy } from \"../policy/schema.ts\";",
+                "newLine": 4
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 4,
+                "newLine": 5
+              },
+              {
+                "kind": "context",
+                "text": "export const DEFAULT_CONFIG_PATH = join(homedir(), \".config\", \"lookout\", \"config.toml\");",
+                "oldLine": 5,
+                "newLine": 6
+              },
+              {
+                "kind": "context",
+                "text": "export const DEFAULT_MODEL = \"openai:gpt-6-luna\";",
+                "oldLine": 6,
+                "newLine": 7
+              }
+            ],
+            "blocks": [
+              {
+                "id": "2d38949e7d03",
+                "hunkId": "ac6b3b8c93bf",
+                "path": "src/dispatch/config.ts",
+                "from": 3,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.187,
+                "newRange": {
+                  "start": 4,
+                  "end": 4
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.187
+          },
+          {
+            "id": "f1d8f5bf8a54",
+            "path": "src/dispatch/config.ts",
+            "header": "@@ -20,10 +21,13 @@ export interface Config {",
+            "oldStart": 20,
+            "oldLines": 10,
+            "newStart": 21,
+            "newLines": 13,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  dispatchers: DispatcherConfig[];",
+                "oldLine": 20,
+                "newLine": 21
+              },
+              {
+                "kind": "context",
+                "text": "  /** Optional override of the default prompt template. */",
+                "oldLine": 21,
+                "newLine": 22
+              },
+              {
+                "kind": "context",
+                "text": "  prompt?: string;",
+                "oldLine": 22,
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "  policy: Policy;",
+                "newLine": 24
+              },
+              {
+                "kind": "context",
+                "text": "  /** Where the config came from, for error messages. */",
+                "oldLine": 23,
+                "newLine": 25
+              },
+              {
+                "kind": "context",
+                "text": "  source: string;",
+                "oldLine": 24,
+                "newLine": 26
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 25,
+                "newLine": 27
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 26,
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "export const REPO_CONFIG_NAME = \".lookout.toml\";",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 30
+              },
+              {
+                "kind": "context",
+                "text": "export const BUILTIN_DISPATCHERS: DispatcherConfig[] = [{ name: \"pi\", cmd: \"pi -p @{prompt_file}\" }];",
+                "oldLine": 27,
+                "newLine": 31
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 28,
+                "newLine": 32
+              },
+              {
+                "kind": "context",
+                "text": "export class ConfigError extends Error {}",
+                "oldLine": 29,
+                "newLine": 33
+              }
+            ],
+            "blocks": [
+              {
+                "id": "7e271cdad315",
+                "hunkId": "f1d8f5bf8a54",
+                "path": "src/dispatch/config.ts",
+                "from": 3,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.303,
+                "newRange": {
+                  "start": 24,
+                  "end": 24
+                },
+                "kind": "types"
+              },
+              {
+                "id": "bf129ebeda9f",
+                "hunkId": "f1d8f5bf8a54",
+                "path": "src/dispatch/config.ts",
+                "from": 8,
+                "to": 10,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.118,
+                "newRange": {
+                  "start": 29,
+                  "end": 30
+                },
+                "kind": "config"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.303
+          },
+          {
+            "id": "1bfb0d88811b",
+            "path": "src/dispatch/config.ts",
+            "header": "@@ -43,13 +47,19 @@ export function checkPlaceholders(template: string, where: string, allowed: read",
+            "oldStart": 43,
+            "oldLines": 13,
+            "newStart": 47,
+            "newLines": 19,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  }",
+                "oldLine": 43,
+                "newLine": 47
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 44,
+                "newLine": 48
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 45,
+                "newLine": 49
+              },
+              {
+                "kind": "del",
+                "text": "/** Validate a parsed TOML document. Hand-written checks so messages name the exact key. */",
+                "oldLine": 46
+              },
+              {
+                "kind": "del",
+                "text": "export function validateConfig(raw: unknown, source: string): Config {",
+                "oldLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "export const DEFAULT_CONFIG: Config = { rank: { model: DEFAULT_MODEL }, dispatchers: BUILTIN_DISPATCHERS, policy: DEFAULT_POLICY, source: \"built-in defaults\" };",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": " * Validate a parsed TOML document layered over `base`: rank, dispatch and prompt replace",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": " * the base's when present; areas and policy layer (see validatePolicy). Hand-written",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": " * checks so messages name the exact key.",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "export function validateConfig(raw: unknown, source: string, base: Config = DEFAULT_CONFIG): Config {",
+                "newLine": 57
+              },
+              {
+                "kind": "context",
+                "text": "  if (!isTable(raw)) throw new ConfigError(`${source}: expected a TOML table at top level`);",
+                "oldLine": 48,
+                "newLine": 58
+              },
+              {
+                "kind": "del",
+                "text": "  const known = new Set([\"rank\", \"dispatch\", \"prompt\"]);",
+                "oldLine": 49
+              },
+              {
+                "kind": "del",
+                "text": "  for (const key of Object.keys(raw)) if (!known.has(key)) throw new ConfigError(`${source}: unknown key \"${key}\" (expected rank, dispatch, prompt)`);",
+                "oldLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "  const known = new Set([\"rank\", \"dispatch\", \"prompt\", \"areas\", \"policy\"]);",
+                "newLine": 59
+              },
+              {
+                "kind": "add",
+                "text": "  for (const key of Object.keys(raw)) if (!known.has(key)) throw new ConfigError(`${source}: unknown key \"${key}\" (expected rank, dispatch, prompt, areas, policy)`);",
+                "newLine": 60
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 51,
+                "newLine": 61
+              },
+              {
+                "kind": "del",
+                "text": "  let model = DEFAULT_MODEL;",
+                "oldLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "  let model = base.rank.model;",
+                "newLine": 62
+              },
+              {
+                "kind": "context",
+                "text": "  if (raw.rank !== undefined) {",
+                "oldLine": 53,
+                "newLine": 63
+              },
+              {
+                "kind": "context",
+                "text": "    if (!isTable(raw.rank)) throw new ConfigError(`${source}: [rank] must be a table`);",
+                "oldLine": 54,
+                "newLine": 64
+              },
+              {
+                "kind": "context",
+                "text": "    for (const key of Object.keys(raw.rank)) if (key !== \"model\") throw new ConfigError(`${source}: unknown key \"rank.${key}\" (expected rank.model)`);",
+                "oldLine": 55,
+                "newLine": 65
+              }
+            ],
+            "blocks": [
+              {
+                "id": "31b2fa9f241b",
+                "hunkId": "1bfb0d88811b",
+                "path": "src/dispatch/config.ts",
+                "from": 3,
+                "to": 13,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.536,
+                "oldRange": {
+                  "start": 46,
+                  "end": 47
+                },
+                "newRange": {
+                  "start": 50,
+                  "end": 57
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "fbe82144af78",
+                "hunkId": "1bfb0d88811b",
+                "path": "src/dispatch/config.ts",
+                "from": 14,
+                "to": 18,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.379,
+                "oldRange": {
+                  "start": 49,
+                  "end": 50
+                },
+                "newRange": {
+                  "start": 59,
+                  "end": 60
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "a733ec9b0f35",
+                "hunkId": "1bfb0d88811b",
+                "path": "src/dispatch/config.ts",
+                "from": 19,
+                "to": 21,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.286,
+                "oldRange": {
+                  "start": 52,
+                  "end": 52
+                },
+                "newRange": {
+                  "start": 62,
+                  "end": 62
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.536
+          },
+          {
+            "id": "004dc0f409a0",
+            "path": "src/dispatch/config.ts",
+            "header": "@@ -61,7 +71,7 @@ export function validateConfig(raw: unknown, source: string): Config {",
+            "oldStart": 61,
+            "oldLines": 7,
+            "newStart": 71,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "    }",
+                "oldLine": 61,
+                "newLine": 71
+              },
+              {
+                "kind": "context",
+                "text": "  }",
+                "oldLine": 62,
+                "newLine": 72
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 63,
+                "newLine": 73
+              },
+              {
+                "kind": "del",
+                "text": "  let dispatchers = BUILTIN_DISPATCHERS;",
+                "oldLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "  let dispatchers = base.dispatchers;",
+                "newLine": 74
+              },
+              {
+                "kind": "context",
+                "text": "  if (raw.dispatch !== undefined) {",
+                "oldLine": 65,
+                "newLine": 75
+              },
+              {
+                "kind": "context",
+                "text": "    if (!isTable(raw.dispatch)) throw new ConfigError(`${source}: [dispatch] must contain [dispatch.<name>] tables`);",
+                "oldLine": 66,
+                "newLine": 76
+              },
+              {
+                "kind": "context",
+                "text": "    dispatchers = Object.entries(raw.dispatch).map(([name, d]) => {",
+                "oldLine": 67,
+                "newLine": 77
+              }
+            ],
+            "blocks": [
+              {
+                "id": "35e33d02e556",
+                "hunkId": "004dc0f409a0",
+                "path": "src/dispatch/config.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.36,
+                "oldRange": {
+                  "start": 64,
+                  "end": 64
+                },
+                "newRange": {
+                  "start": 74,
+                  "end": 74
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.36
+          },
+          {
+            "id": "22e2be99107c",
+            "path": "src/dispatch/config.ts",
+            "header": "@@ -74,22 +84,30 @@ export function validateConfig(raw: unknown, source: string): Config {",
+            "oldStart": 74,
+            "oldLines": 22,
+            "newStart": 84,
+            "newLines": 30,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "    if (dispatchers.length === 0) throw new ConfigError(`${source}: [dispatch] has no dispatchers`);",
+                "oldLine": 74,
+                "newLine": 84
+              },
+              {
+                "kind": "context",
+                "text": "  }",
+                "oldLine": 75,
+                "newLine": 85
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 76,
+                "newLine": 86
+              },
+              {
+                "kind": "del",
+                "text": "  const config: Config = { rank: { model }, dispatchers, source };",
+                "oldLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "  const policy = validatePolicy(raw, source, base.policy);",
+                "newLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "  if (!policy.ok) throw new ConfigError(policy.error);",
+                "newLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "  const config: Config = { rank: { model }, dispatchers, policy: policy.value, source };",
+                "newLine": 90
+              },
+              {
+                "kind": "context",
+                "text": "  if (raw.prompt !== undefined) {",
+                "oldLine": 78,
+                "newLine": 91
+              },
+              {
+                "kind": "context",
+                "text": "    if (typeof raw.prompt !== \"string\" || raw.prompt.trim() === \"\") throw new ConfigError(`${source}: prompt must be a non-empty string`);",
+                "oldLine": 79,
+                "newLine": 92
+              },
+              {
+                "kind": "context",
+                "text": "    checkPlaceholders(raw.prompt, `${source}: prompt`, PROMPT_PLACEHOLDERS);",
+                "oldLine": 80,
+                "newLine": 93
+              },
+              {
+                "kind": "context",
+                "text": "    config.prompt = raw.prompt;",
+                "oldLine": 81,
+                "newLine": 94
+              },
+              {
+                "kind": "del",
+                "text": "  }",
+                "oldLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "  } else if (base.prompt !== undefined) config.prompt = base.prompt;",
+                "newLine": 95
+              },
+              {
+                "kind": "context",
+                "text": "  return config;",
+                "oldLine": 83,
+                "newLine": 96
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 84,
+                "newLine": 97
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 85,
+                "newLine": 98
+              },
+              {
+                "kind": "del",
+                "text": "export function loadConfig(path: string = DEFAULT_CONFIG_PATH): Config {",
+                "oldLine": 86
+              },
+              {
+                "kind": "del",
+                "text": "  if (!existsSync(path)) return { rank: { model: DEFAULT_MODEL }, dispatchers: BUILTIN_DISPATCHERS, source: \"built-in defaults\" };",
+                "oldLine": 87
+              },
+              {
+                "kind": "del",
+                "text": "  let raw: unknown;",
+                "oldLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "function readToml(path: string): unknown {",
+                "newLine": 99
+              },
+              {
+                "kind": "context",
+                "text": "  try {",
+                "oldLine": 89,
+                "newLine": 100
+              },
+              {
+                "kind": "del",
+                "text": "    raw = Bun.TOML.parse(readFileSync(path, \"utf8\"));",
+                "oldLine": 90
+              },
+              {
+                "kind": "add",
+                "text": "    return Bun.TOML.parse(readFileSync(path, \"utf8\"));",
+                "newLine": 101
+              },
+              {
+                "kind": "context",
+                "text": "  } catch (err) {",
+                "oldLine": 91,
+                "newLine": 102
+              },
+              {
+                "kind": "context",
+                "text": "    throw new ConfigError(`${path}: invalid TOML: ${err instanceof Error ? err.message : String(err)}`);",
+                "oldLine": 92,
+                "newLine": 103
+              },
+              {
+                "kind": "context",
+                "text": "  }",
+                "oldLine": 93,
+                "newLine": 104
+              },
+              {
+                "kind": "del",
+                "text": "  return validateConfig(raw, path);",
+                "oldLine": 94
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 105
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 106
+              },
+              {
+                "kind": "add",
+                "text": "/** Global config, then the repo's `.lookout.toml` layered on top when `repoRoot` is given. */",
+                "newLine": 107
+              },
+              {
+                "kind": "add",
+                "text": "export function loadConfig(path: string = DEFAULT_CONFIG_PATH, repoRoot?: string): Config {",
+                "newLine": 108
+              },
+              {
+                "kind": "add",
+                "text": "  let config = existsSync(path) ? validateConfig(readToml(path), path) : DEFAULT_CONFIG;",
+                "newLine": 109
+              },
+              {
+                "kind": "add",
+                "text": "  const repoFile = repoRoot ? join(repoRoot, REPO_CONFIG_NAME) : undefined;",
+                "newLine": 110
+              },
+              {
+                "kind": "add",
+                "text": "  if (repoFile && existsSync(repoFile)) config = validateConfig(readToml(repoFile), repoFile, config);",
+                "newLine": 111
+              },
+              {
+                "kind": "add",
+                "text": "  return config;",
+                "newLine": 112
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 95,
+                "newLine": 113
+              }
+            ],
+            "blocks": [
+              {
+                "id": "70832a42573e",
+                "hunkId": "22e2be99107c",
+                "path": "src/dispatch/config.ts",
+                "from": 3,
+                "to": 8,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.468,
+                "oldRange": {
+                  "start": 77,
+                  "end": 77
+                },
+                "newRange": {
+                  "start": 87,
+                  "end": 90
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "a882afeec11c",
+                "hunkId": "22e2be99107c",
+                "path": "src/dispatch/config.ts",
+                "from": 12,
+                "to": 14,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.272,
+                "oldRange": {
+                  "start": 82,
+                  "end": 82
+                },
+                "newRange": {
+                  "start": 95,
+                  "end": 95
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "06cfe27c0bde",
+                "hunkId": "22e2be99107c",
+                "path": "src/dispatch/config.ts",
+                "from": 17,
+                "to": 21,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.358,
+                "oldRange": {
+                  "start": 86,
+                  "end": 88
+                },
+                "newRange": {
+                  "start": 99,
+                  "end": 99
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "0eedd61cb429",
+                "hunkId": "22e2be99107c",
+                "path": "src/dispatch/config.ts",
+                "from": 22,
+                "to": 24,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.29,
+                "oldRange": {
+                  "start": 90,
+                  "end": 90
+                },
+                "newRange": {
+                  "start": 101,
+                  "end": 101
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "f86149d42fef",
+                "hunkId": "22e2be99107c",
+                "path": "src/dispatch/config.ts",
+                "from": 27,
+                "to": 36,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.572,
+                "oldRange": {
+                  "start": 94,
+                  "end": 94
+                },
+                "newRange": {
+                  "start": 105,
+                  "end": 112
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.572
+          }
+        ]
+      },
+      {
+        "path": "src/policy/evaluate.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "68a0c37cf788",
+            "path": "src/policy/evaluate.ts",
+            "header": "@@ -0,0 +1,93 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 93,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import { allBlocks } from \"../core/blocks.ts\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { ATTENTION_ORDER, type Attention, type ChangeKind, type ChangeSet, type Classification, TIER_ORDER, type Tier, type Verdict } from \"../core/types.ts\";",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "import { globToRegExp } from \"../rank/rules.ts\";",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import type { Policy } from \"./schema.ts\";",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "const tierRank = (t: Tier) => TIER_ORDER.indexOf(t);",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "const maxTier = (a: Tier, b: Tier): Tier => (tierRank(a) >= tierRank(b) ? a : b);",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "const CONFIG_RE = /(^|\\/)(\\.env[^/]*|[^/]+\\.(toml|ya?ml|json|json5|ini|cfg|conf|properties|env))$/i;",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "const DEPS_RE = /(^|\\/)(package\\.json|pyproject\\.toml|requirements[^/]*\\.txt|go\\.mod|Cargo\\.toml|build\\.gradle(\\.kts)?|pom\\.xml|Gemfile|composer\\.json)$/;",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "export function areasOf(policy: Policy, path: string): string[] {",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "  const out: string[] = [];",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "  for (const [name, globs] of Object.entries(policy.areas)) if (globs.some((g) => globToRegExp(g).test(path))) out.push(name);",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "  return out;",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "/** Change-level kind from the non-inert blocks. \"logic\" is the default; narrower kinds need every block to agree. */",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "export function kindOf(blocks: { path: string; labels: string[]; hasDeletions: boolean }[]): ChangeKind {",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "  if (blocks.length === 0) return \"docs\";",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "  const every = (f: (b: (typeof blocks)[number]) => boolean) => blocks.every(f);",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "  if (every((b) => b.labels.includes(\"docs\"))) return \"docs\";",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "  if (every((b) => b.labels.includes(\"test\"))) return \"test\";",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "  if (every((b) => b.labels.includes(\"lockfile\") || DEPS_RE.test(b.path))) return \"deps\";",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "  if (every((b) => b.labels.includes(\"ci\"))) return \"ci\";",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "  if (every((b) => CONFIG_RE.test(b.path) && !DEPS_RE.test(b.path))) return \"config\";",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "  // Additive: nothing removed in non-test code (new files, new functions, new tests). Edits to existing lines are logic.",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "  if (every((b) => b.labels.includes(\"test\") || b.labels.includes(\"docs\") || !b.hasDeletions)) return \"additive\";",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "  return \"logic\";",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "export function classify(changeSet: ChangeSet, policy: Policy): Classification {",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "  const refs = allBlocks(changeSet);",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "  const live = refs.filter((r) => r.block.attention !== \"inert\");",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": "  const areas = new Set<string>();",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "  const sensitivePaths = new Set<string>();",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": "  let maxAttention: Attention = \"inert\";",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "  for (const r of live) {",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "    for (const a of areasOf(policy, r.block.path)) areas.add(a);",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "    if (r.block.labels.includes(\"sensitive\")) sensitivePaths.add(r.block.path);",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "    if (rank(r.block.attention) > rank(maxAttention)) maxAttention = r.block.attention;",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "  const kind = kindOf(",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": "    live.map((r) => ({",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "      path: r.block.path,",
+                "newLine": 46
+              },
+              {
+                "kind": "add",
+                "text": "      labels: r.block.labels,",
+                "newLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "      hasDeletions: r.hunk.lines.slice(r.block.from, r.block.to).some((l) => l.kind === \"del\") && r.file.status !== \"added\",",
+                "newLine": 48
+              },
+              {
+                "kind": "add",
+                "text": "    })),",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": "  );",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "  return {",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "    kind,",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "    areas: [...areas].sort(),",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": "    maxAttention,",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": "    sensitivePaths: [...sensitivePaths].sort(),",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": "    counts: { files: changeSet.files.length, blocks: refs.length, inert: refs.length - live.length },",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "  };",
+                "newLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 58
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 59
+              },
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 60
+              },
+              {
+                "kind": "add",
+                "text": " * Tier = max(kind default, every matching rule, floors). Floors are not configurable:",
+                "newLine": 61
+              },
+              {
+                "kind": "add",
+                "text": " * a touched area is never low, and a suspicious block is at least medium.",
+                "newLine": 62
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 63
+              },
+              {
+                "kind": "add",
+                "text": "export function evaluate(c: Classification, policy: Policy): Verdict {",
+                "newLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "  const reasons: { tier: Tier; text: string }[] = [];",
+                "newLine": 65
+              },
+              {
+                "kind": "add",
+                "text": "  let tier: Tier = policy.kinds[c.kind];",
+                "newLine": 66
+              },
+              {
+                "kind": "add",
+                "text": "  reasons.push({ tier, text: `${c.kind} change → ${tier}` });",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "  for (const rule of policy.rules) {",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "    if (rule.area && !c.areas.includes(rule.area)) continue;",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "    if (rule.kind && c.kind !== rule.kind) continue;",
+                "newLine": 71
+              },
+              {
+                "kind": "add",
+                "text": "    if (rule.attention && rank(c.maxAttention) < rank(rule.attention)) continue;",
+                "newLine": 72
+              },
+              {
+                "kind": "add",
+                "text": "    const what = rule.reason ?? [rule.area && `touches ${rule.area}`, rule.kind && `${rule.kind} change`, rule.attention && `a block is ${rule.attention}`].filter(Boolean).join(\", \");",
+                "newLine": 73
+              },
+              {
+                "kind": "add",
+                "text": "    reasons.push({ tier: rule.tier, text: `${what} → ${rule.tier}` });",
+                "newLine": 74
+              },
+              {
+                "kind": "add",
+                "text": "    tier = maxTier(tier, rule.tier);",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "  if (c.areas.length > 0 && tier === \"low\") {",
+                "newLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "    tier = \"medium\";",
+                "newLine": 79
+              },
+              {
+                "kind": "add",
+                "text": "    reasons.push({ tier, text: `touches ${c.areas.join(\", \")}: never low` });",
+                "newLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 81
+              },
+              {
+                "kind": "add",
+                "text": "  if (c.maxAttention === \"suspicious\" && tierRank(tier) < tierRank(\"medium\")) {",
+                "newLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "    tier = \"medium\";",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "    reasons.push({ tier, text: \"a suspicious block: at least medium\" });",
+                "newLine": 84
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 85
+              },
+              {
+                "kind": "add",
+                "text": "  if (c.sensitivePaths.length > 0 && tier === \"low\") {",
+                "newLine": 86
+              },
+              {
+                "kind": "add",
+                "text": "    tier = \"medium\";",
+                "newLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "    reasons.push({ tier, text: `sensitive path ${c.sensitivePaths[0]}${c.sensitivePaths.length > 1 ? ` (+${c.sensitivePaths.length - 1})` : \"\"}: never low` });",
+                "newLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 90
+              },
+              {
+                "kind": "add",
+                "text": "  reasons.sort((a, b) => tierRank(b.tier) - tierRank(a.tier));",
+                "newLine": 91
+              },
+              {
+                "kind": "add",
+                "text": "  return { tier, requiredHumans: policy.humans[tier], reasons: reasons.map((r) => r.text) };",
+                "newLine": 92
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 93
+              }
+            ],
+            "blocks": [
+              {
+                "id": "cf24e823f071",
+                "hunkId": "68a0c37cf788",
+                "path": "src/policy/evaluate.ts",
+                "from": 0,
+                "to": 93,
+                "labels": [
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.712,
+                "newRange": {
+                  "start": 1,
+                  "end": 93
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.712
+          }
+        ]
+      },
+      {
+        "path": "src/policy/schema.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "5c3642d00b00",
+            "path": "src/policy/schema.ts",
+            "header": "@@ -0,0 +1,129 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 129,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import type { ChangeKind, Tier } from \"../core/types.ts\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { ok, err, type Result } from \"../core/result.ts\";",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "/** A rule raises the tier to at least `tier` when every stated condition holds. */",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "export interface PolicyRule {",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "  area?: string;",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "  kind?: ChangeKind;",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "  /** Any block at or above this attention. */",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "  attention?: \"needs-eyes\" | \"suspicious\";",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "  tier: Tier;",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "  reason?: string;",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "export interface Policy {",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "  /** Area name → path globs (same syntax as rank/rules globs). */",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "  areas: Record<string, string[]>;",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "  /** Minimum tier per change kind, before rules and floors. */",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "  kinds: Record<ChangeKind, Tier>;",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "  humans: Record<Tier, 0 | 1 | 2>;",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "  rules: PolicyRule[];",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "  source: string;",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "export const DEFAULT_AREAS: Record<string, string[]> = {",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "  auth: [\"**/auth/**\", \"**/auth*.*\", \"**/authn/**\", \"**/authz/**\", \"**/oauth/**\", \"**/oidc/**\", \"**/sso/**\", \"**/session/**\", \"**/sessions/**\", \"**/*token*\", \"**/*credential*\", \"**/*password*\", \"**/*secret*\", \"**/permission*/**\", \"**/rbac/**\"],",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "  billing: [\"**/billing/**\", \"**/payment/**\", \"**/payments/**\", \"**/stripe/**\", \"**/invoice*/**\"],",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "  data: [\"**/migration/**\", \"**/migrations/**\", \"*.sql\", \"**/schema/**\", \"**/schema.*\", \"**/prisma/**\"],",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "  infra: [\"**/terraform/**\", \"*.tf\", \"**/k8s/**\", \"**/helm/**\", \"Dockerfile*\", \"**/infra/**\", \".github/workflows/**\"],",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "  prompts: [\"**/prompts/**\", \"**/prompt/**\", \"*.prompt.*\", \"**/system-prompt*\"],",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "};",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "export const DEFAULT_KINDS: Record<ChangeKind, Tier> = {",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "  docs: \"low\",",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "  test: \"low\",",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "  additive: \"low\",",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": "  deps: \"medium\",",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "  config: \"medium\",",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": "  ci: \"high\",",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "  logic: \"medium\",",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "};",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "export const DEFAULT_HUMANS: Record<Tier, 0 | 1 | 2> = { low: 0, medium: 1, high: 2 };",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "export const DEFAULT_RULES: PolicyRule[] = [",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": "  { area: \"auth\", tier: \"high\", reason: \"touches auth\" },",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "  { area: \"billing\", tier: \"high\", reason: \"touches billing\" },",
+                "newLine": 46
+              },
+              {
+                "kind": "add",
+                "text": "  { area: \"data\", tier: \"high\", reason: \"touches data schema or migrations\" },",
+                "newLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "  { area: \"infra\", tier: \"high\", reason: \"touches infra or CI\" },",
+                "newLine": 48
+              },
+              {
+                "kind": "add",
+                "text": "  { area: \"prompts\", tier: \"medium\", reason: \"touches prompts\" },",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": "];",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "export const DEFAULT_POLICY: Policy = { areas: DEFAULT_AREAS, kinds: DEFAULT_KINDS, humans: DEFAULT_HUMANS, rules: DEFAULT_RULES, source: \"built-in defaults\" };",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": "const KINDS: ChangeKind[] = [\"docs\", \"test\", \"deps\", \"ci\", \"config\", \"additive\", \"logic\"];",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": "const TIERS: Tier[] = [\"low\", \"medium\", \"high\"];",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": "const isTable = (v: unknown): v is Record<string, unknown> => typeof v === \"object\" && v !== null && !Array.isArray(v);",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === \"string\");",
+                "newLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 58
+              },
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 59
+              },
+              {
+                "kind": "add",
+                "text": " * Validate the `areas` and `policy` tables of a parsed TOML document, layered over `base`.",
+                "newLine": 60
+              },
+              {
+                "kind": "add",
+                "text": " * `areas` replaces areas by name (an empty list removes one); `policy.rules` replaces the rule list.",
+                "newLine": 61
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 62
+              },
+              {
+                "kind": "add",
+                "text": "export function validatePolicy(raw: Record<string, unknown>, source: string, base: Policy = DEFAULT_POLICY): Result<Policy> {",
+                "newLine": 63
+              },
+              {
+                "kind": "add",
+                "text": "  const policy: Policy = { ...base, areas: { ...base.areas }, kinds: { ...base.kinds }, humans: { ...base.humans }, rules: [...base.rules], source };",
+                "newLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 65
+              },
+              {
+                "kind": "add",
+                "text": "  if (raw.areas !== undefined) {",
+                "newLine": 66
+              },
+              {
+                "kind": "add",
+                "text": "    if (!isTable(raw.areas)) return err(`${source}: [areas] must be a table of name = [globs]`);",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "    for (const [name, globs] of Object.entries(raw.areas)) {",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "      if (!isStringArray(globs)) return err(`${source}: areas.${name} must be an array of glob strings`);",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "      if (globs.length === 0) delete policy.areas[name];",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "      else policy.areas[name] = globs;",
+                "newLine": 71
+              },
+              {
+                "kind": "add",
+                "text": "    }",
+                "newLine": 72
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 73
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 74
+              },
+              {
+                "kind": "add",
+                "text": "  if (raw.policy !== undefined) {",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": "    if (!isTable(raw.policy)) return err(`${source}: [policy] must be a table`);",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "    for (const key of Object.keys(raw.policy)) {",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "      if (![\"kinds\", \"humans\", \"rules\"].includes(key)) return err(`${source}: unknown key \"policy.${key}\" (expected kinds, humans, rules)`);",
+                "newLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "    }",
+                "newLine": 79
+              },
+              {
+                "kind": "add",
+                "text": "    const p = raw.policy;",
+                "newLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "    if (p.kinds !== undefined) {",
+                "newLine": 81
+              },
+              {
+                "kind": "add",
+                "text": "      if (!isTable(p.kinds)) return err(`${source}: [policy.kinds] must be a table`);",
+                "newLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "      for (const [kind, tier] of Object.entries(p.kinds)) {",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "        if (!KINDS.includes(kind as ChangeKind)) return err(`${source}: policy.kinds.${kind}: unknown kind (expected ${KINDS.join(\", \")})`);",
+                "newLine": 84
+              },
+              {
+                "kind": "add",
+                "text": "        if (!TIERS.includes(tier as Tier)) return err(`${source}: policy.kinds.${kind} must be one of ${TIERS.join(\", \")}`);",
+                "newLine": 85
+              },
+              {
+                "kind": "add",
+                "text": "        policy.kinds[kind as ChangeKind] = tier as Tier;",
+                "newLine": 86
+              },
+              {
+                "kind": "add",
+                "text": "      }",
+                "newLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "    }",
+                "newLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "    if (p.humans !== undefined) {",
+                "newLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "      if (!isTable(p.humans)) return err(`${source}: [policy.humans] must be a table`);",
+                "newLine": 90
+              },
+              {
+                "kind": "add",
+                "text": "      for (const [tier, n] of Object.entries(p.humans)) {",
+                "newLine": 91
+              },
+              {
+                "kind": "add",
+                "text": "        if (!TIERS.includes(tier as Tier)) return err(`${source}: policy.humans.${tier}: unknown tier`);",
+                "newLine": 92
+              },
+              {
+                "kind": "add",
+                "text": "        if (n !== 0 && n !== 1 && n !== 2) return err(`${source}: policy.humans.${tier} must be 0, 1 or 2`);",
+                "newLine": 93
+              },
+              {
+                "kind": "add",
+                "text": "        policy.humans[tier as Tier] = n;",
+                "newLine": 94
+              },
+              {
+                "kind": "add",
+                "text": "      }",
+                "newLine": 95
+              },
+              {
+                "kind": "add",
+                "text": "    }",
+                "newLine": 96
+              },
+              {
+                "kind": "add",
+                "text": "    if (p.rules !== undefined) {",
+                "newLine": 97
+              },
+              {
+                "kind": "add",
+                "text": "      if (!Array.isArray(p.rules)) return err(`${source}: policy.rules must be an array of [[policy.rules]] tables`);",
+                "newLine": 98
+              },
+              {
+                "kind": "add",
+                "text": "      const rules: PolicyRule[] = [];",
+                "newLine": 99
+              },
+              {
+                "kind": "add",
+                "text": "      for (const [k, r] of p.rules.entries()) {",
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "        const where = `${source}: policy.rules[${k}]`;",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "        if (!isTable(r)) return err(`${where} must be a table`);",
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "        for (const key of Object.keys(r)) if (![\"area\", \"kind\", \"attention\", \"tier\", \"reason\"].includes(key)) return err(`${where}: unknown key \"${key}\"`);",
+                "newLine": 103
+              },
+              {
+                "kind": "add",
+                "text": "        if (!TIERS.includes(r.tier as Tier)) return err(`${where}: tier must be one of ${TIERS.join(\", \")}`);",
+                "newLine": 104
+              },
+              {
+                "kind": "add",
+                "text": "        const rule: PolicyRule = { tier: r.tier as Tier };",
+                "newLine": 105
+              },
+              {
+                "kind": "add",
+                "text": "        if (r.area !== undefined) {",
+                "newLine": 106
+              },
+              {
+                "kind": "add",
+                "text": "          if (typeof r.area !== \"string\" || !(r.area in policy.areas)) return err(`${where}: area \"${String(r.area)}\" is not defined in [areas] (known: ${Object.keys(policy.areas).join(\", \")})`);",
+                "newLine": 107
+              },
+              {
+                "kind": "add",
+                "text": "          rule.area = r.area;",
+                "newLine": 108
+              },
+              {
+                "kind": "add",
+                "text": "        }",
+                "newLine": 109
+              },
+              {
+                "kind": "add",
+                "text": "        if (r.kind !== undefined) {",
+                "newLine": 110
+              },
+              {
+                "kind": "add",
+                "text": "          if (!KINDS.includes(r.kind as ChangeKind)) return err(`${where}: unknown kind \"${String(r.kind)}\"`);",
+                "newLine": 111
+              },
+              {
+                "kind": "add",
+                "text": "          rule.kind = r.kind as ChangeKind;",
+                "newLine": 112
+              },
+              {
+                "kind": "add",
+                "text": "        }",
+                "newLine": 113
+              },
+              {
+                "kind": "add",
+                "text": "        if (r.attention !== undefined) {",
+                "newLine": 114
+              },
+              {
+                "kind": "add",
+                "text": "          if (r.attention !== \"needs-eyes\" && r.attention !== \"suspicious\") return err(`${where}: attention must be needs-eyes or suspicious`);",
+                "newLine": 115
+              },
+              {
+                "kind": "add",
+                "text": "          rule.attention = r.attention;",
+                "newLine": 116
+              },
+              {
+                "kind": "add",
+                "text": "        }",
+                "newLine": 117
+              },
+              {
+                "kind": "add",
+                "text": "        if (r.reason !== undefined) {",
+                "newLine": 118
+              },
+              {
+                "kind": "add",
+                "text": "          if (typeof r.reason !== \"string\") return err(`${where}: reason must be a string`);",
+                "newLine": 119
+              },
+              {
+                "kind": "add",
+                "text": "          rule.reason = r.reason;",
+                "newLine": 120
+              },
+              {
+                "kind": "add",
+                "text": "        }",
+                "newLine": 121
+              },
+              {
+                "kind": "add",
+                "text": "        if (!rule.area && !rule.kind && !rule.attention) return err(`${where}: needs at least one of area, kind, attention`);",
+                "newLine": 122
+              },
+              {
+                "kind": "add",
+                "text": "        rules.push(rule);",
+                "newLine": 123
+              },
+              {
+                "kind": "add",
+                "text": "      }",
+                "newLine": 124
+              },
+              {
+                "kind": "add",
+                "text": "      policy.rules = rules;",
+                "newLine": 125
+              },
+              {
+                "kind": "add",
+                "text": "    }",
+                "newLine": 126
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 127
+              },
+              {
+                "kind": "add",
+                "text": "  return ok(policy);",
+                "newLine": 128
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 129
+              }
+            ],
+            "blocks": [
+              {
+                "id": "a1f98dfb93fe",
+                "hunkId": "5c3642d00b00",
+                "path": "src/policy/schema.ts",
+                "from": 0,
+                "to": 129,
+                "labels": [
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.73,
+                "newRange": {
+                  "start": 1,
+                  "end": 129
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.73
+          }
+        ]
+      },
+      {
+        "path": "test/dispatch.test.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "f9135eb1b191",
+            "path": "test/dispatch.test.ts",
+            "header": "@@ -8,6 +8,8 @@ import type { Review } from \"../src/core/types.ts\";",
+            "oldStart": 8,
+            "oldLines": 6,
+            "newStart": 8,
+            "newLines": 8,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "import { BUILTIN_DISPATCHERS, type Config, ConfigError, loadConfig, validateConfig } from \"../src/dispatch/config.ts\";",
+                "oldLine": 8,
+                "newLine": 8
+              },
+              {
+                "kind": "context",
+                "text": "import { buildPrompt, FINDINGS_CONTRACT } from \"../src/dispatch/prompt.ts\";",
+                "oldLine": 9,
+                "newLine": 9
+              },
+              {
+                "kind": "context",
+                "text": "import { DispatchRunner, expandCommand, shellQuote } from \"../src/dispatch/runner.ts\";",
+                "oldLine": 10,
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "import { classify, evaluate } from \"../src/policy/evaluate.ts\";",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "import { DEFAULT_POLICY } from \"../src/policy/schema.ts\";",
+                "newLine": 12
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 11,
+                "newLine": 13
+              },
+              {
+                "kind": "context",
+                "text": "const FAKE = `${import.meta.dir}/../fixtures/fake-dispatcher.sh`;",
+                "oldLine": 12,
+                "newLine": 14
+              },
+              {
+                "kind": "context",
+                "text": "const tmp = mkdtempSync(join(tmpdir(), \"lookout-dispatch-test-\"));",
+                "oldLine": 13,
+                "newLine": 15
+              }
+            ],
+            "blocks": [
+              {
+                "id": "9fc05c1acd8c",
+                "hunkId": "f9135eb1b191",
+                "path": "test/dispatch.test.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.124,
+                "newRange": {
+                  "start": 11,
+                  "end": 12
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.124
+          },
+          {
+            "id": "80bc7290abaa",
+            "path": "test/dispatch.test.ts",
+            "header": "@@ -15,9 +17,11 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));",
+            "oldStart": 15,
+            "oldLines": 9,
+            "newStart": 17,
+            "newLines": 11,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 15,
+                "newLine": 17
+              },
+              {
+                "kind": "context",
+                "text": "async function review(): Promise<Review> {",
+                "oldLine": 16,
+                "newLine": 18
+              },
+              {
+                "kind": "context",
+                "text": "  const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/sample-a.diff`).text());",
+                "oldLine": 17,
+                "newLine": 19
+              },
+              {
+                "kind": "del",
+                "text": "  return { changeSet: { target: \"HEAD~1..HEAD\", base: \"a\", head: \"b\", files, intent: { title: \"Render budgets\", body: \"Adds budgets to charts.\" } }, dispatches: [], rankedBy: \"rules\" };",
+                "oldLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "  const changeSet = { target: \"HEAD~1..HEAD\", base: \"a\", head: \"b\", files, intent: { title: \"Render budgets\", body: \"Adds budgets to charts.\" } };",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "  const classification = classify(changeSet, DEFAULT_POLICY);",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "  return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), dispatches: [], rankedBy: \"rules\" };",
+                "newLine": 22
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 19,
+                "newLine": 23
+              },
+              {
+                "kind": "del",
+                "text": "const config = (cmd: string, extra: Partial<Config> = {}): Config => ({ rank: { model: \"openai:gpt-6-luna\" }, dispatchers: [{ name: \"fake\", cmd }], source: \"test\", ...extra });",
+                "oldLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "const config = (cmd: string, extra: Partial<Config> = {}): Config => ({ rank: { model: \"openai:gpt-6-luna\" }, dispatchers: [{ name: \"fake\", cmd }], policy: DEFAULT_POLICY, source: \"test\", ...extra });",
+                "newLine": 24
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 21,
+                "newLine": 25
+              },
+              {
+                "kind": "context",
+                "text": "describe(\"config\", () => {",
+                "oldLine": 22,
+                "newLine": 26
+              },
+              {
+                "kind": "context",
+                "text": "  test(\"missing file → built-in pi dispatcher\", () => {",
+                "oldLine": 23,
+                "newLine": 27
+              }
+            ],
+            "blocks": [
+              {
+                "id": "cd9787e8adf7",
+                "hunkId": "80bc7290abaa",
+                "path": "test/dispatch.test.ts",
+                "from": 3,
+                "to": 7,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.183,
+                "oldRange": {
+                  "start": 18,
+                  "end": 18
+                },
+                "newRange": {
+                  "start": 20,
+                  "end": 22
+                },
+                "kind": "test"
+              },
+              {
+                "id": "5454929e3ca4",
+                "hunkId": "80bc7290abaa",
+                "path": "test/dispatch.test.ts",
+                "from": 8,
+                "to": 10,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.086,
+                "oldRange": {
+                  "start": 20,
+                  "end": 20
+                },
+                "newRange": {
+                  "start": 24,
+                  "end": 24
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.183
+          }
+        ]
+      },
+      {
+        "path": "test/policy.test.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "7847a75188a0",
+            "path": "test/policy.test.ts",
+            "header": "@@ -0,0 +1,174 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 174,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import { describe, expect, test } from \"bun:test\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { mkdtempSync, rmSync, writeFileSync } from \"node:fs\";",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "import { tmpdir } from \"node:os\";",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import { join } from \"node:path\";",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "import { parseDiff } from \"../src/core/diff.ts\";",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "import type { ChangeKind, Classification, Tier } from \"../src/core/types.ts\";",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "import { ConfigError, loadConfig } from \"../src/dispatch/config.ts\";",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "import { areasOf, classify, evaluate, kindOf } from \"../src/policy/evaluate.ts\";",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "import { DEFAULT_POLICY, validatePolicy } from \"../src/policy/schema.ts\";",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "import { applyRules } from \"../src/rank/rules.ts\";",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "const c = (over: Partial<Classification>): Classification => ({ kind: \"logic\", areas: [], maxAttention: \"routine\", sensitivePaths: [], counts: { files: 1, blocks: 1, inert: 0 }, ...over });",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"evaluate: tier table\", () => {",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "  const table: [Partial<Classification>, Tier, 0 | 1 | 2][] = [",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"docs\" }, \"low\", 0],",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"test\" }, \"low\", 0],",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"additive\" }, \"low\", 0],",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"deps\" }, \"medium\", 1],",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"config\" }, \"medium\", 1],",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"logic\" }, \"medium\", 1],",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"ci\" }, \"high\", 2],",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"docs\", areas: [\"auth\"] }, \"high\", 2],",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"logic\", areas: [\"prompts\"] }, \"medium\", 1],",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"additive\", maxAttention: \"suspicious\" }, \"medium\", 1],",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"logic\", maxAttention: \"suspicious\" }, \"medium\", 1],",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "    [{ kind: \"docs\", sensitivePaths: [\"docs/auth.md\"] }, \"medium\", 1],",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "  ];",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "  for (const [over, tier, humans] of table) {",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "    test(`${JSON.stringify(over)} → ${tier}/${humans}`, () => {",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "      const v = evaluate(c(over), DEFAULT_POLICY);",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "      expect(v.tier).toBe(tier);",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "      expect(v.requiredHumans).toBe(humans);",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "      expect(v.reasons.length).toBeGreaterThan(0);",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "    });",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a touched area can never be low, even with a permissive user policy\", () => {",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "    const policy = validatePolicy({ areas: { own: [\"**/own/**\"] }, policy: { rules: [] } }, \"t\");",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "    if (!policy.ok) throw new Error(policy.error);",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "    const v = evaluate(c({ kind: \"docs\", areas: [\"own\"] }), policy.value);",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "    expect(v.tier).toBe(\"medium\");",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "    expect(v.reasons.some((r) => r.includes(\"never low\"))).toBe(true);",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"reasons are most severe first and name the contributing rule\", () => {",
+                "newLine": 46
+              },
+              {
+                "kind": "add",
+                "text": "    const v = evaluate(c({ kind: \"docs\", areas: [\"auth\", \"prompts\"] }), DEFAULT_POLICY);",
+                "newLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "    expect(v.reasons[0]).toBe(\"touches auth → high\");",
+                "newLine": 48
+              },
+              {
+                "kind": "add",
+                "text": "    expect(v.reasons).toContain(\"docs change → low\");",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"user rule by attention and by kind\", () => {",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "    const policy = validatePolicy({ policy: { rules: [{ attention: \"needs-eyes\", tier: \"high\", reason: \"we are careful\" }, { kind: \"deps\", tier: \"high\" }] } }, \"t\");",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": "    if (!policy.ok) throw new Error(policy.error);",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": "    expect(evaluate(c({ maxAttention: \"needs-eyes\" }), policy.value).tier).toBe(\"high\");",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": "    expect(evaluate(c({ maxAttention: \"routine\" }), policy.value).tier).toBe(\"medium\");",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "    expect(evaluate(c({ kind: \"deps\" }), policy.value).reasons[0]).toBe(\"deps change → high\");",
+                "newLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 58
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 59
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"humans mapping is configurable\", () => {",
+                "newLine": 60
+              },
+              {
+                "kind": "add",
+                "text": "    const policy = validatePolicy({ policy: { humans: { medium: 2 } } }, \"t\");",
+                "newLine": 61
+              },
+              {
+                "kind": "add",
+                "text": "    if (!policy.ok) throw new Error(policy.error);",
+                "newLine": 62
+              },
+              {
+                "kind": "add",
+                "text": "    expect(evaluate(c({}), policy.value).requiredHumans).toBe(2);",
+                "newLine": 63
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 65
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 66
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"kindOf\", () => {",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "  const b = (path: string, labels: string[] = [], hasDeletions = false) => ({ path, labels, hasDeletions });",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "  const cases: [ReturnType<typeof b>[], ChangeKind][] = [",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"README.md\", [\"docs\"])], \"docs\"],",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"src/a.test.ts\", [\"test\"]), b(\"src/b.test.ts\", [\"test\"])], \"test\"],",
+                "newLine": 71
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"package.json\"), b(\"bun.lock\", [\"lockfile\"])], \"deps\"],",
+                "newLine": 72
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\".github/workflows/ci.yml\", [\"ci\"])], \"ci\"],",
+                "newLine": 73
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"config/app.yaml\"), b(\".env.example\")], \"config\"],",
+                "newLine": 74
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"src/new.ts\"), b(\"src/new.test.ts\", [\"test\"], true)], \"additive\"],",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"src/a.ts\", [], true)], \"logic\"],",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"src/a.ts\"), b(\"README.md\", [\"docs\"], true)], \"additive\"],",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "    [[b(\"src/a.ts\", [], true), b(\"README.md\", [\"docs\"])], \"logic\"],",
+                "newLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "    [[], \"docs\"],",
+                "newLine": 79
+              },
+              {
+                "kind": "add",
+                "text": "  ];",
+                "newLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "  for (const [blocks, kind] of cases) test(`${blocks.map((x) => x.path).join(\", \") || \"(none)\"} → ${kind}`, () => expect(kindOf(blocks)).toBe(kind));",
+                "newLine": 81
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"areas\", () => {",
+                "newLine": 84
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"default areas match by glob\", () => {",
+                "newLine": 85
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(DEFAULT_POLICY, \"apps/x/src/auth/refresh.ts\")).toEqual([\"auth\"]);",
+                "newLine": 86
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(DEFAULT_POLICY, \"db/migrations/0012_add.sql\")).toEqual([\"data\"]);",
+                "newLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(DEFAULT_POLICY, \".github/workflows/ci.yml\")).toEqual([\"infra\"]);",
+                "newLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(DEFAULT_POLICY, \"src/components/Button.tsx\")).toEqual([]);",
+                "newLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 90
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"repo areas replace by name; an empty list removes a default\", () => {",
+                "newLine": 91
+              },
+              {
+                "kind": "add",
+                "text": "    const p = validatePolicy({ areas: { auth: [\"services/identity/**\"], prompts: [] } }, \"t\");",
+                "newLine": 92
+              },
+              {
+                "kind": "add",
+                "text": "    if (!p.ok) throw new Error(p.error);",
+                "newLine": 93
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(p.value, \"services/identity/login.ts\")).toEqual([\"auth\"]);",
+                "newLine": 94
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(p.value, \"src/auth/x.ts\")).toEqual([]);",
+                "newLine": 95
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(p.value, \"src/prompts/system.md\")).toEqual([]);",
+                "newLine": 96
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 97
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 98
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 99
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"classify from a real diff\", () => {",
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"sample fixture: a test file plus source → logic, no areas, counts filled\", async () => {",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "    const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/sample-a.diff`).text());",
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "    const cs = applyRules({ target: \"t\", base: \"\", head: \"\", files });",
+                "newLine": 103
+              },
+              {
+                "kind": "add",
+                "text": "    const k = classify(cs, DEFAULT_POLICY);",
+                "newLine": 104
+              },
+              {
+                "kind": "add",
+                "text": "    expect(k.counts.blocks).toBe(27);",
+                "newLine": 105
+              },
+              {
+                "kind": "add",
+                "text": "    expect(k.counts.files).toBe(cs.files.length);",
+                "newLine": 106
+              },
+              {
+                "kind": "add",
+                "text": "    expect(k.kind).toBe(\"logic\");",
+                "newLine": 107
+              },
+              {
+                "kind": "add",
+                "text": "    expect(k.areas).toEqual([]);",
+                "newLine": 108
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 109
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"inert blocks do not contribute: a comment-only change under auth/ is docs-kind with no area\", () => {",
+                "newLine": 110
+              },
+              {
+                "kind": "add",
+                "text": "    const diff = [\"diff --git a/src/auth/a.ts b/src/auth/a.ts\", \"--- a/src/auth/a.ts\", \"+++ b/src/auth/a.ts\", \"@@ -1,2 +1,2 @@\", \"-// old comment\", \"+// new comment\", \" const a = 1;\"].join(\"\\n\") + \"\\n\";",
+                "newLine": 111
+              },
+              {
+                "kind": "add",
+                "text": "    const cs = applyRules({ target: \"t\", base: \"\", head: \"\", files: parseDiff(diff) });",
+                "newLine": 112
+              },
+              {
+                "kind": "add",
+                "text": "    // auth paths carry the sensitive label, so rules never mark them inert; the block stays live.",
+                "newLine": 113
+              },
+              {
+                "kind": "add",
+                "text": "    const k = classify(cs, DEFAULT_POLICY);",
+                "newLine": 114
+              },
+              {
+                "kind": "add",
+                "text": "    expect(k.areas).toEqual([\"auth\"]);",
+                "newLine": 115
+              },
+              {
+                "kind": "add",
+                "text": "    expect(evaluate(k, DEFAULT_POLICY).tier).toBe(\"high\");",
+                "newLine": 116
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 117
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 118
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 119
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"policy schema errors name the key\", () => {",
+                "newLine": 120
+              },
+              {
+                "kind": "add",
+                "text": "  const bad: [Record<string, unknown>, string][] = [",
+                "newLine": 121
+              },
+              {
+                "kind": "add",
+                "text": "    [{ areas: \"x\" }, \"[areas] must be a table\"],",
+                "newLine": 122
+              },
+              {
+                "kind": "add",
+                "text": "    [{ areas: { auth: \"x\" } }, \"areas.auth must be an array\"],",
+                "newLine": 123
+              },
+              {
+                "kind": "add",
+                "text": "    [{ policy: { nope: 1 } }, 'unknown key \"policy.nope\"'],",
+                "newLine": 124
+              },
+              {
+                "kind": "add",
+                "text": "    [{ policy: { kinds: { weird: \"low\" } } }, \"unknown kind\"],",
+                "newLine": 125
+              },
+              {
+                "kind": "add",
+                "text": "    [{ policy: { kinds: { docs: \"extreme\" } } }, \"one of low, medium, high\"],",
+                "newLine": 126
+              },
+              {
+                "kind": "add",
+                "text": "    [{ policy: { humans: { low: 3 } } }, \"0, 1 or 2\"],",
+                "newLine": 127
+              },
+              {
+                "kind": "add",
+                "text": "    [{ policy: { rules: [{ tier: \"high\" }] } }, \"at least one of area, kind, attention\"],",
+                "newLine": 128
+              },
+              {
+                "kind": "add",
+                "text": "    [{ policy: { rules: [{ area: \"nope\", tier: \"high\" }] } }, 'area \"nope\" is not defined'],",
+                "newLine": 129
+              },
+              {
+                "kind": "add",
+                "text": "    [{ policy: { rules: [{ kind: \"docs\", tier: \"huge\" }] } }, \"tier must be\"],",
+                "newLine": 130
+              },
+              {
+                "kind": "add",
+                "text": "  ];",
+                "newLine": 131
+              },
+              {
+                "kind": "add",
+                "text": "  for (const [raw, msg] of bad) {",
+                "newLine": 132
+              },
+              {
+                "kind": "add",
+                "text": "    test(msg, () => {",
+                "newLine": 133
+              },
+              {
+                "kind": "add",
+                "text": "      const r = validatePolicy(raw, \"t\");",
+                "newLine": 134
+              },
+              {
+                "kind": "add",
+                "text": "      expect(r.ok).toBe(false);",
+                "newLine": 135
+              },
+              {
+                "kind": "add",
+                "text": "      if (!r.ok) expect(r.error).toContain(msg);",
+                "newLine": 136
+              },
+              {
+                "kind": "add",
+                "text": "    });",
+                "newLine": 137
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 138
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 139
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 140
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"config layering\", () => {",
+                "newLine": 141
+              },
+              {
+                "kind": "add",
+                "text": "  const tmp = mkdtempSync(join(tmpdir(), \"lookout-policy-\"));",
+                "newLine": 142
+              },
+              {
+                "kind": "add",
+                "text": "  const repo = join(tmp, \"repo\");",
+                "newLine": 143
+              },
+              {
+                "kind": "add",
+                "text": "  const g = join(tmp, \"global.toml\");",
+                "newLine": 144
+              },
+              {
+                "kind": "add",
+                "text": "  writeFileSync(g, `[rank]\\nmodel = \"openai:gpt-6-luna\"\\n\\n[dispatch.pi]\\ncmd = \"pi -p @{prompt_file}\"\\n\\n[areas]\\nbilling = [\"money/**\"]\\n`);",
+                "newLine": 145
+              },
+              {
+                "kind": "add",
+                "text": "  Bun.spawnSync([\"mkdir\", \"-p\", repo]);",
+                "newLine": 146
+              },
+              {
+                "kind": "add",
+                "text": "  writeFileSync(join(repo, \".lookout.toml\"), `[areas]\\nauth = [\"identity/**\"]\\n\\n[[policy.rules]]\\narea = \"auth\"\\ntier = \"medium\"\\nreason = \"identity is well-tested here\"\\n\\n[policy.humans]\\nhigh = 1\\n`);",
+                "newLine": 147
+              },
+              {
+                "kind": "add",
+                "text": "  const cleanup = () => rmSync(tmp, { recursive: true, force: true });",
+                "newLine": 148
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 149
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"repo .lookout.toml layers over the global file; dispatch/rank come from global\", () => {",
+                "newLine": 150
+              },
+              {
+                "kind": "add",
+                "text": "    const cfg = loadConfig(g, repo);",
+                "newLine": 151
+              },
+              {
+                "kind": "add",
+                "text": "    expect(cfg.dispatchers.map((d) => d.name)).toEqual([\"pi\"]);",
+                "newLine": 152
+              },
+              {
+                "kind": "add",
+                "text": "    expect(cfg.policy.source).toContain(\".lookout.toml\");",
+                "newLine": 153
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(cfg.policy, \"money/charge.ts\")).toEqual([\"billing\"]); // from global",
+                "newLine": 154
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(cfg.policy, \"identity/login.ts\")).toEqual([\"auth\"]); // replaced by repo",
+                "newLine": 155
+              },
+              {
+                "kind": "add",
+                "text": "    expect(areasOf(cfg.policy, \"src/auth/x.ts\")).toEqual([]);",
+                "newLine": 156
+              },
+              {
+                "kind": "add",
+                "text": "    expect(cfg.policy.humans.high).toBe(1);",
+                "newLine": 157
+              },
+              {
+                "kind": "add",
+                "text": "    // Repo rules replace the default rule list.",
+                "newLine": 158
+              },
+              {
+                "kind": "add",
+                "text": "    expect(cfg.policy.rules).toEqual([{ area: \"auth\", tier: \"medium\", reason: \"identity is well-tested here\" }]);",
+                "newLine": 159
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 160
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"no repo file → global only; no files → defaults\", () => {",
+                "newLine": 161
+              },
+              {
+                "kind": "add",
+                "text": "    expect(loadConfig(g, tmp).policy.rules).toEqual(DEFAULT_POLICY.rules);",
+                "newLine": 162
+              },
+              {
+                "kind": "add",
+                "text": "    expect(loadConfig(join(tmp, \"missing.toml\")).policy).toBe(DEFAULT_POLICY);",
+                "newLine": 163
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 164
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a bad repo file names the repo file\", () => {",
+                "newLine": 165
+              },
+              {
+                "kind": "add",
+                "text": "    const bad = join(tmp, \"bad\");",
+                "newLine": 166
+              },
+              {
+                "kind": "add",
+                "text": "    Bun.spawnSync([\"mkdir\", \"-p\", bad]);",
+                "newLine": 167
+              },
+              {
+                "kind": "add",
+                "text": "    writeFileSync(join(bad, \".lookout.toml\"), `[policy]\\nkinds = { docs = \"silly\" }\\n`);",
+                "newLine": 168
+              },
+              {
+                "kind": "add",
+                "text": "    expect(() => loadConfig(g, bad)).toThrow(ConfigError);",
+                "newLine": 169
+              },
+              {
+                "kind": "add",
+                "text": "    expect(() => loadConfig(g, bad)).toThrow(/bad\\/\\.lookout\\.toml: policy\\.kinds\\.docs/);",
+                "newLine": 170
+              },
+              {
+                "kind": "add",
+                "text": "    cleanup();",
+                "newLine": 171
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 172
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 173
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 174
+              }
+            ],
+            "blocks": [
+              {
+                "id": "f2b87b37b7fc",
+                "hunkId": "7847a75188a0",
+                "path": "test/policy.test.ts",
+                "from": 0,
+                "to": 174,
+                "labels": [
+                  "test",
+                  "added"
+                ],
+                "attention": "routine",
+                "score": 0.476,
+                "newRange": {
+                  "start": 1,
+                  "end": 174
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test",
+              "added"
+            ],
+            "attention": "routine",
+            "score": 0.476
+          }
+        ]
+      }
+    ]
+  },
+  "classification": {
+    "kind": "logic",
+    "areas": [],
+    "maxAttention": "needs-eyes",
+    "sensitivePaths": [],
+    "counts": {
+      "files": 8,
+      "blocks": 27,
+      "inert": 0
+    }
+  },
+  "verdict": {
+    "tier": "medium",
+    "requiredHumans": 1,
+    "reasons": [
+      "logic change → medium"
+    ]
+  },
+  "cards": [
+    {
+      "id": "bd36242c789a",
+      "title": "Add Policy-Based Review Verdicts",
+      "color": "amber",
+      "kind": "logic",
+      "areas": [],
+      "labels": [
+        "added"
+      ],
+      "blockIds": [
+        "c37de64686c8",
+        "b7697b4aa51c",
+        "1c3033197f0c",
+        "736fdd39e6f1",
+        "eb6219060cac",
+        "f02af4ccb44d",
+        "2d38949e7d03",
+        "31b2fa9f241b",
+        "fbe82144af78",
+        "a733ec9b0f35",
+        "35e33d02e556",
+        "70832a42573e",
+        "a882afeec11c",
+        "06cfe27c0bde",
+        "0eedd61cb429",
+        "f86149d42fef",
+        "cf24e823f071",
+        "a1f98dfb93fe"
+      ],
+      "attention": "needs-eyes",
+      "score": 0.73,
+      "blockKind": "behavior",
+      "paragraph": "`loadConfig` now layers repository `.lookout.toml` settings over global configuration, including areas and policy rules. The CLI classifies each `ChangeSet`, evaluates its tier and required human count, and stores the classification and verdict both before and after model ranking; `tier-survey.ts` reports these classifications for recent non-merge commits."
+    },
+    {
+      "id": "c209d915793d",
+      "title": "Type change classification and policy metadata",
+      "color": "amber",
+      "kind": "additive",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "334b24d81b1f",
+        "eb8e109f5889",
+        "7e271cdad315"
+      ],
+      "attention": "needs-eyes",
+      "score": 0.442,
+      "blockKind": "types",
+      "paragraph": "`Review` now includes `classification: Classification` and `verdict: Verdict`; `Classification` records the change kind, areas, maximum attention, sensitive paths, and file/block/inert counts, while `Verdict` records a low/medium/high tier, required human count, and reasons. `Config` now requires a `policy: Policy` field."
+    },
+    {
+      "id": "ba8519f20d6e",
+      "title": "Test policy classification and evaluation",
+      "color": "green",
+      "kind": "test",
+      "areas": [],
+      "labels": [
+        "added",
+        "test"
+      ],
+      "blockIds": [
+        "9fc05c1acd8c",
+        "cd9787e8adf7",
+        "5454929e3ca4",
+        "f2b87b37b7fc"
+      ],
+      "attention": "routine",
+      "score": 0.476,
+      "blockKind": "test",
+      "paragraph": "`dispatch.test.ts` now builds each `Review` with `classification` from `classify` and `verdict` from `evaluate`, and supplies `DEFAULT_POLICY` in test configs. New `policy.test.ts` cases cover tier and human-count evaluation, change-kind and area classification, diff classification, schema errors, and global/repository config layering."
+    },
+    {
+      "id": "6c7ed8d2c059",
+      "title": "Typing refactor in main.ts",
+      "color": "green",
+      "kind": "logic",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "af9901c7a4e2"
+      ],
+      "attention": "routine",
+      "score": 0.12,
+      "blockKind": "typing-refactor",
+      "paragraph": "1 edit change types, annotations or function form only (ChangeSet); runtime behaviour is unchanged.",
+      "mechanical": true
+    },
+    {
+      "id": "b246e861bf19",
+      "title": "Configure Repository Config Filename",
+      "color": "green",
+      "kind": "additive",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "bf129ebeda9f"
+      ],
+      "attention": "routine",
+      "score": 0.118,
+      "blockKind": "config",
+      "paragraph": "Exports `REPO_CONFIG_NAME` with the value `.lookout.toml` from `src/dispatch/config.ts`."
+    }
+  ],
+  "untouched": [
+    "auth",
+    "billing",
+    "data",
+    "infra",
+    "prompts"
+  ],
+  "dispatches": [],
+  "rankedBy": "rules+openai:gpt-6-luna"
+}

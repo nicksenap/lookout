@@ -1,0 +1,93 @@
+import { allBlocks, type BlockRef } from "../core/blocks.ts";
+import { ATTENTION_ORDER, type Attention, type Card, type CardColor, type ChangeSet, COLOR_ORDER } from "../core/types.ts";
+import { areasOf, kindOf } from "../policy/evaluate.ts";
+import type { Policy } from "../policy/schema.ts";
+import { groupBlocks, isMechanical, mechanicalText } from "./group.ts";
+
+const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
+const CONTENT_LABELS = ["whitespace-only", "comment-only"];
+
+/**
+ * Group live (non-inert) blocks into cards. With model kinds available, blocks are grouped
+ * into logical changes (cards/group.ts) and mechanical groups get deterministic prose; under
+ * rules-only ranking (no kinds) the stand-in is one card per file. Inert blocks all go to the
+ * fixed "clean" card. Every block lands in exactly one card.
+ */
+export function buildCards(changeSet: ChangeSet, policy: Policy): Card[] {
+  const refs = allBlocks(changeSet);
+  const live = refs.filter((r) => r.block.attention !== "inert");
+  const inert = refs.filter((r) => r.block.attention === "inert");
+
+  const haveKinds = live.length > 0 && live.every((r) => r.block.kind !== undefined);
+  const cards = haveKinds
+    ? groupBlocks(live).map((g) => {
+        const card = makeCard(cardId(g.refs.map((r) => r.block.id)), titleFor(g.refs, g.topIdentifiers), g.refs, policy);
+        if (g.kind) card.blockKind = g.kind;
+        if (isMechanical(g.kind)) {
+          const text = mechanicalText(g);
+          card.title = text.title;
+          card.paragraph = text.paragraph;
+          card.mechanical = true;
+        }
+        return card;
+      })
+    : [...live.reduce((m, r) => m.set(r.file.path, [...(m.get(r.file.path) ?? []), r]), new Map<string, BlockRef[]>())].map(([path, group]) => makeCard(cardId(group.map((r) => r.block.id)), path, group, policy));
+  cards.sort(compareCards);
+
+  if (inert.length > 0) cards.push({ ...makeCard("clean", `verified clean · ${inert.length} edit${inert.length === 1 ? "" : "s"}`, inert, policy), color: "grey", fixed: "clean" });
+  return cards;
+}
+
+/** Placeholder title until the writer names the card: the file, or the files, it touches. */
+function titleFor(group: BlockRef[], topIdentifiers: string[]): string {
+  const files = [...new Set(group.map((r) => r.file.path))];
+  const where = files.length === 1 ? files[0]! : `${files[0]!.split("/").pop()} +${files.length - 1} more`;
+  return topIdentifiers.length ? `${where} · ${topIdentifiers.slice(0, 2).join(", ")}` : where;
+}
+
+export function cardId(blockIds: string[]): string {
+  const h = new Bun.CryptoHasher("sha1");
+  for (const id of [...blockIds].sort()) h.update(`${id}\0`);
+  return h.digest("hex").slice(0, 12);
+}
+
+function makeCard(id: string, title: string, group: BlockRef[], policy: Policy): Card {
+  const labels = [...new Set(group.flatMap((r) => r.block.labels))].filter((l) => !CONTENT_LABELS.includes(l)).sort();
+  const areas = [...new Set(group.flatMap((r) => areasOf(policy, r.block.path)))].sort();
+  const kind = kindOf(
+    group.map((r) => ({
+      path: r.block.path,
+      labels: r.block.labels,
+      hasDeletions: r.hunk.lines.slice(r.block.from, r.block.to).some((l) => l.kind === "del") && r.file.status !== "added",
+    })),
+  );
+  const attention = group.reduce<Attention>((top, r) => (rank(r.block.attention) > rank(top) ? r.block.attention : top), "inert");
+  const score = Math.max(0, ...group.map((r) => r.block.score));
+  const card: Card = { id, title, color: "grey", kind, areas, labels, blockIds: group.map((r) => r.block.id), attention, score };
+  card.color = colorFloor(card);
+  return card;
+}
+
+/**
+ * Rule-derived color. The model step (plan pipeline step 8) may only raise a card above
+ * this floor, never lower it; and only rules may call a card grey.
+ */
+export function colorFloor(card: Pick<Card, "attention" | "areas" | "labels" | "kind">): CardColor {
+  if (card.attention === "inert") return "grey";
+  if (card.attention === "suspicious" || card.areas.length > 0 || card.labels.includes("sensitive")) return "red";
+  if (card.attention === "needs-eyes" || card.kind === "deps" || card.kind === "config" || card.kind === "ci") return "amber";
+  return "green";
+}
+
+/** Riskiest first: color, then attention, then score; stable for equal keys. */
+export function compareCards(a: Card, b: Card): number {
+  return COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) || rank(b.attention) - rank(a.attention) || b.score - a.score;
+}
+
+/** Policy areas that no file of the change touches at all. */
+export function untouchedAreas(changeSet: ChangeSet, policy: Policy): string[] {
+  const touched = new Set(changeSet.files.flatMap((f) => areasOf(policy, f.path)));
+  return Object.keys(policy.areas)
+    .filter((a) => !touched.has(a))
+    .sort();
+}

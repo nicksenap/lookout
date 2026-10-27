@@ -1,0 +1,104 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..29b5c02
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,6 @@
++node_modules/
++.lookout/
++*.log
++.DS_Store
++coverage/
++dist/
+diff --git a/bin/lookout b/bin/lookout
+new file mode 100755
+index 0000000..15d183e
+--- /dev/null
++++ b/bin/lookout
+@@ -0,0 +1,2 @@
++#!/usr/bin/env bun
++import "../src/cli/main.ts";
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..ca01dd2
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,24 @@
++{
++  "name": "lookout",
++  "version": "0.1.0",
++  "type": "module",
++  "private": true,
++  "bin": {
++    "lookout": "bin/lookout"
++  },
++  "scripts": {
++    "typecheck": "tsc --noEmit",
++    "test": "bun test"
++  },
++  "dependencies": {
++    "ai": "7.0.154",
++    "ink": "6.8.0",
++    "react": "19.3.1"
++  },
++  "devDependencies": {
++    "@types/bun": "^1.4.4",
++    "@types/react": "^19.3.0",
++    "ink-testing-library": "4",
++    "typescript": "^7.0.2"
++  }
++}
+diff --git a/src/cli/main.ts b/src/cli/main.ts
+new file mode 100644
+index 0000000..c45c4e7
+--- /dev/null
++++ b/src/cli/main.ts
+@@ -0,0 +1,7 @@
++import pkg from "../../package.json" with { type: "json" };
++
++const args = process.argv.slice(2);
++if (args.includes("--version") || args.includes("-v")) {
++  console.log(`lookout ${pkg.version}`);
++  process.exit(0);
++}
+diff --git a/test/version.test.ts b/test/version.test.ts
+new file mode 100644
+index 0000000..a50027e
+--- /dev/null
++++ b/test/version.test.ts
+@@ -0,0 +1,7 @@
++import { expect, test } from "bun:test";
++
++test("lookout --version prints the package version", async () => {
++  const proc = Bun.spawn(["bun", "bin/lookout", "--version"], { stdout: "pipe" });
++  const out = await new Response(proc.stdout).text();
++  expect(out.trim()).toBe("lookout 0.1.0");
++});
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..d19c001
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,22 @@
++{
++  "compilerOptions": {
++    "target": "ESNext",
++    "module": "Preserve",
++    "moduleResolution": "bundler",
++    "lib": ["ESNext"],
++    "jsx": "react-jsx",
++    "types": ["bun"],
++    "strict": true,
++    "noUncheckedIndexedAccess": true,
++    "noImplicitOverride": true,
++    "noFallthroughCasesInSwitch": true,
++    "exactOptionalPropertyTypes": false,
++    "verbatimModuleSyntax": true,
++    "allowImportingTsExtensions": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "isolatedModules": true,
++    "resolveJsonModule": true
++  },
++  "include": ["src", "test", "bin"]
++}

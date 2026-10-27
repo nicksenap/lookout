@@ -1,0 +1,615 @@
+diff --git a/src/cli/main.ts b/src/cli/main.ts
+index c716494..f577562 100644
+--- a/src/cli/main.ts
++++ b/src/cli/main.ts
+@@ -1,8 +1,10 @@
+ import pkg from "../../package.json" with { type: "json" };
+ import { ReviewStore } from "../core/store.ts";
+-import type { Review } from "../core/types.ts";
++import type { ChangeSet, Review } from "../core/types.ts";
+ import { loadConfig } from "../dispatch/config.ts";
++import { classify, evaluate } from "../policy/evaluate.ts";
+ import { rankChangeSet, rankWithModel } from "../rank/rank.ts";
++import { repoRoot } from "../sources/git.ts";
+ import { loadChangeSet, resolveTarget } from "../sources/resolve.ts";
+ 
+ const HELP = `lookout ${pkg.version} — rank hunks that deserve attention, dispatch review agents
+@@ -42,12 +44,16 @@ function parseArgs(argv: string[]): CliArgs {
+ 
+ async function main(): Promise<void> {
+   const args = parseArgs(process.argv.slice(2));
+-  const config = loadConfig();
++  const config = loadConfig(undefined, await repoRoot().catch(() => undefined));
+   const ruled = await rankChangeSet(await loadChangeSet(resolveTarget(args.target)));
+-  const store = new ReviewStore({ changeSet: ruled.changeSet, dispatches: [], rankedBy: ruled.rankedBy });
++  const judge = (cs: ChangeSet) => {
++    const classification = classify(cs, config.policy);
++    return { classification, verdict: evaluate(classification, config.policy) };
++  };
++  const store = new ReviewStore({ changeSet: ruled.changeSet, ...judge(ruled.changeSet), dispatches: [], rankedBy: ruled.rankedBy });
+   const modelRanking = rankWithModel(ruled.changeSet, { modelSpec: config.rank.model }).then((res) =>
+     store.update((r) => {
+-      const next: Review = { ...r, changeSet: res.changeSet, rankedBy: res.rankedBy };
++      const next: Review = { ...r, changeSet: res.changeSet, ...judge(res.changeSet), rankedBy: res.rankedBy };
+       if (res.warning) next.warning = res.warning;
+       else delete next.warning;
+       return next;
+diff --git a/src/core/types.ts b/src/core/types.ts
+index bed4523..71f4648 100644
+--- a/src/core/types.ts
++++ b/src/core/types.ts
+@@ -100,7 +100,35 @@ export interface Dispatch {
+ 
+ export interface Review {
+   changeSet: ChangeSet;
++  classification: Classification;
++  verdict: Verdict;
+   dispatches: Dispatch[];
+   rankedBy: string; // "rules" | `rules+${model}`
+   warning?: string;
+ }
++
++// ---------------------------------------------------------------- change-level
++
++export type ChangeKind = "docs" | "test" | "deps" | "ci" | "config" | "additive" | "logic";
++
++/** What the whole change is, derived from its blocks (rules now, model later). */
++export interface Classification {
++  kind: ChangeKind;
++  /** Named sensitive areas (from policy) touched by any non-inert block. */
++  areas: string[];
++  /** Highest attention among blocks. */
++  maxAttention: Attention;
++  /** Blocks whose path matched the built-in sensitive-word heuristic, by path. */
++  sensitivePaths: string[];
++  counts: { files: number; blocks: number; inert: number };
++}
++
++export type Tier = "low" | "medium" | "high";
++export const TIER_ORDER: readonly Tier[] = ["low", "medium", "high"];
++
++export interface Verdict {
++  tier: Tier;
++  requiredHumans: 0 | 1 | 2;
++  /** One line per rule or floor that contributed, most severe first. */
++  reasons: string[];
++}
+diff --git a/src/dispatch/config.ts b/src/dispatch/config.ts
+index 8997db1..ec40a8b 100644
+--- a/src/dispatch/config.ts
++++ b/src/dispatch/config.ts
+@@ -1,6 +1,7 @@
+ import { existsSync, readFileSync } from "node:fs";
+ import { homedir } from "node:os";
+ import { join } from "node:path";
++import { DEFAULT_POLICY, type Policy, validatePolicy } from "../policy/schema.ts";
+ 
+ export const DEFAULT_CONFIG_PATH = join(homedir(), ".config", "lookout", "config.toml");
+ export const DEFAULT_MODEL = "openai:gpt-6-luna";
+@@ -20,10 +21,13 @@ export interface Config {
+   dispatchers: DispatcherConfig[];
+   /** Optional override of the default prompt template. */
+   prompt?: string;
++  policy: Policy;
+   /** Where the config came from, for error messages. */
+   source: string;
+ }
+ 
++export const REPO_CONFIG_NAME = ".lookout.toml";
++
+ export const BUILTIN_DISPATCHERS: DispatcherConfig[] = [{ name: "pi", cmd: "pi -p @{prompt_file}" }];
+ 
+ export class ConfigError extends Error {}
+@@ -43,13 +47,19 @@ export function checkPlaceholders(template: string, where: string, allowed: read
+   }
+ }
+ 
+-/** Validate a parsed TOML document. Hand-written checks so messages name the exact key. */
+-export function validateConfig(raw: unknown, source: string): Config {
++export const DEFAULT_CONFIG: Config = { rank: { model: DEFAULT_MODEL }, dispatchers: BUILTIN_DISPATCHERS, policy: DEFAULT_POLICY, source: "built-in defaults" };
++
++/**
++ * Validate a parsed TOML document layered over `base`: rank, dispatch and prompt replace
++ * the base's when present; areas and policy layer (see validatePolicy). Hand-written
++ * checks so messages name the exact key.
++ */
++export function validateConfig(raw: unknown, source: string, base: Config = DEFAULT_CONFIG): Config {
+   if (!isTable(raw)) throw new ConfigError(`${source}: expected a TOML table at top level`);
+-  const known = new Set(["rank", "dispatch", "prompt"]);
+-  for (const key of Object.keys(raw)) if (!known.has(key)) throw new ConfigError(`${source}: unknown key "${key}" (expected rank, dispatch, prompt)`);
++  const known = new Set(["rank", "dispatch", "prompt", "areas", "policy"]);
++  for (const key of Object.keys(raw)) if (!known.has(key)) throw new ConfigError(`${source}: unknown key "${key}" (expected rank, dispatch, prompt, areas, policy)`);
+ 
+-  let model = DEFAULT_MODEL;
++  let model = base.rank.model;
+   if (raw.rank !== undefined) {
+     if (!isTable(raw.rank)) throw new ConfigError(`${source}: [rank] must be a table`);
+     for (const key of Object.keys(raw.rank)) if (key !== "model") throw new ConfigError(`${source}: unknown key "rank.${key}" (expected rank.model)`);
+@@ -61,7 +71,7 @@ export function validateConfig(raw: unknown, source: string): Config {
+     }
+   }
+ 
+-  let dispatchers = BUILTIN_DISPATCHERS;
++  let dispatchers = base.dispatchers;
+   if (raw.dispatch !== undefined) {
+     if (!isTable(raw.dispatch)) throw new ConfigError(`${source}: [dispatch] must contain [dispatch.<name>] tables`);
+     dispatchers = Object.entries(raw.dispatch).map(([name, d]) => {
+@@ -74,22 +84,30 @@ export function validateConfig(raw: unknown, source: string): Config {
+     if (dispatchers.length === 0) throw new ConfigError(`${source}: [dispatch] has no dispatchers`);
+   }
+ 
+-  const config: Config = { rank: { model }, dispatchers, source };
++  const policy = validatePolicy(raw, source, base.policy);
++  if (!policy.ok) throw new ConfigError(policy.error);
++
++  const config: Config = { rank: { model }, dispatchers, policy: policy.value, source };
+   if (raw.prompt !== undefined) {
+     if (typeof raw.prompt !== "string" || raw.prompt.trim() === "") throw new ConfigError(`${source}: prompt must be a non-empty string`);
+     checkPlaceholders(raw.prompt, `${source}: prompt`, PROMPT_PLACEHOLDERS);
+     config.prompt = raw.prompt;
+-  }
++  } else if (base.prompt !== undefined) config.prompt = base.prompt;
+   return config;
+ }
+ 
+-export function loadConfig(path: string = DEFAULT_CONFIG_PATH): Config {
+-  if (!existsSync(path)) return { rank: { model: DEFAULT_MODEL }, dispatchers: BUILTIN_DISPATCHERS, source: "built-in defaults" };
+-  let raw: unknown;
++function readToml(path: string): unknown {
+   try {
+-    raw = Bun.TOML.parse(readFileSync(path, "utf8"));
++    return Bun.TOML.parse(readFileSync(path, "utf8"));
+   } catch (err) {
+     throw new ConfigError(`${path}: invalid TOML: ${err instanceof Error ? err.message : String(err)}`);
+   }
+-  return validateConfig(raw, path);
++}
++
++/** Global config, then the repo's `.lookout.toml` layered on top when `repoRoot` is given. */
++export function loadConfig(path: string = DEFAULT_CONFIG_PATH, repoRoot?: string): Config {
++  let config = existsSync(path) ? validateConfig(readToml(path), path) : DEFAULT_CONFIG;
++  const repoFile = repoRoot ? join(repoRoot, REPO_CONFIG_NAME) : undefined;
++  if (repoFile && existsSync(repoFile)) config = validateConfig(readToml(repoFile), repoFile, config);
++  return config;
+ }
+diff --git a/src/policy/evaluate.ts b/src/policy/evaluate.ts
+new file mode 100644
+index 0000000..1e0c5fc
+--- /dev/null
++++ b/src/policy/evaluate.ts
+@@ -0,0 +1,93 @@
++import { allBlocks } from "../core/blocks.ts";
++import { ATTENTION_ORDER, type Attention, type ChangeKind, type ChangeSet, type Classification, TIER_ORDER, type Tier, type Verdict } from "../core/types.ts";
++import { globToRegExp } from "../rank/rules.ts";
++import type { Policy } from "./schema.ts";
++
++const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
++const tierRank = (t: Tier) => TIER_ORDER.indexOf(t);
++const maxTier = (a: Tier, b: Tier): Tier => (tierRank(a) >= tierRank(b) ? a : b);
++
++const CONFIG_RE = /(^|\/)(\.env[^/]*|[^/]+\.(toml|ya?ml|json|json5|ini|cfg|conf|properties|env))$/i;
++const DEPS_RE = /(^|\/)(package\.json|pyproject\.toml|requirements[^/]*\.txt|go\.mod|Cargo\.toml|build\.gradle(\.kts)?|pom\.xml|Gemfile|composer\.json)$/;
++
++export function areasOf(policy: Policy, path: string): string[] {
++  const out: string[] = [];
++  for (const [name, globs] of Object.entries(policy.areas)) if (globs.some((g) => globToRegExp(g).test(path))) out.push(name);
++  return out;
++}
++
++/** Change-level kind from the non-inert blocks. "logic" is the default; narrower kinds need every block to agree. */
++export function kindOf(blocks: { path: string; labels: string[]; hasDeletions: boolean }[]): ChangeKind {
++  if (blocks.length === 0) return "docs";
++  const every = (f: (b: (typeof blocks)[number]) => boolean) => blocks.every(f);
++  if (every((b) => b.labels.includes("docs"))) return "docs";
++  if (every((b) => b.labels.includes("test"))) return "test";
++  if (every((b) => b.labels.includes("lockfile") || DEPS_RE.test(b.path))) return "deps";
++  if (every((b) => b.labels.includes("ci"))) return "ci";
++  if (every((b) => CONFIG_RE.test(b.path) && !DEPS_RE.test(b.path))) return "config";
++  // Additive: nothing removed in non-test code (new files, new functions, new tests). Edits to existing lines are logic.
++  if (every((b) => b.labels.includes("test") || b.labels.includes("docs") || !b.hasDeletions)) return "additive";
++  return "logic";
++}
++
++export function classify(changeSet: ChangeSet, policy: Policy): Classification {
++  const refs = allBlocks(changeSet);
++  const live = refs.filter((r) => r.block.attention !== "inert");
++  const areas = new Set<string>();
++  const sensitivePaths = new Set<string>();
++  let maxAttention: Attention = "inert";
++  for (const r of live) {
++    for (const a of areasOf(policy, r.block.path)) areas.add(a);
++    if (r.block.labels.includes("sensitive")) sensitivePaths.add(r.block.path);
++    if (rank(r.block.attention) > rank(maxAttention)) maxAttention = r.block.attention;
++  }
++  const kind = kindOf(
++    live.map((r) => ({
++      path: r.block.path,
++      labels: r.block.labels,
++      hasDeletions: r.hunk.lines.slice(r.block.from, r.block.to).some((l) => l.kind === "del") && r.file.status !== "added",
++    })),
++  );
++  return {
++    kind,
++    areas: [...areas].sort(),
++    maxAttention,
++    sensitivePaths: [...sensitivePaths].sort(),
++    counts: { files: changeSet.files.length, blocks: refs.length, inert: refs.length - live.length },
++  };
++}
++
++/**
++ * Tier = max(kind default, every matching rule, floors). Floors are not configurable:
++ * a touched area is never low, and a suspicious block is at least medium.
++ */
++export function evaluate(c: Classification, policy: Policy): Verdict {
++  const reasons: { tier: Tier; text: string }[] = [];
++  let tier: Tier = policy.kinds[c.kind];
++  reasons.push({ tier, text: `${c.kind} change → ${tier}` });
++
++  for (const rule of policy.rules) {
++    if (rule.area && !c.areas.includes(rule.area)) continue;
++    if (rule.kind && c.kind !== rule.kind) continue;
++    if (rule.attention && rank(c.maxAttention) < rank(rule.attention)) continue;
++    const what = rule.reason ?? [rule.area && `touches ${rule.area}`, rule.kind && `${rule.kind} change`, rule.attention && `a block is ${rule.attention}`].filter(Boolean).join(", ");
++    reasons.push({ tier: rule.tier, text: `${what} → ${rule.tier}` });
++    tier = maxTier(tier, rule.tier);
++  }
++
++  if (c.areas.length > 0 && tier === "low") {
++    tier = "medium";
++    reasons.push({ tier, text: `touches ${c.areas.join(", ")}: never low` });
++  }
++  if (c.maxAttention === "suspicious" && tierRank(tier) < tierRank("medium")) {
++    tier = "medium";
++    reasons.push({ tier, text: "a suspicious block: at least medium" });
++  }
++  if (c.sensitivePaths.length > 0 && tier === "low") {
++    tier = "medium";
++    reasons.push({ tier, text: `sensitive path ${c.sensitivePaths[0]}${c.sensitivePaths.length > 1 ? ` (+${c.sensitivePaths.length - 1})` : ""}: never low` });
++  }
++
++  reasons.sort((a, b) => tierRank(b.tier) - tierRank(a.tier));
++  return { tier, requiredHumans: policy.humans[tier], reasons: reasons.map((r) => r.text) };
++}
+diff --git a/src/policy/schema.ts b/src/policy/schema.ts
+new file mode 100644
+index 0000000..731e2ab
+--- /dev/null
++++ b/src/policy/schema.ts
+@@ -0,0 +1,129 @@
++import type { ChangeKind, Tier } from "../core/types.ts";
++import { ok, err, type Result } from "../core/result.ts";
++
++/** A rule raises the tier to at least `tier` when every stated condition holds. */
++export interface PolicyRule {
++  area?: string;
++  kind?: ChangeKind;
++  /** Any block at or above this attention. */
++  attention?: "needs-eyes" | "suspicious";
++  tier: Tier;
++  reason?: string;
++}
++
++export interface Policy {
++  /** Area name → path globs (same syntax as rank/rules globs). */
++  areas: Record<string, string[]>;
++  /** Minimum tier per change kind, before rules and floors. */
++  kinds: Record<ChangeKind, Tier>;
++  humans: Record<Tier, 0 | 1 | 2>;
++  rules: PolicyRule[];
++  source: string;
++}
++
++export const DEFAULT_AREAS: Record<string, string[]> = {
++  auth: ["**/auth/**", "**/auth*.*", "**/authn/**", "**/authz/**", "**/oauth/**", "**/oidc/**", "**/sso/**", "**/session/**", "**/sessions/**", "**/*token*", "**/*credential*", "**/*password*", "**/*secret*", "**/permission*/**", "**/rbac/**"],
++  billing: ["**/billing/**", "**/payment/**", "**/payments/**", "**/stripe/**", "**/invoice*/**"],
++  data: ["**/migration/**", "**/migrations/**", "*.sql", "**/schema/**", "**/schema.*", "**/prisma/**"],
++  infra: ["**/terraform/**", "*.tf", "**/k8s/**", "**/helm/**", "Dockerfile*", "**/infra/**", ".github/workflows/**"],
++  prompts: ["**/prompts/**", "**/prompt/**", "*.prompt.*", "**/system-prompt*"],
++};
++
++export const DEFAULT_KINDS: Record<ChangeKind, Tier> = {
++  docs: "low",
++  test: "low",
++  additive: "low",
++  deps: "medium",
++  config: "medium",
++  ci: "high",
++  logic: "medium",
++};
++
++export const DEFAULT_HUMANS: Record<Tier, 0 | 1 | 2> = { low: 0, medium: 1, high: 2 };
++
++export const DEFAULT_RULES: PolicyRule[] = [
++  { area: "auth", tier: "high", reason: "touches auth" },
++  { area: "billing", tier: "high", reason: "touches billing" },
++  { area: "data", tier: "high", reason: "touches data schema or migrations" },
++  { area: "infra", tier: "high", reason: "touches infra or CI" },
++  { area: "prompts", tier: "medium", reason: "touches prompts" },
++];
++
++export const DEFAULT_POLICY: Policy = { areas: DEFAULT_AREAS, kinds: DEFAULT_KINDS, humans: DEFAULT_HUMANS, rules: DEFAULT_RULES, source: "built-in defaults" };
++
++const KINDS: ChangeKind[] = ["docs", "test", "deps", "ci", "config", "additive", "logic"];
++const TIERS: Tier[] = ["low", "medium", "high"];
++const isTable = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
++const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
++
++/**
++ * Validate the `areas` and `policy` tables of a parsed TOML document, layered over `base`.
++ * `areas` replaces areas by name (an empty list removes one); `policy.rules` replaces the rule list.
++ */
++export function validatePolicy(raw: Record<string, unknown>, source: string, base: Policy = DEFAULT_POLICY): Result<Policy> {
++  const policy: Policy = { ...base, areas: { ...base.areas }, kinds: { ...base.kinds }, humans: { ...base.humans }, rules: [...base.rules], source };
++
++  if (raw.areas !== undefined) {
++    if (!isTable(raw.areas)) return err(`${source}: [areas] must be a table of name = [globs]`);
++    for (const [name, globs] of Object.entries(raw.areas)) {
++      if (!isStringArray(globs)) return err(`${source}: areas.${name} must be an array of glob strings`);
++      if (globs.length === 0) delete policy.areas[name];
++      else policy.areas[name] = globs;
++    }
++  }
++
++  if (raw.policy !== undefined) {
++    if (!isTable(raw.policy)) return err(`${source}: [policy] must be a table`);
++    for (const key of Object.keys(raw.policy)) {
++      if (!["kinds", "humans", "rules"].includes(key)) return err(`${source}: unknown key "policy.${key}" (expected kinds, humans, rules)`);
++    }
++    const p = raw.policy;
++    if (p.kinds !== undefined) {
++      if (!isTable(p.kinds)) return err(`${source}: [policy.kinds] must be a table`);
++      for (const [kind, tier] of Object.entries(p.kinds)) {
++        if (!KINDS.includes(kind as ChangeKind)) return err(`${source}: policy.kinds.${kind}: unknown kind (expected ${KINDS.join(", ")})`);
++        if (!TIERS.includes(tier as Tier)) return err(`${source}: policy.kinds.${kind} must be one of ${TIERS.join(", ")}`);
++        policy.kinds[kind as ChangeKind] = tier as Tier;
++      }
++    }
++    if (p.humans !== undefined) {
++      if (!isTable(p.humans)) return err(`${source}: [policy.humans] must be a table`);
++      for (const [tier, n] of Object.entries(p.humans)) {
++        if (!TIERS.includes(tier as Tier)) return err(`${source}: policy.humans.${tier}: unknown tier`);
++        if (n !== 0 && n !== 1 && n !== 2) return err(`${source}: policy.humans.${tier} must be 0, 1 or 2`);
++        policy.humans[tier as Tier] = n;
++      }
++    }
++    if (p.rules !== undefined) {
++      if (!Array.isArray(p.rules)) return err(`${source}: policy.rules must be an array of [[policy.rules]] tables`);
++      const rules: PolicyRule[] = [];
++      for (const [k, r] of p.rules.entries()) {
++        const where = `${source}: policy.rules[${k}]`;
++        if (!isTable(r)) return err(`${where} must be a table`);
++        for (const key of Object.keys(r)) if (!["area", "kind", "attention", "tier", "reason"].includes(key)) return err(`${where}: unknown key "${key}"`);
++        if (!TIERS.includes(r.tier as Tier)) return err(`${where}: tier must be one of ${TIERS.join(", ")}`);
++        const rule: PolicyRule = { tier: r.tier as Tier };
++        if (r.area !== undefined) {
++          if (typeof r.area !== "string" || !(r.area in policy.areas)) return err(`${where}: area "${String(r.area)}" is not defined in [areas] (known: ${Object.keys(policy.areas).join(", ")})`);
++          rule.area = r.area;
++        }
++        if (r.kind !== undefined) {
++          if (!KINDS.includes(r.kind as ChangeKind)) return err(`${where}: unknown kind "${String(r.kind)}"`);
++          rule.kind = r.kind as ChangeKind;
++        }
++        if (r.attention !== undefined) {
++          if (r.attention !== "needs-eyes" && r.attention !== "suspicious") return err(`${where}: attention must be needs-eyes or suspicious`);
++          rule.attention = r.attention;
++        }
++        if (r.reason !== undefined) {
++          if (typeof r.reason !== "string") return err(`${where}: reason must be a string`);
++          rule.reason = r.reason;
++        }
++        if (!rule.area && !rule.kind && !rule.attention) return err(`${where}: needs at least one of area, kind, attention`);
++        rules.push(rule);
++      }
++      policy.rules = rules;
++    }
++  }
++  return ok(policy);
++}
+diff --git a/test/dispatch.test.ts b/test/dispatch.test.ts
+index 1395db9..128b646 100644
+--- a/test/dispatch.test.ts
++++ b/test/dispatch.test.ts
+@@ -8,6 +8,8 @@ import type { Review } from "../src/core/types.ts";
+ import { BUILTIN_DISPATCHERS, type Config, ConfigError, loadConfig, validateConfig } from "../src/dispatch/config.ts";
+ import { buildPrompt, FINDINGS_CONTRACT } from "../src/dispatch/prompt.ts";
+ import { DispatchRunner, expandCommand, shellQuote } from "../src/dispatch/runner.ts";
++import { classify, evaluate } from "../src/policy/evaluate.ts";
++import { DEFAULT_POLICY } from "../src/policy/schema.ts";
+ 
+ const FAKE = `${import.meta.dir}/../fixtures/fake-dispatcher.sh`;
+ const tmp = mkdtempSync(join(tmpdir(), "lookout-dispatch-test-"));
+@@ -15,9 +17,11 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+ 
+ async function review(): Promise<Review> {
+   const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/sample-a.diff`).text());
+-  return { changeSet: { target: "HEAD~1..HEAD", base: "a", head: "b", files, intent: { title: "Render budgets", body: "Adds budgets to charts." } }, dispatches: [], rankedBy: "rules" };
++  const changeSet = { target: "HEAD~1..HEAD", base: "a", head: "b", files, intent: { title: "Render budgets", body: "Adds budgets to charts." } };
++  const classification = classify(changeSet, DEFAULT_POLICY);
++  return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), dispatches: [], rankedBy: "rules" };
+ }
+-const config = (cmd: string, extra: Partial<Config> = {}): Config => ({ rank: { model: "openai:gpt-6-luna" }, dispatchers: [{ name: "fake", cmd }], source: "test", ...extra });
++const config = (cmd: string, extra: Partial<Config> = {}): Config => ({ rank: { model: "openai:gpt-6-luna" }, dispatchers: [{ name: "fake", cmd }], policy: DEFAULT_POLICY, source: "test", ...extra });
+ 
+ describe("config", () => {
+   test("missing file → built-in pi dispatcher", () => {
+diff --git a/test/policy.test.ts b/test/policy.test.ts
+new file mode 100644
+index 0000000..09988a4
+--- /dev/null
++++ b/test/policy.test.ts
+@@ -0,0 +1,174 @@
++import { describe, expect, test } from "bun:test";
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { parseDiff } from "../src/core/diff.ts";
++import type { ChangeKind, Classification, Tier } from "../src/core/types.ts";
++import { ConfigError, loadConfig } from "../src/dispatch/config.ts";
++import { areasOf, classify, evaluate, kindOf } from "../src/policy/evaluate.ts";
++import { DEFAULT_POLICY, validatePolicy } from "../src/policy/schema.ts";
++import { applyRules } from "../src/rank/rules.ts";
++
++const c = (over: Partial<Classification>): Classification => ({ kind: "logic", areas: [], maxAttention: "routine", sensitivePaths: [], counts: { files: 1, blocks: 1, inert: 0 }, ...over });
++
++describe("evaluate: tier table", () => {
++  const table: [Partial<Classification>, Tier, 0 | 1 | 2][] = [
++    [{ kind: "docs" }, "low", 0],
++    [{ kind: "test" }, "low", 0],
++    [{ kind: "additive" }, "low", 0],
++    [{ kind: "deps" }, "medium", 1],
++    [{ kind: "config" }, "medium", 1],
++    [{ kind: "logic" }, "medium", 1],
++    [{ kind: "ci" }, "high", 2],
++    [{ kind: "docs", areas: ["auth"] }, "high", 2],
++    [{ kind: "logic", areas: ["prompts"] }, "medium", 1],
++    [{ kind: "additive", maxAttention: "suspicious" }, "medium", 1],
++    [{ kind: "logic", maxAttention: "suspicious" }, "medium", 1],
++    [{ kind: "docs", sensitivePaths: ["docs/auth.md"] }, "medium", 1],
++  ];
++  for (const [over, tier, humans] of table) {
++    test(`${JSON.stringify(over)} → ${tier}/${humans}`, () => {
++      const v = evaluate(c(over), DEFAULT_POLICY);
++      expect(v.tier).toBe(tier);
++      expect(v.requiredHumans).toBe(humans);
++      expect(v.reasons.length).toBeGreaterThan(0);
++    });
++  }
++
++  test("a touched area can never be low, even with a permissive user policy", () => {
++    const policy = validatePolicy({ areas: { own: ["**/own/**"] }, policy: { rules: [] } }, "t");
++    if (!policy.ok) throw new Error(policy.error);
++    const v = evaluate(c({ kind: "docs", areas: ["own"] }), policy.value);
++    expect(v.tier).toBe("medium");
++    expect(v.reasons.some((r) => r.includes("never low"))).toBe(true);
++  });
++
++  test("reasons are most severe first and name the contributing rule", () => {
++    const v = evaluate(c({ kind: "docs", areas: ["auth", "prompts"] }), DEFAULT_POLICY);
++    expect(v.reasons[0]).toBe("touches auth → high");
++    expect(v.reasons).toContain("docs change → low");
++  });
++
++  test("user rule by attention and by kind", () => {
++    const policy = validatePolicy({ policy: { rules: [{ attention: "needs-eyes", tier: "high", reason: "we are careful" }, { kind: "deps", tier: "high" }] } }, "t");
++    if (!policy.ok) throw new Error(policy.error);
++    expect(evaluate(c({ maxAttention: "needs-eyes" }), policy.value).tier).toBe("high");
++    expect(evaluate(c({ maxAttention: "routine" }), policy.value).tier).toBe("medium");
++    expect(evaluate(c({ kind: "deps" }), policy.value).reasons[0]).toBe("deps change → high");
++  });
++
++  test("humans mapping is configurable", () => {
++    const policy = validatePolicy({ policy: { humans: { medium: 2 } } }, "t");
++    if (!policy.ok) throw new Error(policy.error);
++    expect(evaluate(c({}), policy.value).requiredHumans).toBe(2);
++  });
++});
++
++describe("kindOf", () => {
++  const b = (path: string, labels: string[] = [], hasDeletions = false) => ({ path, labels, hasDeletions });
++  const cases: [ReturnType<typeof b>[], ChangeKind][] = [
++    [[b("README.md", ["docs"])], "docs"],
++    [[b("src/a.test.ts", ["test"]), b("src/b.test.ts", ["test"])], "test"],
++    [[b("package.json"), b("bun.lock", ["lockfile"])], "deps"],
++    [[b(".github/workflows/ci.yml", ["ci"])], "ci"],
++    [[b("config/app.yaml"), b(".env.example")], "config"],
++    [[b("src/new.ts"), b("src/new.test.ts", ["test"], true)], "additive"],
++    [[b("src/a.ts", [], true)], "logic"],
++    [[b("src/a.ts"), b("README.md", ["docs"], true)], "additive"],
++    [[b("src/a.ts", [], true), b("README.md", ["docs"])], "logic"],
++    [[], "docs"],
++  ];
++  for (const [blocks, kind] of cases) test(`${blocks.map((x) => x.path).join(", ") || "(none)"} → ${kind}`, () => expect(kindOf(blocks)).toBe(kind));
++});
++
++describe("areas", () => {
++  test("default areas match by glob", () => {
++    expect(areasOf(DEFAULT_POLICY, "apps/x/src/auth/refresh.ts")).toEqual(["auth"]);
++    expect(areasOf(DEFAULT_POLICY, "db/migrations/0012_add.sql")).toEqual(["data"]);
++    expect(areasOf(DEFAULT_POLICY, ".github/workflows/ci.yml")).toEqual(["infra"]);
++    expect(areasOf(DEFAULT_POLICY, "src/components/Button.tsx")).toEqual([]);
++  });
++  test("repo areas replace by name; an empty list removes a default", () => {
++    const p = validatePolicy({ areas: { auth: ["services/identity/**"], prompts: [] } }, "t");
++    if (!p.ok) throw new Error(p.error);
++    expect(areasOf(p.value, "services/identity/login.ts")).toEqual(["auth"]);
++    expect(areasOf(p.value, "src/auth/x.ts")).toEqual([]);
++    expect(areasOf(p.value, "src/prompts/system.md")).toEqual([]);
++  });
++});
++
++describe("classify from a real diff", () => {
++  test("sample fixture: a test file plus source → logic, no areas, counts filled", async () => {
++    const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/sample-a.diff`).text());
++    const cs = applyRules({ target: "t", base: "", head: "", files });
++    const k = classify(cs, DEFAULT_POLICY);
++    expect(k.counts.blocks).toBe(27);
++    expect(k.counts.files).toBe(cs.files.length);
++    expect(k.kind).toBe("logic");
++    expect(k.areas).toEqual([]);
++  });
++  test("inert blocks do not contribute: a comment-only change under auth/ is docs-kind with no area", () => {
++    const diff = ["diff --git a/src/auth/a.ts b/src/auth/a.ts", "--- a/src/auth/a.ts", "+++ b/src/auth/a.ts", "@@ -1,2 +1,2 @@", "-// old comment", "+// new comment", " const a = 1;"].join("\n") + "\n";
++    const cs = applyRules({ target: "t", base: "", head: "", files: parseDiff(diff) });
++    // auth paths carry the sensitive label, so rules never mark them inert; the block stays live.
++    const k = classify(cs, DEFAULT_POLICY);
++    expect(k.areas).toEqual(["auth"]);
++    expect(evaluate(k, DEFAULT_POLICY).tier).toBe("high");
++  });
++});
++
++describe("policy schema errors name the key", () => {
++  const bad: [Record<string, unknown>, string][] = [
++    [{ areas: "x" }, "[areas] must be a table"],
++    [{ areas: { auth: "x" } }, "areas.auth must be an array"],
++    [{ policy: { nope: 1 } }, 'unknown key "policy.nope"'],
++    [{ policy: { kinds: { weird: "low" } } }, "unknown kind"],
++    [{ policy: { kinds: { docs: "extreme" } } }, "one of low, medium, high"],
++    [{ policy: { humans: { low: 3 } } }, "0, 1 or 2"],
++    [{ policy: { rules: [{ tier: "high" }] } }, "at least one of area, kind, attention"],
++    [{ policy: { rules: [{ area: "nope", tier: "high" }] } }, 'area "nope" is not defined'],
++    [{ policy: { rules: [{ kind: "docs", tier: "huge" }] } }, "tier must be"],
++  ];
++  for (const [raw, msg] of bad) {
++    test(msg, () => {
++      const r = validatePolicy(raw, "t");
++      expect(r.ok).toBe(false);
++      if (!r.ok) expect(r.error).toContain(msg);
++    });
++  }
++});
++
++describe("config layering", () => {
++  const tmp = mkdtempSync(join(tmpdir(), "lookout-policy-"));
++  const repo = join(tmp, "repo");
++  const g = join(tmp, "global.toml");
++  writeFileSync(g, `[rank]\nmodel = "openai:gpt-6-luna"\n\n[dispatch.pi]\ncmd = "pi -p @{prompt_file}"\n\n[areas]\nbilling = ["money/**"]\n`);
++  Bun.spawnSync(["mkdir", "-p", repo]);
++  writeFileSync(join(repo, ".lookout.toml"), `[areas]\nauth = ["identity/**"]\n\n[[policy.rules]]\narea = "auth"\ntier = "medium"\nreason = "identity is well-tested here"\n\n[policy.humans]\nhigh = 1\n`);
++  const cleanup = () => rmSync(tmp, { recursive: true, force: true });
++
++  test("repo .lookout.toml layers over the global file; dispatch/rank come from global", () => {
++    const cfg = loadConfig(g, repo);
++    expect(cfg.dispatchers.map((d) => d.name)).toEqual(["pi"]);
++    expect(cfg.policy.source).toContain(".lookout.toml");
++    expect(areasOf(cfg.policy, "money/charge.ts")).toEqual(["billing"]); // from global
++    expect(areasOf(cfg.policy, "identity/login.ts")).toEqual(["auth"]); // replaced by repo
++    expect(areasOf(cfg.policy, "src/auth/x.ts")).toEqual([]);
++    expect(cfg.policy.humans.high).toBe(1);
++    // Repo rules replace the default rule list.
++    expect(cfg.policy.rules).toEqual([{ area: "auth", tier: "medium", reason: "identity is well-tested here" }]);
++  });
++  test("no repo file → global only; no files → defaults", () => {
++    expect(loadConfig(g, tmp).policy.rules).toEqual(DEFAULT_POLICY.rules);
++    expect(loadConfig(join(tmp, "missing.toml")).policy).toBe(DEFAULT_POLICY);
++  });
++  test("a bad repo file names the repo file", () => {
++    const bad = join(tmp, "bad");
++    Bun.spawnSync(["mkdir", "-p", bad]);
++    writeFileSync(join(bad, ".lookout.toml"), `[policy]\nkinds = { docs = "silly" }\n`);
++    expect(() => loadConfig(g, bad)).toThrow(ConfigError);
++    expect(() => loadConfig(g, bad)).toThrow(/bad\/\.lookout\.toml: policy\.kinds\.docs/);
++    cleanup();
++  });
++});
++

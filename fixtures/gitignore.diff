@@ -1,0 +1,11 @@
+diff --git a/.gitignore b/.gitignore
+index 29b5c02..1f43fc5 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -4,3 +4,6 @@ node_modules/
+ .DS_Store
+ coverage/
+ dist/
++
++.env
++.env.*

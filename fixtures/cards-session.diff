@@ -1,0 +1,749 @@
+diff --git a/src/cards/build.ts b/src/cards/build.ts
+new file mode 100644
+index 0000000..c01238f
+--- /dev/null
++++ b/src/cards/build.ts
+@@ -0,0 +1,73 @@
++import { allBlocks, type BlockRef } from "../core/blocks.ts";
++import { ATTENTION_ORDER, type Attention, type Card, type CardColor, type ChangeSet, COLOR_ORDER } from "../core/types.ts";
++import { areasOf, kindOf } from "../policy/evaluate.ts";
++import type { Policy } from "../policy/schema.ts";
++
++const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
++const CONTENT_LABELS = ["whitespace-only", "comment-only"];
++
++/**
++ * Group live (non-inert) blocks into cards. Until the LLM proposes logical changes
++ * (plan step 11), the stand-in grouping is one card per file; titles are the path.
++ * Inert blocks all go to the fixed "clean" card. Every block lands in exactly one card.
++ */
++export function buildCards(changeSet: ChangeSet, policy: Policy): Card[] {
++  const refs = allBlocks(changeSet);
++  const live = refs.filter((r) => r.block.attention !== "inert");
++  const inert = refs.filter((r) => r.block.attention === "inert");
++
++  const byFile = new Map<string, BlockRef[]>();
++  for (const r of live) byFile.set(r.file.path, [...(byFile.get(r.file.path) ?? []), r]);
++  const cards = [...byFile].map(([path, group]) => makeCard(cardId(group.map((r) => r.block.id)), path, group, policy));
++  cards.sort(compareCards);
++
++  if (inert.length > 0) cards.push({ ...makeCard("clean", `verified clean · ${inert.length} edit${inert.length === 1 ? "" : "s"}`, inert, policy), color: "grey", fixed: "clean" });
++  return cards;
++}
++
++export function cardId(blockIds: string[]): string {
++  const h = new Bun.CryptoHasher("sha1");
++  for (const id of [...blockIds].sort()) h.update(`${id}\0`);
++  return h.digest("hex").slice(0, 12);
++}
++
++function makeCard(id: string, title: string, group: BlockRef[], policy: Policy): Card {
++  const labels = [...new Set(group.flatMap((r) => r.block.labels))].filter((l) => !CONTENT_LABELS.includes(l)).sort();
++  const areas = [...new Set(group.flatMap((r) => areasOf(policy, r.block.path)))].sort();
++  const kind = kindOf(
++    group.map((r) => ({
++      path: r.block.path,
++      labels: r.block.labels,
++      hasDeletions: r.hunk.lines.slice(r.block.from, r.block.to).some((l) => l.kind === "del") && r.file.status !== "added",
++    })),
++  );
++  const attention = group.reduce<Attention>((top, r) => (rank(r.block.attention) > rank(top) ? r.block.attention : top), "inert");
++  const score = Math.max(0, ...group.map((r) => r.block.score));
++  const card: Card = { id, title, color: "grey", kind, areas, labels, blockIds: group.map((r) => r.block.id), attention, score };
++  card.color = colorFloor(card);
++  return card;
++}
++
++/**
++ * Rule-derived color. The model step (plan pipeline step 8) may only raise a card above
++ * this floor, never lower it; and only rules may call a card grey.
++ */
++export function colorFloor(card: Pick<Card, "attention" | "areas" | "labels" | "kind">): CardColor {
++  if (card.attention === "inert") return "grey";
++  if (card.attention === "suspicious" || card.areas.length > 0 || card.labels.includes("sensitive")) return "red";
++  if (card.attention === "needs-eyes" || card.kind === "deps" || card.kind === "config" || card.kind === "ci") return "amber";
++  return "green";
++}
++
++/** Riskiest first: color, then attention, then score; stable for equal keys. */
++export function compareCards(a: Card, b: Card): number {
++  return COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) || rank(b.attention) - rank(a.attention) || b.score - a.score;
++}
++
++/** Policy areas that no file of the change touches at all. */
++export function untouchedAreas(changeSet: ChangeSet, policy: Policy): string[] {
++  const touched = new Set(changeSet.files.flatMap((f) => areasOf(policy, f.path)));
++  return Object.keys(policy.areas)
++    .filter((a) => !touched.has(a))
++    .sort();
++}
+diff --git a/src/cli/main.ts b/src/cli/main.ts
+index 4a46e92..c7d89e9 100644
+--- a/src/cli/main.ts
++++ b/src/cli/main.ts
+@@ -1,9 +1,6 @@
+ import pkg from "../../package.json" with { type: "json" };
+-import { ReviewStore } from "../core/store.ts";
+-import type { ChangeSet, Review } from "../core/types.ts";
++import { LocalSession } from "../core/session.ts";
+ import { loadConfig } from "../dispatch/config.ts";
+-import { classify, evaluate } from "../policy/evaluate.ts";
+-import { rankChangeSet, rankWithModel } from "../rank/rank.ts";
+ import { repoRoot } from "../sources/git.ts";
+ import { loadChangeSet, resolveTarget } from "../sources/resolve.ts";
+ 
+@@ -52,23 +49,9 @@ async function main(): Promise<number> {
+   if (!spec.ok) return fail(spec.error);
+   const loaded = await loadChangeSet(spec.value);
+   if (!loaded.ok) return fail(loaded.error);
+-  const policy = config.value.policy;
+-
+-  const ruled = await rankChangeSet(loaded.value);
+-  const judge = (cs: ChangeSet) => {
+-    const classification = classify(cs, policy);
+-    return { classification, verdict: evaluate(classification, policy) };
+-  };
+-  const store = new ReviewStore({ changeSet: ruled.changeSet, ...judge(ruled.changeSet), dispatches: [], rankedBy: ruled.rankedBy });
+-  const res = await rankWithModel(ruled.changeSet, { modelSpec: config.value.rank.model });
+-  store.update((r) => {
+-    const next: Review = { ...r, changeSet: res.changeSet, ...judge(res.changeSet), rankedBy: res.rankedBy };
+-    if (res.warning) next.warning = res.warning;
+-    else delete next.warning;
+-    return next;
+-  });
+-
+-  const review = store.getSnapshot();
++  const session = new LocalSession({ config: config.value, changeSet: loaded.value });
++  await session.ready();
++  const review = session.snapshot();
+   if (review.warning) console.error(`lookout: ${review.warning}`);
+   // The card stack replaces this once it exists; until then every mode prints JSON.
+   process.stdout.write(JSON.stringify(review, null, 2) + "\n");
+diff --git a/src/core/session.ts b/src/core/session.ts
+new file mode 100644
+index 0000000..ba8b2be
+--- /dev/null
++++ b/src/core/session.ts
+@@ -0,0 +1,146 @@
++import { buildCards, untouchedAreas } from "../cards/build.ts";
++import type { Config } from "../dispatch/config.ts";
++import type { DispatchRunner } from "../dispatch/runner.ts";
++import { classify, evaluate } from "../policy/evaluate.ts";
++import { rankWithModel } from "../rank/rank.ts";
++import { applyRules } from "../rank/rules.ts";
++import { err, ok, type Result } from "./result.ts";
++import { type ReviewEvent, ReviewStore } from "./store.ts";
++import type { Card, ChangeSet, Review } from "./types.ts";
++
++export type { ReviewEvent } from "./store.ts";
++
++export type ReviewCommand =
++  | { type: "dispatchCard"; cardId: string; dispatcher?: string }
++  /** Every red and amber card, one after another. */
++  | { type: "dispatchAll"; dispatcher?: string }
++  | { type: "cancel" }
++  | { type: "answerQuestion"; cardId: string; questionId: string; answer: "yes" | "no" | "unsure" }
++  | { type: "setDepth"; depth: "quick" | "standard" | "deep" }
++  | { type: "refresh" };
++
++/**
++ * The only seam between the core and any UI, `--json`, or a later remote daemon.
++ * Events are patches; `snapshot()` is the full Review for consumers that need it.
++ */
++export interface ReviewSession {
++  snapshot(): Review;
++  subscribe(fn: (event: ReviewEvent) => void): () => void;
++  command(c: ReviewCommand): Promise<Result<void>>;
++  /** Resolves when the ranking pipeline has emitted `done`. */
++  ready(): Promise<void>;
++}
++
++export interface LocalSessionOptions {
++  config: Config;
++  changeSet: ChangeSet;
++  /** Built after the store exists, since the runner writes dispatches into it. */
++  runner?: (store: ReviewStore) => DispatchRunner;
++  /** Injection point for tests. */
++  rank?: typeof rankWithModel;
++  env?: Record<string, string | undefined>;
++}
++
++/** In-process implementation: rules first (synchronous), then the model raises cards and patches them in. */
++export class LocalSession implements ReviewSession {
++  readonly store: ReviewStore;
++  private readonly runner?: DispatchRunner;
++  private readonly finished: Promise<void>;
++
++  constructor(private readonly opts: LocalSessionOptions) {
++    const ruled = applyRules(opts.changeSet);
++    this.store = new ReviewStore(this.assemble(ruled, "rules"));
++    this.runner = opts.runner?.(this.store);
++    this.finished = this.runModel(ruled);
++  }
++
++  snapshot = (): Review => this.store.getSnapshot();
++  subscribe = (fn: (event: ReviewEvent) => void): (() => void) => this.store.onEvent(fn);
++  ready = (): Promise<void> => this.finished;
++
++  async command(c: ReviewCommand): Promise<Result<void>> {
++    switch (c.type) {
++      case "dispatchCard": {
++        const card = this.snapshot().cards.find((x) => x.id === c.cardId);
++        if (!card) return err(`no card ${c.cardId}`);
++        return this.dispatch(card, c.dispatcher);
++      }
++      case "dispatchAll": {
++        const runner = this.runner;
++        if (!runner) return err("no dispatchers configured");
++        const targets = this.snapshot().cards.filter((x) => x.color === "red" || x.color === "amber");
++        if (targets.length === 0) return err("no red or amber cards to review");
++        for (const card of targets) {
++          const started = this.dispatch(card, c.dispatcher);
++          if (!started.ok) return started;
++          await runner.settled();
++        }
++        return ok(undefined);
++      }
++      case "cancel":
++        return this.runner?.cancel() ? ok(undefined) : err("nothing to cancel");
++      case "refresh":
++        return err("refresh is not implemented yet");
++      case "answerQuestion":
++      case "setDepth":
++        return err(`${c.type} arrives with plan step ${c.type === "setDepth" ? 14 : 13}`);
++    }
++  }
++
++  /** Resolves when the current dispatch, if any, has finished. */
++  settled = (): Promise<void> => this.runner?.settled() ?? Promise.resolve();
++
++  private dispatch(card: Card, dispatcher?: string): Result<void> {
++    const runner = this.runner;
++    if (!runner) return err("no dispatchers configured");
++    const name = dispatcher ?? this.opts.config.dispatchers[0]!.name;
++    const started = runner.start(name, { kind: "card", card });
++    return started.ok ? ok(undefined) : started;
++  }
++
++  private assemble(changeSet: ChangeSet, rankedBy: string, warning?: string): Review {
++    const policy = this.opts.config.policy;
++    const classification = classify(changeSet, policy);
++    const review: Review = {
++      changeSet,
++      classification,
++      verdict: evaluate(classification, policy),
++      cards: buildCards(changeSet, policy),
++      untouched: untouchedAreas(changeSet, policy),
++      dispatches: this.store?.getSnapshot().dispatches ?? [],
++      rankedBy,
++    };
++    if (warning) review.warning = warning;
++    return review;
++  }
++
++  private async runModel(ruled: ChangeSet): Promise<void> {
++    const rank = this.opts.rank ?? rankWithModel;
++    const res = await rank(ruled, { modelSpec: this.opts.config.rank.model, env: this.opts.env });
++    const before = this.snapshot();
++    const after = this.assemble(res.changeSet, res.rankedBy, res.warning);
++    this.store.update(() => after);
++    for (const event of cardPatches(before.cards, after.cards, after.untouched)) this.store.emit(event);
++    if (JSON.stringify(before.verdict) !== JSON.stringify(after.verdict) || JSON.stringify(before.classification) !== JSON.stringify(after.classification)) {
++      this.store.emit({ type: "verdict.updated", verdict: after.verdict, classification: after.classification });
++    }
++    if (after.warning !== before.warning) this.store.emit({ type: "warning", text: after.warning });
++    this.store.emit({ type: "done" });
++  }
++}
++
++/** Events that turn `before` into `after`: per-card field patches when the card set is unchanged, else one replacement. */
++export function cardPatches(before: Card[], after: Card[], untouched: string[]): ReviewEvent[] {
++  const sameOrder = before.length === after.length && before.every((c, k) => c.id === after[k]!.id);
++  if (!sameOrder) return [{ type: "cards.replaced", cards: after, untouched }];
++  const events: ReviewEvent[] = [];
++  for (const [k, next] of after.entries()) {
++    const prev = before[k]!;
++    const patch: Partial<Card> = {};
++    for (const key of Object.keys(next) as (keyof Card)[]) {
++      if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) (patch as Record<string, unknown>)[key] = next[key];
++    }
++    if (Object.keys(patch).length > 0) events.push({ type: "card.updated", id: next.id, patch });
++  }
++  return events;
++}
+diff --git a/src/core/store.ts b/src/core/store.ts
+index 8a873c8..a0e87ff 100644
+--- a/src/core/store.ts
++++ b/src/core/store.ts
+@@ -1,9 +1,16 @@
+-import type { Dispatch, Review } from "./types.ts";
++import type { Card, Classification, Dispatch, Review, Verdict } from "./types.ts";
+ 
++/** Patches, not snapshots: a 40-card review streaming paragraphs never re-sends the whole Review. */
+ export type ReviewEvent =
+-  | { type: "dispatch-started"; dispatch: Dispatch }
+-  | { type: "dispatch-output"; id: string; chunk: string }
+-  | { type: "dispatch-finished"; dispatch: Dispatch };
++  | { type: "cards.replaced"; cards: Card[]; untouched: string[] }
++  | { type: "card.updated"; id: string; patch: Partial<Card> }
++  | { type: "verdict.updated"; verdict: Verdict; classification: Classification }
++  | { type: "dispatch.started"; dispatch: Dispatch }
++  | { type: "dispatch.output"; id: string; chunk: string }
++  | { type: "dispatch.finished"; dispatch: Dispatch }
++  | { type: "warning"; text?: string }
++  /** The ranking pipeline has finished (with or without the model). */
++  | { type: "done" };
+ 
+ type Listener = () => void;
+ type EventListener = (event: ReviewEvent) => void;
+@@ -39,22 +46,26 @@ export class ReviewStore {
+     for (const l of this.listeners) l();
+   }
+ 
+-  update(fn: (review: Review) => Review): void {
+-    this.set(fn(this.review));
++  update(fn: (review: Review) => Review, event?: ReviewEvent): void {
++    this.set(fn(this.review), event);
++  }
++
++  emit(event: ReviewEvent): void {
++    this.set(this.review, event);
+   }
+ 
+   startDispatch(dispatch: Dispatch): void {
+-    this.set({ ...this.review, dispatches: [...this.review.dispatches, dispatch] }, { type: "dispatch-started", dispatch });
++    this.set({ ...this.review, dispatches: [...this.review.dispatches, dispatch] }, { type: "dispatch.started", dispatch });
+   }
+ 
+   appendOutput(id: string, chunk: string): void {
+-    this.set(this.patchDispatch(id, (d) => ({ ...d, output: d.output + chunk })), { type: "dispatch-output", id, chunk });
++    this.set(this.patchDispatch(id, (d) => ({ ...d, output: d.output + chunk })), { type: "dispatch.output", id, chunk });
+   }
+ 
+   finishDispatch(id: string, patch: Partial<Dispatch>): void {
+     const review = this.patchDispatch(id, (d) => ({ ...d, ...patch }));
+     const dispatch = review.dispatches.find((d) => d.id === id)!;
+-    this.set(review, { type: "dispatch-finished", dispatch });
++    this.set(review, { type: "dispatch.finished", dispatch });
+   }
+ 
+   private patchDispatch(id: string, fn: (d: Dispatch) => Dispatch): Review {
+diff --git a/src/core/types.ts b/src/core/types.ts
+index 71f4648..32eccab 100644
+--- a/src/core/types.ts
++++ b/src/core/types.ts
+@@ -86,9 +86,11 @@ export type DispatchStatus = "running" | "done" | "failed" | "cancelled";
+ export interface Dispatch {
+   id: string;
+   dispatcher: string;
+-  scope: "hunk" | "change";
++  scope: "hunk" | "card" | "change";
+   /** Hunk id when scope is "hunk". */
+   hunkId?: string;
++  /** Card id when scope is "card". */
++  cardId?: string;
+   cmd: string;
+   status: DispatchStatus;
+   output: string;
+@@ -98,10 +100,40 @@ export interface Dispatch {
+   error?: string;
+ }
+ 
++// ---------------------------------------------------------------- cards
++
++/** A card's risk: red needs a human, amber is worth a look, green is fine, grey is verified clean. */
++export type CardColor = "red" | "amber" | "green" | "grey";
++export const COLOR_ORDER: readonly CardColor[] = ["grey", "green", "amber", "red"];
++
++/** One logical change, made of edit blocks from any files. The unit a human reviews. */
++export interface Card {
++  id: string;
++  title: string;
++  color: CardColor;
++  kind: ChangeKind;
++  /** Policy areas touched by this card's blocks. */
++  areas: string[];
++  /** Union of block labels (test, docs, sensitive, …), without the content labels. */
++  labels: string[];
++  blockIds: string[];
++  /** Highest attention and score among the card's blocks. */
++  attention: Attention;
++  score: number;
++  /** Written by the LLM step from this card's blocks; absent until then. */
++  paragraph?: string;
++  /** The fixed card that collects every inert block. */
++  fixed?: "clean";
++}
++
+ export interface Review {
+   changeSet: ChangeSet;
+   classification: Classification;
+   verdict: Verdict;
++  /** Riskiest first; the "clean" card last. Every block is in exactly one card. */
++  cards: Card[];
++  /** Policy areas no file of the change touches. */
++  untouched: string[];
+   dispatches: Dispatch[];
+   rankedBy: string; // "rules" | `rules+${model}`
+   warning?: string;
+diff --git a/src/dispatch/prompt.ts b/src/dispatch/prompt.ts
+index 79800c2..eac3f6d 100644
+--- a/src/dispatch/prompt.ts
++++ b/src/dispatch/prompt.ts
+@@ -1,6 +1,14 @@
+-import type { ChangeSet, FileChange, Hunk } from "../core/types.ts";
++import type { Card, ChangeSet, FileChange, Hunk } from "../core/types.ts";
+ 
+-export type DispatchScope = { kind: "hunk"; hunk: Hunk } | { kind: "change" };
++export type DispatchScope = { kind: "hunk"; hunk: Hunk } | { kind: "card"; card: Card } | { kind: "change" };
++
++/** The hunks (grouped by file) that hold a card's blocks, in file order. */
++export function cardHunks(changeSet: ChangeSet, card: Card): { file: FileChange; hunks: Hunk[] }[] {
++  const ids = new Set(card.blockIds);
++  return changeSet.files
++    .map((file) => ({ file, hunks: file.hunks.filter((h) => h.blocks.some((b) => ids.has(b.id))) }))
++    .filter((f) => f.hunks.length > 0);
++}
+ 
+ export const FINDINGS_CONTRACT = `End your reply with exactly one fenced \`\`\`json block, and nothing after it, of this shape:
+ 
+@@ -54,12 +62,17 @@ export function renderDiff(files: { file: FileChange; hunks: Hunk[] }[]): string
+ 
+ export function diffSlice(changeSet: ChangeSet, scope: DispatchScope): string {
+   if (scope.kind === "change") return renderDiff(changeSet.files.map((file) => ({ file, hunks: file.hunks })));
++  if (scope.kind === "card") return renderDiff(cardHunks(changeSet, scope.card));
+   const file = changeSet.files.find((f) => f.path === scope.hunk.path)!;
+   return renderDiff([{ file, hunks: [scope.hunk] }]);
+ }
+ 
+ export function describeScope(changeSet: ChangeSet, scope: DispatchScope): string {
+   if (scope.kind === "change") return `the whole change ${changeSet.target} (${changeSet.files.length} files)`;
++  if (scope.kind === "card") {
++    const files = cardHunks(changeSet, scope.card);
++    return `one logical change of ${changeSet.target}: "${scope.card.title}" (${scope.card.blockIds.length} edits in ${files.length} file${files.length === 1 ? "" : "s"}; ${scope.card.color}, ${scope.card.kind}${scope.card.areas.length ? `; areas: ${scope.card.areas.join(", ")}` : ""}). Review only the + and - lines of these hunks.`;
++  }
+   const h = scope.hunk;
+   const end = h.newStart + Math.max(0, h.newLines - 1);
+   return `one hunk of ${changeSet.target}: ${h.path} lines ${h.newStart}-${end} (rules/model attention: ${h.attention}${h.labels.length ? `; ${h.labels.join(", ")}` : ""})`;
+diff --git a/src/dispatch/runner.ts b/src/dispatch/runner.ts
+index 52d09ea..6c50710 100644
+--- a/src/dispatch/runner.ts
++++ b/src/dispatch/runner.ts
+@@ -79,6 +79,7 @@ export class DispatchRunner {
+       findings: [],
+     };
+     if (scope.kind === "hunk") dispatch.hunkId = scope.hunk.id;
++    if (scope.kind === "card") dispatch.cardId = scope.card.id;
+     this.store.startDispatch(dispatch);
+ 
+     const spawned = attempt(() =>
+diff --git a/src/policy/evaluate.ts b/src/policy/evaluate.ts
+index 1e0c5fc..a409379 100644
+--- a/src/policy/evaluate.ts
++++ b/src/policy/evaluate.ts
+@@ -59,7 +59,8 @@ export function classify(changeSet: ChangeSet, policy: Policy): Classification {
+ 
+ /**
+  * Tier = max(kind default, every matching rule, floors). Floors are not configurable:
+- * a touched area is never low, and a suspicious block is at least medium.
++ * a touched area is never low, and a needs-eyes or suspicious block is at least medium
++ * (an amber or red card with zero required humans would contradict itself).
+  */
+ export function evaluate(c: Classification, policy: Policy): Verdict {
+   const reasons: { tier: Tier; text: string }[] = [];
+@@ -79,9 +80,9 @@ export function evaluate(c: Classification, policy: Policy): Verdict {
+     tier = "medium";
+     reasons.push({ tier, text: `touches ${c.areas.join(", ")}: never low` });
+   }
+-  if (c.maxAttention === "suspicious" && tierRank(tier) < tierRank("medium")) {
++  if (rank(c.maxAttention) >= rank("needs-eyes") && tierRank(tier) < tierRank("medium")) {
+     tier = "medium";
+-    reasons.push({ tier, text: "a suspicious block: at least medium" });
++    reasons.push({ tier, text: `a block ${c.maxAttention === "suspicious" ? "is suspicious" : "needs eyes"}: at least medium` });
+   }
+   if (c.sensitivePaths.length > 0 && tier === "low") {
+     tier = "medium";
+diff --git a/test/boundaries.test.ts b/test/boundaries.test.ts
+index f4a69ba..17414dc 100644
+--- a/test/boundaries.test.ts
++++ b/test/boundaries.test.ts
+@@ -1,13 +1,34 @@
+ import { expect, test } from "bun:test";
+ import { Glob } from "bun";
++import { existsSync } from "node:fs";
+ 
+-test("core, sources, rank and dispatch never import react or ink", async () => {
++const SRC = `${import.meta.dir}/../src`;
++const files = async (dir: string) => {
++  const out: string[] = [];
++  if (!existsSync(`${SRC}/${dir}`)) return out;
++  for await (const f of new Glob("**/*.{ts,tsx}").scan(`${SRC}/${dir}`)) out.push(f);
++  return out;
++};
++
++test("nothing below tui imports react or ink; experimental_* only in rank/model.ts", async () => {
+   const offenders: string[] = [];
+-  for (const dir of ["core", "sources", "rank", "dispatch"]) {
+-    for await (const f of new Glob("**/*.{ts,tsx}").scan(`${import.meta.dir}/../src/${dir}`)) {
+-      const text = await Bun.file(`${import.meta.dir}/../src/${dir}/${f}`).text();
++  for (const dir of ["core", "sources", "rank", "policy", "cards", "evidence", "dispatch", "verify", "questions", "cli"]) {
++    for (const f of await files(dir)) {
++      const text = await Bun.file(`${SRC}/${dir}/${f}`).text();
+       if (/from\s+["'](react|ink)(\/[^"']*)?["']|import\(\s*["'](react|ink)/.test(text)) offenders.push(`${dir}/${f}`);
+-      if (dir !== "rank" || f !== "model.ts") if (/experimental_|Experimental_/.test(text)) offenders.push(`${dir}/${f} (experimental_* outside rank/model.ts)`);
++      if (!(dir === "rank" && f === "model.ts") && /experimental_|Experimental_/.test(text)) offenders.push(`${dir}/${f} (experimental_* outside rank/model.ts)`);
++    }
++  }
++  expect(offenders).toEqual([]);
++});
++
++test("tui imports only core/session.ts, core/types.ts and its own files", async () => {
++  const offenders: string[] = [];
++  for (const f of await files("tui")) {
++    const text = await Bun.file(`${SRC}/tui/${f}`).text();
++    for (const m of text.matchAll(/from\s+["'](\.\.\/[^"']+)["']/g)) {
++      const target = m[1]!;
++      if (target !== "../core/session.ts" && target !== "../core/types.ts") offenders.push(`tui/${f} → ${target}`);
+     }
+   }
+   expect(offenders).toEqual([]);
+diff --git a/test/cards.test.ts b/test/cards.test.ts
+new file mode 100644
+index 0000000..dc1fb01
+--- /dev/null
++++ b/test/cards.test.ts
+@@ -0,0 +1,187 @@
++import { describe, expect, test } from "bun:test";
++import { mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { Experimental_DecisionMockModelV4 } from "ai/test";
++import { buildCards, colorFloor, untouchedAreas } from "../src/cards/build.ts";
++import { allBlocks } from "../src/core/blocks.ts";
++import { parseDiff } from "../src/core/diff.ts";
++import { cardPatches, LocalSession } from "../src/core/session.ts";
++import type { ReviewEvent } from "../src/core/store.ts";
++import type { Card, ChangeSet } from "../src/core/types.ts";
++import { DEFAULT_CONFIG } from "../src/dispatch/config.ts";
++import { DispatchRunner } from "../src/dispatch/runner.ts";
++import { DEFAULT_POLICY, validatePolicy } from "../src/policy/schema.ts";
++import { RankCache } from "../src/rank/cache.ts";
++import { rankWithModel } from "../src/rank/rank.ts";
++import { applyRules } from "../src/rank/rules.ts";
++
++const fixture = async (name: string): Promise<ChangeSet> => ({
++  target: name,
++  base: "a",
++  head: "b",
++  files: parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/${name}.diff`).text()),
++});
++
++const diff = (path: string, header: string, body: string[]) =>
++  [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n") + "\n";
++
++describe("buildCards", () => {
++  test("every block is in exactly one card; inert blocks are in the clean card, which is last", async () => {
++    const cs = applyRules(await fixture("sample-b"));
++    const cards = buildCards(cs, DEFAULT_POLICY);
++    const seen = new Map<string, number>();
++    for (const c of cards) for (const id of c.blockIds) seen.set(id, (seen.get(id) ?? 0) + 1);
++    const all = allBlocks(cs).map((r) => r.block);
++    expect(seen.size).toBe(all.length);
++    expect([...seen.values()].every((n) => n === 1)).toBe(true);
++    const inert = all.filter((b) => b.attention === "inert").map((b) => b.id);
++    const clean = cards.find((c) => c.fixed === "clean");
++    if (inert.length > 0) {
++      expect(clean).toBeDefined();
++      expect(clean!.blockIds.sort()).toEqual(inert.sort());
++      expect(cards.at(-1)).toBe(clean);
++      expect(clean!.color).toBe("grey");
++    } else expect(clean).toBeUndefined();
++  });
++
++  test("no inert blocks → no clean card", () => {
++    const cs = applyRules({ target: "t", base: "", head: "", files: parseDiff(diff("src/a.ts", "@@ -1,2 +1,2 @@", [" x", "-y", "+z"])) });
++    expect(buildCards(cs, DEFAULT_POLICY).map((c) => c.fixed)).toEqual([undefined]);
++  });
++
++  test("cards are riskiest first; a sensitive-area card is red and sorts above routine", () => {
++    const files = parseDiff(
++      diff("src/util.ts", "@@ -1,2 +1,2 @@", [" a", "-b", "+c"]) +
++        diff("src/auth/login.ts", "@@ -1,2 +1,2 @@", [" a", "-b", "+c"]) +
++        diff("README.md", "@@ -1,2 +1,2 @@", [" a", "-b", "+c"]),
++    );
++    const cards = buildCards(applyRules({ target: "t", base: "", head: "", files }), DEFAULT_POLICY);
++    expect(cards.map((c) => [c.title, c.color])).toEqual([
++      ["src/auth/login.ts", "red"],
++      ["src/util.ts", "green"],
++      ["README.md", "green"],
++    ]);
++    expect(cards[0]!.areas).toEqual(["auth"]);
++    expect(cards[0]!.labels).toContain("sensitive");
++  });
++
++  test("card ids are stable across re-ranking (same blocks → same id)", async () => {
++    const cs = applyRules(await fixture("sample-a"));
++    const a = buildCards(cs, DEFAULT_POLICY).map((c) => c.id).sort();
++    const b = buildCards(applyRules(cs), DEFAULT_POLICY).map((c) => c.id).sort();
++    expect(a).toEqual(b);
++  });
++});
++
++describe("colorFloor", () => {
++  const base: Pick<Card, "attention" | "areas" | "labels" | "kind"> = { attention: "routine", areas: [], labels: [], kind: "logic" };
++  test("grey only for inert; red for suspicious, areas, sensitive; amber for needs-eyes and deps/config/ci", () => {
++    expect(colorFloor({ ...base, attention: "inert" })).toBe("grey");
++    expect(colorFloor(base)).toBe("green");
++    expect(colorFloor({ ...base, attention: "needs-eyes" })).toBe("amber");
++    expect(colorFloor({ ...base, kind: "deps" })).toBe("amber");
++    expect(colorFloor({ ...base, attention: "suspicious" })).toBe("red");
++    expect(colorFloor({ ...base, areas: ["billing"] })).toBe("red");
++    expect(colorFloor({ ...base, labels: ["sensitive"] })).toBe("red");
++  });
++});
++
++describe("untouchedAreas", () => {
++  test("lists policy areas no file touches, sorted", () => {
++    const cs: ChangeSet = { target: "t", base: "", head: "", files: parseDiff(diff("src/auth/a.ts", "@@ -1 +1 @@", ["-a", "+b"])) };
++    expect(untouchedAreas(cs, DEFAULT_POLICY)).toEqual(["billing", "data", "infra", "prompts"]);
++    const own = validatePolicy({ areas: { auth: [], billing: [], data: [], infra: [], prompts: [], money: ["pay/**"] } }, "t");
++    if (!own.ok) throw new Error(own.error);
++    expect(untouchedAreas(cs, own.value)).toEqual(["money"]);
++  });
++});
++
++describe("cardPatches", () => {
++  const card = (id: string, color: Card["color"] = "green"): Card => ({ id, title: id, color, kind: "logic", areas: [], labels: [], blockIds: [id], attention: "routine", score: 0.1 });
++  test("same order → one card.updated per changed card with only the changed fields", () => {
++    const before = [card("a"), card("b")];
++    const after = [card("a"), { ...card("b", "amber"), attention: "needs-eyes" as const }];
++    expect(cardPatches(before, after, [])).toEqual([{ type: "card.updated", id: "b", patch: { color: "amber", attention: "needs-eyes" } }]);
++    expect(cardPatches(before, before, [])).toEqual([]);
++  });
++  test("a changed order or set → one cards.replaced", () => {
++    const before = [card("a"), card("b")];
++    const after = [card("b"), card("a")];
++    const events = cardPatches(before, after, ["billing"]);
++    expect(events).toHaveLength(1);
++    expect(events[0]!.type).toBe("cards.replaced");
++  });
++});
++
++describe("LocalSession", () => {
++  const dirs: string[] = [];
++  const tmp = () => {
++    const d = mkdtempSync(join(tmpdir(), "lookout-session-"));
++    dirs.push(d);
++    return d;
++  };
++  const mock = (scoreFor: (id: string) => number) =>
++    new Experimental_DecisionMockModelV4({
++      provider: "mock",
++      modelId: "attention",
++      supportedQuestionTypes: ["score"],
++      doDecide: async ({ questions }) => ({
++        answers: Object.fromEntries(Object.keys(questions).map((q) => [q, { type: "score" as const, score: scoreFor(q.replace("review_attention_", "")) }])),
++        warnings: [],
++      }),
++    });
++  const rankWith = (model: Experimental_DecisionMockModelV4) => (cs: ChangeSet, opts: Parameters<typeof rankWithModel>[1]) =>
++    rankWithModel(cs, { ...opts, cache: new RankCache(tmp()), resolveModel: () => ({ ok: true, model }) });
++
++  test("rules give an immediate snapshot; the model then patches cards and emits verdict + done", async () => {
++    const cs = await fixture("sample-a");
++    const target = cs.files[0]!.hunks[0]!.blocks[0]!.id;
++    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: cs, rank: rankWith(mock((id) => (id === target ? 3 : 1))) });
++    const first = session.snapshot();
++    expect(first.rankedBy).toBe("rules");
++    expect(first.cards.length).toBeGreaterThan(0);
++    const events: ReviewEvent[] = [];
++    session.subscribe((e) => events.push(e));
++    await session.ready();
++    const after = session.snapshot();
++    expect(after.rankedBy).toBe("rules+openai:gpt-6-luna");
++    expect(after.cards.find((c) => c.blockIds.includes(target))!.color).toBe("red");
++    const types = events.map((e) => e.type);
++    expect(types.at(-1)).toBe("done");
++    expect(types.some((t) => t === "card.updated" || t === "cards.replaced")).toBe(true);
++    // Patches, not snapshots: no event carries a ChangeSet.
++    expect(events.some((e) => "changeSet" in e)).toBe(false);
++    dirs.forEach((d) => rmSync(d, { recursive: true, force: true }));
++  });
++
++  test("missing key → warning event, rules stay, done still fires", async () => {
++    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: await fixture("sample-b"), env: {} });
++    const events: ReviewEvent[] = [];
++    session.subscribe((e) => events.push(e));
++    await session.ready();
++    expect(session.snapshot().rankedBy).toBe("rules");
++    expect(events.find((e) => e.type === "warning")).toMatchObject({ type: "warning", text: expect.stringContaining("OPENAI_API_KEY") });
++    expect(events.at(-1)!.type).toBe("done");
++  });
++
++  test("dispatchCard runs the dispatcher on that card's hunks and records cardId; unknown card and cancel-when-idle fail softly", async () => {
++    const cs = await fixture("sample-a");
++    const fake = `${import.meta.dir}/../fixtures/fake-dispatcher.sh`;
++    const config = { ...DEFAULT_CONFIG, dispatchers: [{ name: "fake", cmd: `sh ${fake} {prompt_file}` }] };
++    const repo = tmp();
++    const session = new LocalSession({ config, changeSet: cs, env: {}, runner: (store) => new DispatchRunner(store, { repo, config }) });
++    await session.ready();
++    const card = session.snapshot().cards[0]!;
++    expect((await session.command({ type: "dispatchCard", cardId: "nope" })).ok).toBe(false);
++    expect((await session.command({ type: "cancel" })).ok).toBe(false);
++    const started = await session.command({ type: "dispatchCard", cardId: card.id });
++    expect(started.ok).toBe(true);
++    await session.settled();
++    const d = session.snapshot().dispatches[0]!;
++    expect(d.scope).toBe("card");
++    expect(d.cardId).toBe(card.id);
++    expect(d.status).toBe("done");
++    dirs.forEach((d) => rmSync(d, { recursive: true, force: true }));
++  });
++});
+diff --git a/test/dispatch.test.ts b/test/dispatch.test.ts
+index aca2640..bd3a76d 100644
+--- a/test/dispatch.test.ts
++++ b/test/dispatch.test.ts
+@@ -9,6 +9,7 @@ import type { Result } from "../src/core/result.ts";
+ import { BUILTIN_DISPATCHERS, type Config, loadConfig, validateConfig } from "../src/dispatch/config.ts";
+ import { buildPrompt, FINDINGS_CONTRACT } from "../src/dispatch/prompt.ts";
+ import { DispatchRunner, expandCommand, shellQuote } from "../src/dispatch/runner.ts";
++import { buildCards, untouchedAreas } from "../src/cards/build.ts";
+ import { classify, evaluate } from "../src/policy/evaluate.ts";
+ import { DEFAULT_POLICY } from "../src/policy/schema.ts";
+ 
+@@ -20,7 +21,7 @@ async function review(): Promise<Review> {
+   const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/sample-a.diff`).text());
+   const changeSet = { target: "HEAD~1..HEAD", base: "a", head: "b", files, intent: { title: "Render budgets", body: "Adds budgets to charts." } };
+   const classification = classify(changeSet, DEFAULT_POLICY);
+-  return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), dispatches: [], rankedBy: "rules" };
++  return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(changeSet, DEFAULT_POLICY), untouched: untouchedAreas(changeSet, DEFAULT_POLICY), dispatches: [], rankedBy: "rules" };
+ }
+ 
+ /** Unwrap a Result in tests; a failure is a test failure with the message. */
+@@ -121,9 +122,9 @@ describe("DispatchRunner with a fake dispatcher", () => {
+     expect(d.output).toContain("Reviewing");
+     expect(d.findings).toMatchObject([{ severity: "p1", anchor: { path: hunk.path, line: 257 }, dispatcher: "fake" }]);
+     expect(d.freeform).toContain("deserves a second look");
+-    expect(events[0]).toBe("dispatch-started");
+-    expect(events).toContain("dispatch-output");
+-    expect(events.at(-1)).toBe("dispatch-finished");
++    expect(events[0]).toBe("dispatch.started");
++    expect(events).toContain("dispatch.output");
++    expect(events.at(-1)).toBe("dispatch.finished");
+     expect(runner.running).toBe(false);
+   });
+ 
+diff --git a/test/policy.test.ts b/test/policy.test.ts
+index 341f5d5..f4722be 100644
+--- a/test/policy.test.ts
++++ b/test/policy.test.ts
+@@ -31,6 +31,8 @@ describe("evaluate: tier table", () => {
+     [{ kind: "docs", areas: ["auth"] }, "high", 2],
+     [{ kind: "logic", areas: ["prompts"] }, "medium", 1],
+     [{ kind: "additive", maxAttention: "suspicious" }, "medium", 1],
++    [{ kind: "additive", maxAttention: "needs-eyes" }, "medium", 1],
++    [{ kind: "docs", maxAttention: "needs-eyes" }, "medium", 1],
+     [{ kind: "logic", maxAttention: "suspicious" }, "medium", 1],
+     [{ kind: "docs", sensitivePaths: ["docs/auth.md"] }, "medium", 1],
+   ];

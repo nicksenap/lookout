@@ -1,0 +1,729 @@
+diff --git a/src/cli/main.ts b/src/cli/main.ts
+index c45c4e7..d5705a8 100644
+--- a/src/cli/main.ts
++++ b/src/cli/main.ts
+@@ -1,7 +1,57 @@
+ import pkg from "../../package.json" with { type: "json" };
++import { ReviewStore } from "../core/store.ts";
++import type { Review } from "../core/types.ts";
++import { loadChangeSet, resolveTarget } from "../sources/resolve.ts";
+ 
+-const args = process.argv.slice(2);
+-if (args.includes("--version") || args.includes("-v")) {
+-  console.log(`lookout ${pkg.version}`);
+-  process.exit(0);
++const HELP = `lookout ${pkg.version} — rank hunks that deserve attention, dispatch review agents
++
++Usage:
++  lookout                  working tree vs HEAD
++  lookout A..B | A...B     local range (main.. means main..HEAD)
++  lookout <pr-url>         GitHub PR (read-only, via gh)
++  lookout owner/repo#N
++
++Options:
++  --json        print the Review as JSON (no TUI)
++  --version     print version
++  --help        this help`;
++
++interface CliArgs {
++  json: boolean;
++  target?: string;
++}
++
++function parseArgs(argv: string[]): CliArgs {
++  const args: CliArgs = { json: false };
++  for (const a of argv) {
++    if (a === "--json") args.json = true;
++    else if (a === "--version" || a === "-v") {
++      console.log(`lookout ${pkg.version}`);
++      process.exit(0);
++    } else if (a === "--help" || a === "-h") {
++      console.log(HELP);
++      process.exit(0);
++    } else if (a.startsWith("-")) throw new Error(`Unknown option ${a}. See lookout --help.`);
++    else if (args.target !== undefined) throw new Error(`Only one target allowed (got "${args.target}" and "${a}").`);
++    else args.target = a;
++  }
++  return args;
+ }
++
++async function main(): Promise<void> {
++  const args = parseArgs(process.argv.slice(2));
++  const changeSet = await loadChangeSet(resolveTarget(args.target));
++  const review: Review = { changeSet, dispatches: [], rankedBy: "rules" };
++  const store = new ReviewStore(review);
++
++  if (args.json) {
++    process.stdout.write(JSON.stringify(store.getSnapshot(), null, 2) + "\n");
++    return;
++  }
++  throw new Error("TUI not implemented yet; use --json.");
++}
++
++main().catch((err: unknown) => {
++  console.error(`lookout: ${err instanceof Error ? err.message : String(err)}`);
++  process.exit(1);
++});
+diff --git a/src/core/diff.ts b/src/core/diff.ts
+new file mode 100644
+index 0000000..c4c55f6
+--- /dev/null
++++ b/src/core/diff.ts
+@@ -0,0 +1,149 @@
++import type { DiffLine, FileChange, Hunk } from "./types.ts";
++
++/** Unquote a git C-style quoted path ("a/\303\251 x") or return it unchanged. */
++export function unquoteGitPath(raw: string): string {
++  if (!raw.startsWith('"') || !raw.endsWith('"')) return raw;
++  const body = raw.slice(1, -1);
++  const bytes: number[] = [];
++  const simple: Record<string, number> = { n: 10, t: 9, r: 13, a: 7, b: 8, f: 12, v: 11, '"': 34, "\\": 92 };
++  for (let i = 0; i < body.length; i++) {
++    const ch = body[i]!;
++    if (ch !== "\\") {
++      for (const b of new TextEncoder().encode(ch)) bytes.push(b);
++      continue;
++    }
++    const next = body[i + 1] ?? "";
++    if (/[0-7]/.test(next)) {
++      bytes.push(parseInt(body.slice(i + 1, i + 4), 8));
++      i += 3;
++    } else {
++      bytes.push(simple[next] ?? next.charCodeAt(0));
++      i += 1;
++    }
++  }
++  return new TextDecoder().decode(new Uint8Array(bytes));
++}
++
++function stripPrefix(path: string): string {
++  const p = unquoteGitPath(path.replace(/\t.*$/, ""));
++  if (p === "/dev/null") return p;
++  return p.replace(/^[ab]\//, "");
++}
++
++/** Split the `diff --git a/X b/Y` remainder into old/new paths. */
++function parseDiffGitPaths(rest: string): [string, string] {
++  if (rest.startsWith('"')) {
++    const m = /^("(?:[^"\\]|\\.)*")\s+(.+)$/.exec(rest);
++    if (m) return [stripPrefix(m[1]!), stripPrefix(m[2]!)];
++  }
++  // Symmetric case "a/P b/P" — exact split even when P contains " b/".
++  const n = (rest.length - 5) / 2;
++  if (Number.isInteger(n) && rest.startsWith("a/") && rest.slice(n + 2, n + 5) === " b/" && rest.slice(2, n + 2) === rest.slice(n + 5)) {
++    const p = rest.slice(2, n + 2);
++    return [p, p];
++  }
++  const idx = rest.lastIndexOf(" b/");
++  if (idx > 0) return [stripPrefix(rest.slice(0, idx)), stripPrefix(rest.slice(idx + 1))];
++  return [rest, rest];
++}
++
++export function hunkId(path: string, header: string, lines: DiffLine[]): string {
++  const h = new Bun.CryptoHasher("sha1");
++  h.update(path);
++  h.update("\0");
++  h.update(header);
++  for (const l of lines) h.update(`\0${l.kind[0]}${l.text}`);
++  return h.digest("hex").slice(0, 12);
++}
++
++const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
++
++/** Parse `git diff` / `gh pr diff` unified output (git extended format). */
++export function parseDiff(text: string): FileChange[] {
++  const lines = text.split("\n");
++  if (lines.length && lines[lines.length - 1] === "") lines.pop();
++  const files: FileChange[] = [];
++  let i = 0;
++
++  while (i < lines.length) {
++    const line = lines[i]!;
++    if (!line.startsWith("diff --git ")) {
++      i++;
++      continue;
++    }
++    let [oldPath, newPath] = parseDiffGitPaths(line.slice("diff --git ".length));
++    let status: FileChange["status"] = "modified";
++    let binary = false;
++    let renamed = false;
++    i++;
++
++    // Extended headers.
++    while (i < lines.length && !lines[i]!.startsWith("diff --git ") && !lines[i]!.startsWith("@@ ")) {
++      const h = lines[i]!;
++      if (h.startsWith("new file mode")) status = "added";
++      else if (h.startsWith("deleted file mode")) status = "deleted";
++      else if (h.startsWith("rename from ")) { oldPath = unquoteGitPath(h.slice(12)); renamed = true; }
++      else if (h.startsWith("rename to ")) { newPath = unquoteGitPath(h.slice(10)); renamed = true; }
++      else if (h.startsWith("Binary files ") || h === "GIT binary patch") binary = true;
++      else if (h.startsWith("--- ")) { const p = stripPrefix(h.slice(4)); if (p === "/dev/null") status = "added"; else oldPath = p; }
++      else if (h.startsWith("+++ ")) { const p = stripPrefix(h.slice(4)); if (p === "/dev/null") status = "deleted"; else newPath = p; }
++      i++;
++    }
++    if (renamed && status === "modified") status = "renamed";
++    const path = status === "deleted" ? oldPath : newPath;
++    const file: FileChange = { path, status, binary, hunks: [] };
++    if (status === "renamed") file.oldPath = oldPath;
++
++    while (i < lines.length && lines[i]!.startsWith("@@ ")) {
++      const header = lines[i]!;
++      const m = HUNK_RE.exec(header);
++      if (!m) throw new Error(`Malformed hunk header in ${path}: ${header}`);
++      const oldStart = Number(m[1]);
++      const oldLines = m[2] === undefined ? 1 : Number(m[2]);
++      const newStart = Number(m[3]);
++      const newLines = m[4] === undefined ? 1 : Number(m[4]);
++      i++;
++      const body: DiffLine[] = [];
++      let oldLeft = oldLines;
++      let newLeft = newLines;
++      let oldNo = oldStart;
++      let newNo = newStart;
++      while (i < lines.length && (oldLeft > 0 || newLeft > 0 || lines[i]!.startsWith("\\"))) {
++        const l = lines[i]!;
++        const tag = l[0];
++        if (tag === "\\") {
++          const prev = body[body.length - 1];
++          if (prev) prev.noNewlineAtEof = true;
++        } else if (tag === "+") {
++          body.push({ kind: "add", text: l.slice(1), newLine: newNo++ });
++          newLeft--;
++        } else if (tag === "-") {
++          body.push({ kind: "del", text: l.slice(1), oldLine: oldNo++ });
++          oldLeft--;
++        } else if (tag === " " || l === "") {
++          body.push({ kind: "context", text: l.slice(1), oldLine: oldNo++, newLine: newNo++ });
++          oldLeft--;
++          newLeft--;
++        } else {
++          throw new Error(`Unexpected line in hunk ${path} ${header}: ${l.slice(0, 80)}`);
++        }
++        i++;
++      }
++      file.hunks.push({
++        id: hunkId(path, header, body),
++        path,
++        header,
++        oldStart,
++        oldLines,
++        newStart,
++        newLines,
++        lines: body,
++        labels: [],
++        attention: "routine",
++        score: 0,
++      });
++    }
++    files.push(file);
++  }
++  return files;
++}
+diff --git a/src/core/store.ts b/src/core/store.ts
+new file mode 100644
+index 0000000..8a873c8
+--- /dev/null
++++ b/src/core/store.ts
+@@ -0,0 +1,63 @@
++import type { Dispatch, Review } from "./types.ts";
++
++export type ReviewEvent =
++  | { type: "dispatch-started"; dispatch: Dispatch }
++  | { type: "dispatch-output"; id: string; chunk: string }
++  | { type: "dispatch-finished"; dispatch: Dispatch };
++
++type Listener = () => void;
++type EventListener = (event: ReviewEvent) => void;
++
++/**
++ * Plain, UI-agnostic Review state. Snapshots are immutable: every change replaces
++ * the Review object so `useSyncExternalStore` and `--json` see consistent state.
++ */
++export class ReviewStore {
++  private review: Review;
++  private listeners = new Set<Listener>();
++  private eventListeners = new Set<EventListener>();
++
++  constructor(review: Review) {
++    this.review = review;
++  }
++
++  getSnapshot = (): Review => this.review;
++
++  subscribe = (listener: Listener): (() => void) => {
++    this.listeners.add(listener);
++    return () => this.listeners.delete(listener);
++  };
++
++  onEvent(listener: EventListener): () => void {
++    this.eventListeners.add(listener);
++    return () => this.eventListeners.delete(listener);
++  }
++
++  private set(review: Review, event?: ReviewEvent): void {
++    this.review = review;
++    if (event) for (const l of this.eventListeners) l(event);
++    for (const l of this.listeners) l();
++  }
++
++  update(fn: (review: Review) => Review): void {
++    this.set(fn(this.review));
++  }
++
++  startDispatch(dispatch: Dispatch): void {
++    this.set({ ...this.review, dispatches: [...this.review.dispatches, dispatch] }, { type: "dispatch-started", dispatch });
++  }
++
++  appendOutput(id: string, chunk: string): void {
++    this.set(this.patchDispatch(id, (d) => ({ ...d, output: d.output + chunk })), { type: "dispatch-output", id, chunk });
++  }
++
++  finishDispatch(id: string, patch: Partial<Dispatch>): void {
++    const review = this.patchDispatch(id, (d) => ({ ...d, ...patch }));
++    const dispatch = review.dispatches.find((d) => d.id === id)!;
++    this.set(review, { type: "dispatch-finished", dispatch });
++  }
++
++  private patchDispatch(id: string, fn: (d: Dispatch) => Dispatch): Review {
++    return { ...this.review, dispatches: this.review.dispatches.map((d) => (d.id === id ? fn(d) : d)) };
++  }
++}
+diff --git a/src/core/types.ts b/src/core/types.ts
+new file mode 100644
+index 0000000..41984fe
+--- /dev/null
++++ b/src/core/types.ts
+@@ -0,0 +1,83 @@
++export type Attention = "inert" | "routine" | "needs-eyes" | "suspicious";
++export const ATTENTION_ORDER: readonly Attention[] = ["inert", "routine", "needs-eyes", "suspicious"];
++
++export type FileStatus = "added" | "modified" | "deleted" | "renamed";
++
++export interface DiffLine {
++  kind: "context" | "add" | "del";
++  text: string;
++  oldLine?: number;
++  newLine?: number;
++  /** "\ No newline at end of file" followed this line. */
++  noNewlineAtEof?: boolean;
++}
++
++export interface Hunk {
++  id: string;
++  path: string;
++  header: string;
++  oldStart: number;
++  oldLines: number;
++  newStart: number;
++  newLines: number;
++  lines: DiffLine[];
++  labels: string[];
++  attention: Attention;
++  score: number;
++}
++
++export interface FileChange {
++  path: string;
++  oldPath?: string;
++  status: FileStatus;
++  binary: boolean;
++  hunks: Hunk[];
++}
++
++export interface Intent {
++  title: string;
++  body: string;
++}
++
++export interface ChangeSet {
++  target: string;
++  base: string;
++  head: string;
++  files: FileChange[];
++  intent?: Intent;
++}
++
++export type Severity = "p0" | "p1" | "p2";
++
++export interface Finding {
++  id: string;
++  severity: Severity;
++  title: string;
++  body: string;
++  anchor?: { path: string; line: number };
++  dispatcher: string;
++}
++
++export type DispatchStatus = "running" | "done" | "failed" | "cancelled";
++
++export interface Dispatch {
++  id: string;
++  dispatcher: string;
++  scope: "hunk" | "change";
++  /** Hunk id when scope is "hunk". */
++  hunkId?: string;
++  cmd: string;
++  status: DispatchStatus;
++  output: string;
++  findings: Finding[];
++  /** Output that is not a findings block (freeform text, parse errors). */
++  freeform?: string;
++  error?: string;
++}
++
++export interface Review {
++  changeSet: ChangeSet;
++  dispatches: Dispatch[];
++  rankedBy: string; // "rules" | `rules+${model}`
++  warning?: string;
++}
+diff --git a/src/sources/exec.ts b/src/sources/exec.ts
+new file mode 100644
+index 0000000..d565ef4
+--- /dev/null
++++ b/src/sources/exec.ts
+@@ -0,0 +1,11 @@
++/** Run a command and return stdout; throw with stderr on non-zero exit. */
++export async function run(cmd: string[], cwd: string = process.cwd()): Promise<string> {
++  const proc = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
++  const [out, err, code] = await Promise.all([
++    new Response(proc.stdout).text(),
++    new Response(proc.stderr).text(),
++    proc.exited,
++  ]);
++  if (code !== 0) throw new Error(`${cmd.join(" ")} failed (exit ${code}): ${err.trim() || out.trim()}`);
++  return out;
++}
+diff --git a/src/sources/git.ts b/src/sources/git.ts
+new file mode 100644
+index 0000000..249a9f6
+--- /dev/null
++++ b/src/sources/git.ts
+@@ -0,0 +1,35 @@
++import { parseDiff } from "../core/diff.ts";
++import type { ChangeSet } from "../core/types.ts";
++import { run } from "./exec.ts";
++
++/** Flags that pin git's diff output to the format parseDiff expects regardless of user config. */
++export const DIFF_FLAGS = ["--no-color", "--no-ext-diff", "--no-textconv", "-M", "--src-prefix=a/", "--dst-prefix=b/"];
++
++export async function repoRoot(cwd: string = process.cwd()): Promise<string> {
++  return (await run(["git", "rev-parse", "--show-toplevel"], cwd)).trim();
++}
++
++async function revParse(rev: string, cwd: string): Promise<string> {
++  return (await run(["git", "rev-parse", "--verify", "--end-of-options", `${rev}^{commit}`], cwd)).trim();
++}
++
++/** Working tree (staged + unstaged) vs HEAD. */
++export async function loadWorktree(cwd: string = process.cwd()): Promise<ChangeSet> {
++  const head = await revParse("HEAD", cwd);
++  const text = await run(["git", "diff", ...DIFF_FLAGS, "HEAD", "--"], cwd);
++  return { target: "worktree", base: head, head: "worktree", files: parseDiff(text) };
++}
++
++/** `A..B` (B defaults to HEAD) or `A...B` (diff from merge-base). */
++export async function loadRange(range: string, cwd: string = process.cwd()): Promise<ChangeSet> {
++  const threeDot = range.includes("...");
++  const [left, right] = range.split(threeDot ? "..." : "..");
++  const a = left || "HEAD";
++  const b = right || "HEAD";
++  const headSha = await revParse(b, cwd);
++  const baseSha = threeDot
++    ? (await run(["git", "merge-base", a, b], cwd)).trim()
++    : await revParse(a, cwd);
++  const text = await run(["git", "diff", ...DIFF_FLAGS, baseSha, headSha, "--"], cwd);
++  return { target: range, base: baseSha, head: headSha, files: parseDiff(text) };
++}
+diff --git a/src/sources/github.ts b/src/sources/github.ts
+new file mode 100644
+index 0000000..df46494
+--- /dev/null
++++ b/src/sources/github.ts
+@@ -0,0 +1,43 @@
++import { parseDiff } from "../core/diff.ts";
++import type { ChangeSet } from "../core/types.ts";
++import { run } from "./exec.ts";
++
++export interface PrRef {
++  owner: string;
++  repo: string;
++  number: number;
++}
++
++const URL_RE = /^https?:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)(?:[/?#].*)?$/;
++const SHORT_RE = /^([\w.-]+)\/([\w.-]+)#(\d+)$/;
++
++export function parsePrRef(arg: string): PrRef | undefined {
++  const m = URL_RE.exec(arg) ?? SHORT_RE.exec(arg);
++  if (!m) return undefined;
++  return { owner: m[1]!, repo: m[2]!, number: Number(m[3]) };
++}
++
++interface PrView {
++  title: string;
++  body: string;
++  baseRefOid: string;
++  headRefOid: string;
++}
++
++/** Read-only PR load through `gh` (uses gh's own auth). */
++export async function loadPullRequest(ref: PrRef, target: string): Promise<ChangeSet> {
++  const repo = `${ref.owner}/${ref.repo}`;
++  const n = String(ref.number);
++  const [text, viewJson] = await Promise.all([
++    run(["gh", "pr", "diff", n, "--repo", repo, "--color", "never"]),
++    run(["gh", "pr", "view", n, "--repo", repo, "--json", "title,body,baseRefOid,headRefOid"]),
++  ]);
++  const view = JSON.parse(viewJson) as PrView;
++  return {
++    target,
++    base: view.baseRefOid,
++    head: view.headRefOid,
++    files: parseDiff(text),
++    intent: { title: view.title, body: view.body ?? "" },
++  };
++}
+diff --git a/src/sources/resolve.ts b/src/sources/resolve.ts
+new file mode 100644
+index 0000000..e3ddaa0
+--- /dev/null
++++ b/src/sources/resolve.ts
+@@ -0,0 +1,29 @@
++import type { ChangeSet } from "../core/types.ts";
++import { loadRange, loadWorktree } from "./git.ts";
++import { loadPullRequest, parsePrRef } from "./github.ts";
++
++export type SourceSpec =
++  | { kind: "worktree" }
++  | { kind: "range"; range: string }
++  | { kind: "pr"; owner: string; repo: string; number: number; target: string };
++
++export function resolveTarget(arg: string | undefined): SourceSpec {
++  if (arg === undefined) return { kind: "worktree" };
++  const pr = parsePrRef(arg);
++  if (pr) return { kind: "pr", ...pr, target: arg };
++  if (arg.includes("..")) return { kind: "range", range: arg };
++  throw new Error(
++    `Unrecognised target "${arg}". Use: (nothing) for working tree vs HEAD, A..B / A...B / main.. for a range, or a PR URL / owner/repo#N.`,
++  );
++}
++
++export function loadChangeSet(spec: SourceSpec, cwd: string = process.cwd()): Promise<ChangeSet> {
++  switch (spec.kind) {
++    case "worktree":
++      return loadWorktree(cwd);
++    case "range":
++      return loadRange(spec.range, cwd);
++    case "pr":
++      return loadPullRequest(spec, spec.target);
++  }
++}
+diff --git a/test/diff.test.ts b/test/diff.test.ts
+new file mode 100644
+index 0000000..0d29b16
+--- /dev/null
++++ b/test/diff.test.ts
+@@ -0,0 +1,114 @@
++import { describe, expect, test } from "bun:test";
++import { parseDiff, unquoteGitPath } from "../src/core/diff.ts";
++
++const fixture = (name: string) => Bun.file(`${import.meta.dir}/../fixtures/${name}`).text();
++
++describe("parseDiff edge-cases.diff (real git output)", async () => {
++  const files = parseDiff(await fixture("edge-cases.diff"));
++  const byPath = Object.fromEntries(files.map((f) => [f.path, f]));
++
++  test("file count matches git diff --stat (10 files)", () => {
++    expect(files.length).toBe(10);
++  });
++
++  test("added file", () => {
++    const f = byPath["added.go"]!;
++    expect(f.status).toBe("added");
++    expect(f.hunks).toHaveLength(1);
++    expect(f.hunks[0]!.lines).toEqual([{ kind: "add", text: "brand new", newLine: 1 }]);
++    expect(f.hunks[0]!.oldStart).toBe(0);
++    expect(f.hunks[0]!.oldLines).toBe(0);
++    expect(f.hunks[0]!.newLines).toBe(1);
++  });
++
++  test("deleted file uses old path", () => {
++    const f = byPath["del.md"]!;
++    expect(f.status).toBe("deleted");
++    expect(f.hunks[0]!.lines).toEqual([{ kind: "del", text: "gone", oldLine: 1 }]);
++  });
++
++  test("no newline at EOF on both sides", () => {
++    const lines = byPath["eof.txt"]!.hunks[0]!.lines;
++    expect(lines).toHaveLength(2);
++    expect(lines.every((l) => l.noNewlineAtEof)).toBe(true);
++  });
++
++  test("no newline at EOF on the new side only", () => {
++    const lines = byPath["keep.txt"]!.hunks[0]!.lines;
++    expect(lines.map((l) => l.kind)).toEqual(["context", "del", "add", "context", "add"]);
++    expect(lines[4]).toEqual({ kind: "add", text: "line4", newLine: 4, noNewlineAtEof: true });
++    expect(lines[3]!.noNewlineAtEof).toBeUndefined();
++  });
++
++  test("binary modified and binary added", () => {
++    expect(byPath["img.png"]).toMatchObject({ status: "modified", binary: true, hunks: [] });
++    expect(byPath["newbin.dat"]).toMatchObject({ status: "added", binary: true, hunks: [] });
++  });
++
++  test("rename with edit", () => {
++    const f = byPath["new_name.ts"]!;
++    expect(f.status).toBe("renamed");
++    expect(f.oldPath).toBe("old_name.ts");
++    const h = f.hunks[0]!;
++    expect(h.header).toBe("@@ -5,6 +5,6 @@ d");
++    expect(h.lines.find((l) => l.kind === "add")).toEqual({ kind: "add", text: "H", newLine: 8 });
++    expect(h.lines.find((l) => l.kind === "del")).toEqual({ kind: "del", text: "h", oldLine: 8 });
++  });
++
++  test("mode-only change has no hunks", () => {
++    expect(byPath["script.sh"]).toMatchObject({ status: "modified", binary: false, hunks: [] });
++  });
++
++  test("path with space (trailing tab in ---/+++)", () => {
++    expect(byPath["with space.txt"]!.hunks).toHaveLength(1);
++  });
++
++  test("C-quoted unicode path", () => {
++    expect(byPath["ünï.txt"]!.hunks[0]!.lines.map((l) => l.text)).toEqual(["u", "u2"]);
++  });
++
++  test("hunk ids are stable and distinct", () => {
++    const ids = files.flatMap((f) => f.hunks.map((h) => h.id));
++    expect(new Set(ids).size).toBe(ids.length);
++    expect(parseDiff("")).toEqual([]);
++  });
++});
++
++describe("parseDiff sample fixtures", () => {
++  test("sample-a: 4 files, 20 hunks, line counts match headers", async () => {
++    const files = parseDiff(await fixture("sample-a.diff"));
++    expect(files).toHaveLength(4);
++    const hunks = files.flatMap((f) => f.hunks);
++    expect(hunks).toHaveLength(20);
++    for (const h of hunks) {
++      expect(h.lines.filter((l) => l.kind !== "add").length).toBe(h.oldLines);
++      expect(h.lines.filter((l) => l.kind !== "del").length).toBe(h.newLines);
++    }
++    const adds = hunks.flatMap((h) => h.lines).filter((l) => l.kind === "add").length;
++    const dels = hunks.flatMap((h) => h.lines).filter((l) => l.kind === "del").length;
++    expect([adds, dels]).toEqual([84, 18]);
++  });
++
++  test("sample-b: 52 files incl. binary PNGs", async () => {
++    const files = parseDiff(await fixture("sample-b.diff"));
++    expect(files).toHaveLength(52);
++    const bins = files.filter((f) => f.binary);
++    expect(bins.length).toBeGreaterThan(40);
++    expect(bins.every((f) => f.status === "added" && f.hunks.length === 0)).toBe(true);
++  });
++
++  test("parsing is deterministic (same ids)", async () => {
++    const text = await fixture("sample-a.diff");
++    const a = parseDiff(text).flatMap((f) => f.hunks.map((h) => h.id));
++    const b = parseDiff(text).flatMap((f) => f.hunks.map((h) => h.id));
++    expect(a).toEqual(b);
++  });
++});
++
++describe("unquoteGitPath", () => {
++  test("octal escapes and simple escapes", () => {
++    expect(unquoteGitPath('"a/\\303\\274.txt"')).toBe("a/ü.txt");
++    expect(unquoteGitPath('"tab\\there"')).toBe("tab\there");
++    expect(unquoteGitPath("plain")).toBe("plain");
++  });
++});
+diff --git a/test/sources.test.ts b/test/sources.test.ts
+new file mode 100644
+index 0000000..3a10aee
+--- /dev/null
++++ b/test/sources.test.ts
+@@ -0,0 +1,82 @@
++import { afterAll, beforeAll, describe, expect, test } from "bun:test";
++import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { loadRange, loadWorktree } from "../src/sources/git.ts";
++import { parsePrRef } from "../src/sources/github.ts";
++import { resolveTarget } from "../src/sources/resolve.ts";
++
++let dir: string;
++const git = (...args: string[]) => {
++  const r = Bun.spawnSync(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" });
++  if (r.exitCode !== 0) throw new Error(r.stderr.toString());
++  return r.stdout.toString().trim();
++};
++const write = (p: string, s: string) => writeFileSync(join(dir, p), s);
++
++beforeAll(() => {
++  dir = mkdtempSync(join(tmpdir(), "lookout-git-"));
++  git("init", "-q", "-b", "main");
++  git("config", "user.email", "t@t");
++  git("config", "user.name", "t");
++  write("a.ts", "export const a = 1;\n");
++  git("add", "-A");
++  git("commit", "-qm", "base");
++  git("checkout", "-qb", "feature");
++  write("b.ts", "export const b = 2;\n");
++  write("a.ts", "export const a = 3;\n");
++  git("add", "-A");
++  git("commit", "-qm", "feature");
++  git("checkout", "-q", "main");
++  write("c.ts", "export const c = 4;\n");
++  git("add", "-A");
++  git("commit", "-qm", "main moves");
++  git("checkout", "-q", "feature");
++});
++afterAll(() => rmSync(dir, { recursive: true, force: true }));
++
++describe("git source", () => {
++  test("worktree vs HEAD includes staged and unstaged", async () => {
++    write("a.ts", "export const a = 5;\n");
++    write("b.ts", "export const b = 6;\n");
++    git("add", "b.ts");
++    const cs = await loadWorktree(dir);
++    expect(cs.files.map((f) => f.path).sort()).toEqual(["a.ts", "b.ts"]);
++    expect(cs.head).toBe("worktree");
++    git("checkout", "-q", "--", ".");
++    git("reset", "-q", "--hard");
++  });
++
++  test("A..B compares the two tips", async () => {
++    const cs = await loadRange("main..feature", dir);
++    // main has c.ts that feature lacks, so two-dot shows it as deleted.
++    expect(cs.files.map((f) => `${f.status}:${f.path}`).sort()).toEqual(["added:b.ts", "deleted:c.ts", "modified:a.ts"]);
++  });
++
++  test("A...B diffs from the merge-base", async () => {
++    const cs = await loadRange("main...feature", dir);
++    expect(cs.files.map((f) => f.path).sort()).toEqual(["a.ts", "b.ts"]);
++    expect(cs.base).toBe(git("merge-base", "main", "feature"));
++  });
++
++  test("main.. defaults the right side to HEAD", async () => {
++    const cs = await loadRange("main..", dir);
++    expect(cs.head).toBe(git("rev-parse", "HEAD"));
++    expect(cs.files).toHaveLength(3);
++  });
++});
++
++describe("resolveTarget", () => {
++  test("forms", () => {
++    expect(resolveTarget(undefined)).toEqual({ kind: "worktree" });
++    expect(resolveTarget("main..")).toEqual({ kind: "range", range: "main.." });
++    expect(resolveTarget("a...b")).toEqual({ kind: "range", range: "a...b" });
++    expect(resolveTarget("https://github.com/o/r/pull/12/files")).toMatchObject({ kind: "pr", owner: "o", repo: "r", number: 12 });
++    expect(resolveTarget("o/r#7")).toMatchObject({ kind: "pr", owner: "o", repo: "r", number: 7 });
++    expect(() => resolveTarget("main")).toThrow(/Unrecognised target/);
++  });
++
++  test("parsePrRef rejects non-PR URLs", () => {
++    expect(parsePrRef("https://github.com/o/r/issues/1")).toBeUndefined();
++  });
++});

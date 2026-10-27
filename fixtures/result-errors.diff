@@ -1,0 +1,789 @@
+diff --git a/src/cli/main.ts b/src/cli/main.ts
+index f577562..4a46e92 100644
+--- a/src/cli/main.ts
++++ b/src/cli/main.ts
+@@ -42,36 +42,49 @@ function parseArgs(argv: string[]): CliArgs {
+   return args;
+ }
+ 
+-async function main(): Promise<void> {
++/** The one place expected failures become exit codes. Returns the exit code. */
++async function main(): Promise<number> {
+   const args = parseArgs(process.argv.slice(2));
+-  const config = loadConfig(undefined, await repoRoot().catch(() => undefined));
+-  const ruled = await rankChangeSet(await loadChangeSet(resolveTarget(args.target)));
++  const root = await repoRoot();
++  const config = loadConfig(undefined, root.ok ? root.value : undefined);
++  if (!config.ok) return fail(config.error);
++  const spec = resolveTarget(args.target);
++  if (!spec.ok) return fail(spec.error);
++  const loaded = await loadChangeSet(spec.value);
++  if (!loaded.ok) return fail(loaded.error);
++  const policy = config.value.policy;
++
++  const ruled = await rankChangeSet(loaded.value);
+   const judge = (cs: ChangeSet) => {
+-    const classification = classify(cs, config.policy);
+-    return { classification, verdict: evaluate(classification, config.policy) };
++    const classification = classify(cs, policy);
++    return { classification, verdict: evaluate(classification, policy) };
+   };
+   const store = new ReviewStore({ changeSet: ruled.changeSet, ...judge(ruled.changeSet), dispatches: [], rankedBy: ruled.rankedBy });
+-  const modelRanking = rankWithModel(ruled.changeSet, { modelSpec: config.rank.model }).then((res) =>
+-    store.update((r) => {
+-      const next: Review = { ...r, changeSet: res.changeSet, ...judge(res.changeSet), rankedBy: res.rankedBy };
+-      if (res.warning) next.warning = res.warning;
+-      else delete next.warning;
+-      return next;
+-    }),
+-  );
++  const res = await rankWithModel(ruled.changeSet, { modelSpec: config.value.rank.model });
++  store.update((r) => {
++    const next: Review = { ...r, changeSet: res.changeSet, ...judge(res.changeSet), rankedBy: res.rankedBy };
++    if (res.warning) next.warning = res.warning;
++    else delete next.warning;
++    return next;
++  });
+ 
+-  await modelRanking;
+   const review = store.getSnapshot();
+   if (review.warning) console.error(`lookout: ${review.warning}`);
+-  if (args.json) {
+-    process.stdout.write(JSON.stringify(review, null, 2) + "\n");
+-    return;
+-  }
+-  // The verdict card replaces the TUI here; until then print JSON.
++  // The card stack replaces this once it exists; until then every mode prints JSON.
+   process.stdout.write(JSON.stringify(review, null, 2) + "\n");
++  return 0;
++}
++
++function fail(message: string): number {
++  console.error(`lookout: ${message}`);
++  return 1;
+ }
+ 
+-main().catch((err: unknown) => {
+-  console.error(`lookout: ${err instanceof Error ? err.message : String(err)}`);
+-  process.exit(1);
+-});
++// Anything that reaches here is a bug or an unrecognised option, not an expected failure.
++main().then(
++  (code) => process.exit(code),
++  (err: unknown) => {
++    console.error(`lookout: ${err instanceof Error ? err.message : String(err)}`);
++    process.exit(1);
++  },
++);
+diff --git a/src/dispatch/config.ts b/src/dispatch/config.ts
+index ec40a8b..62869db 100644
+--- a/src/dispatch/config.ts
++++ b/src/dispatch/config.ts
+@@ -1,6 +1,7 @@
+ import { existsSync, readFileSync } from "node:fs";
+ import { homedir } from "node:os";
+ import { join } from "node:path";
++import { attempt, err, ok, type Result } from "../core/result.ts";
+ import { DEFAULT_POLICY, type Policy, validatePolicy } from "../policy/schema.ts";
+ 
+ export const DEFAULT_CONFIG_PATH = join(homedir(), ".config", "lookout", "config.toml");
+@@ -30,8 +31,6 @@ export const REPO_CONFIG_NAME = ".lookout.toml";
+ 
+ export const BUILTIN_DISPATCHERS: DispatcherConfig[] = [{ name: "pi", cmd: "pi -p @{prompt_file}" }];
+ 
+-export class ConfigError extends Error {}
+-
+ const isTable = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+ 
+ /** `{name}` tokens (identifier names only, so JSON like `{"a": 1}` is left alone). */
+@@ -39,12 +38,10 @@ export function placeholdersIn(template: string): string[] {
+   return [...template.matchAll(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g)].map((m) => m[1]!);
+ }
+ 
+-export function checkPlaceholders(template: string, where: string, allowed: readonly string[]): void {
+-  for (const name of placeholdersIn(template)) {
+-    if (!allowed.includes(name)) {
+-      throw new ConfigError(`${where}: unknown placeholder {${name}}. Allowed: ${allowed.map((p) => `{${p}}`).join(" ")}`);
+-    }
+-  }
++export function checkPlaceholders(template: string, where: string, allowed: readonly string[]): Result<void> {
++  const unknown = placeholdersIn(template).find((name) => !allowed.includes(name));
++  if (unknown) return err(`${where}: unknown placeholder {${unknown}}. Allowed: ${allowed.map((p) => `{${p}}`).join(" ")}`);
++  return ok(undefined);
+ }
+ 
+ export const DEFAULT_CONFIG: Config = { rank: { model: DEFAULT_MODEL }, dispatchers: BUILTIN_DISPATCHERS, policy: DEFAULT_POLICY, source: "built-in defaults" };
+@@ -54,18 +51,18 @@ export const DEFAULT_CONFIG: Config = { rank: { model: DEFAULT_MODEL }, dispatch
+  * the base's when present; areas and policy layer (see validatePolicy). Hand-written
+  * checks so messages name the exact key.
+  */
+-export function validateConfig(raw: unknown, source: string, base: Config = DEFAULT_CONFIG): Config {
+-  if (!isTable(raw)) throw new ConfigError(`${source}: expected a TOML table at top level`);
++export function validateConfig(raw: unknown, source: string, base: Config = DEFAULT_CONFIG): Result<Config> {
++  if (!isTable(raw)) return err(`${source}: expected a TOML table at top level`);
+   const known = new Set(["rank", "dispatch", "prompt", "areas", "policy"]);
+-  for (const key of Object.keys(raw)) if (!known.has(key)) throw new ConfigError(`${source}: unknown key "${key}" (expected rank, dispatch, prompt, areas, policy)`);
++  for (const key of Object.keys(raw)) if (!known.has(key)) return err(`${source}: unknown key "${key}" (expected rank, dispatch, prompt, areas, policy)`);
+ 
+   let model = base.rank.model;
+   if (raw.rank !== undefined) {
+-    if (!isTable(raw.rank)) throw new ConfigError(`${source}: [rank] must be a table`);
+-    for (const key of Object.keys(raw.rank)) if (key !== "model") throw new ConfigError(`${source}: unknown key "rank.${key}" (expected rank.model)`);
++    if (!isTable(raw.rank)) return err(`${source}: [rank] must be a table`);
++    for (const key of Object.keys(raw.rank)) if (key !== "model") return err(`${source}: unknown key "rank.${key}" (expected rank.model)`);
+     if (raw.rank.model !== undefined) {
+       if (typeof raw.rank.model !== "string" || !/^[\w.-]+:.+$/.test(raw.rank.model)) {
+-        throw new ConfigError(`${source}: rank.model must be a "provider:model" string, e.g. "${DEFAULT_MODEL}"`);
++        return err(`${source}: rank.model must be a "provider:model" string, e.g. "${DEFAULT_MODEL}"`);
+       }
+       model = raw.rank.model;
+     }
+@@ -73,41 +70,44 @@ export function validateConfig(raw: unknown, source: string, base: Config = DEFA
+ 
+   let dispatchers = base.dispatchers;
+   if (raw.dispatch !== undefined) {
+-    if (!isTable(raw.dispatch)) throw new ConfigError(`${source}: [dispatch] must contain [dispatch.<name>] tables`);
+-    dispatchers = Object.entries(raw.dispatch).map(([name, d]) => {
+-      if (!isTable(d)) throw new ConfigError(`${source}: [dispatch.${name}] must be a table with a cmd`);
+-      for (const key of Object.keys(d)) if (key !== "cmd") throw new ConfigError(`${source}: unknown key "dispatch.${name}.${key}" (expected cmd)`);
+-      if (typeof d.cmd !== "string" || d.cmd.trim() === "") throw new ConfigError(`${source}: dispatch.${name}.cmd must be a non-empty string`);
+-      checkPlaceholders(d.cmd, `${source}: dispatch.${name}.cmd`, PLACEHOLDERS);
+-      return { name, cmd: d.cmd };
+-    });
+-    if (dispatchers.length === 0) throw new ConfigError(`${source}: [dispatch] has no dispatchers`);
++    if (!isTable(raw.dispatch)) return err(`${source}: [dispatch] must contain [dispatch.<name>] tables`);
++    const list: DispatcherConfig[] = [];
++    for (const [name, d] of Object.entries(raw.dispatch)) {
++      if (!isTable(d)) return err(`${source}: [dispatch.${name}] must be a table with a cmd`);
++      for (const key of Object.keys(d)) if (key !== "cmd") return err(`${source}: unknown key "dispatch.${name}.${key}" (expected cmd)`);
++      if (typeof d.cmd !== "string" || d.cmd.trim() === "") return err(`${source}: dispatch.${name}.cmd must be a non-empty string`);
++      const placeholders = checkPlaceholders(d.cmd, `${source}: dispatch.${name}.cmd`, PLACEHOLDERS);
++      if (!placeholders.ok) return placeholders;
++      list.push({ name, cmd: d.cmd });
++    }
++    if (list.length === 0) return err(`${source}: [dispatch] has no dispatchers`);
++    dispatchers = list;
+   }
+ 
+   const policy = validatePolicy(raw, source, base.policy);
+-  if (!policy.ok) throw new ConfigError(policy.error);
++  if (!policy.ok) return policy;
+ 
+   const config: Config = { rank: { model }, dispatchers, policy: policy.value, source };
+   if (raw.prompt !== undefined) {
+-    if (typeof raw.prompt !== "string" || raw.prompt.trim() === "") throw new ConfigError(`${source}: prompt must be a non-empty string`);
+-    checkPlaceholders(raw.prompt, `${source}: prompt`, PROMPT_PLACEHOLDERS);
++    if (typeof raw.prompt !== "string" || raw.prompt.trim() === "") return err(`${source}: prompt must be a non-empty string`);
++    const placeholders = checkPlaceholders(raw.prompt, `${source}: prompt`, PROMPT_PLACEHOLDERS);
++    if (!placeholders.ok) return placeholders;
+     config.prompt = raw.prompt;
+   } else if (base.prompt !== undefined) config.prompt = base.prompt;
+-  return config;
++  return ok(config);
+ }
+ 
+-function readToml(path: string): unknown {
+-  try {
+-    return Bun.TOML.parse(readFileSync(path, "utf8"));
+-  } catch (err) {
+-    throw new ConfigError(`${path}: invalid TOML: ${err instanceof Error ? err.message : String(err)}`);
+-  }
++function loadFile(path: string, base: Config): Result<Config> {
++  const raw = attempt((): unknown => Bun.TOML.parse(readFileSync(path, "utf8")));
++  if (!raw.ok) return err(`${path}: invalid TOML: ${raw.error}`);
++  return validateConfig(raw.value, path, base);
+ }
+ 
+ /** Global config, then the repo's `.lookout.toml` layered on top when `repoRoot` is given. */
+-export function loadConfig(path: string = DEFAULT_CONFIG_PATH, repoRoot?: string): Config {
+-  let config = existsSync(path) ? validateConfig(readToml(path), path) : DEFAULT_CONFIG;
++export function loadConfig(path: string = DEFAULT_CONFIG_PATH, repoRoot?: string): Result<Config> {
++  const global = existsSync(path) ? loadFile(path, DEFAULT_CONFIG) : ok(DEFAULT_CONFIG);
++  if (!global.ok) return global;
+   const repoFile = repoRoot ? join(repoRoot, REPO_CONFIG_NAME) : undefined;
+-  if (repoFile && existsSync(repoFile)) config = validateConfig(readToml(repoFile), repoFile, config);
+-  return config;
++  if (!repoFile || !existsSync(repoFile)) return global;
++  return loadFile(repoFile, global.value);
+ }
+diff --git a/src/dispatch/parse.ts b/src/dispatch/parse.ts
+index f8a553a..dfc58f4 100644
+--- a/src/dispatch/parse.ts
++++ b/src/dispatch/parse.ts
+@@ -1,4 +1,5 @@
+ import type { ChangeSet, Finding, Severity } from "../core/types.ts";
++import { attempt } from "../core/result.ts";
+ 
+ export interface ParsedOutput {
+   findings: Finding[];
+@@ -53,14 +54,9 @@ export function parseDispatchOutput(rawOutput: string, opts: { dispatcher: strin
+   if (!block) return { findings: [], freeform: output.trim(), notes: ["no ```json findings block in output"] };
+ 
+   const freeform = [...lines.slice(0, block.start), ...lines.slice(block.end + 1)].join("\n").trim();
+-  let data: unknown;
+-  try {
+-    data = JSON.parse(block.body);
+-  } catch (err) {
+-    const why = err instanceof Error ? err.message : String(err);
+-    return { findings: [], freeform: output.trim(), notes: [`last \`\`\`json block is not valid JSON (${why})`] };
+-  }
+-  const list = Array.isArray(data) ? data : (data as { findings?: unknown } | null)?.findings;
++  const data = attempt((): unknown => JSON.parse(block.body));
++  if (!data.ok) return { findings: [], freeform: output.trim(), notes: [`last \`\`\`json block is not valid JSON (${data.error})`] };
++  const list = Array.isArray(data.value) ? data.value : (data.value as { findings?: unknown } | null)?.findings;
+   if (!Array.isArray(list)) return { findings: [], freeform: output.trim(), notes: ['last ```json block has no "findings" array'] };
+ 
+   const notes: string[] = [];
+diff --git a/src/dispatch/prompt.ts b/src/dispatch/prompt.ts
+index dcc3ce0..79800c2 100644
+--- a/src/dispatch/prompt.ts
++++ b/src/dispatch/prompt.ts
+@@ -1,5 +1,4 @@
+ import type { ChangeSet, FileChange, Hunk } from "../core/types.ts";
+-import { checkPlaceholders, PROMPT_PLACEHOLDERS } from "./config.ts";
+ 
+ export type DispatchScope = { kind: "hunk"; hunk: Hunk } | { kind: "change" };
+ 
+@@ -72,8 +71,7 @@ export function fillTemplate(template: string, values: Record<string, string>):
+ }
+ 
+ export function buildPrompt(opts: { changeSet: ChangeSet; scope: DispatchScope; repo: string; template?: string }): string {
+-  const template = opts.template ?? DEFAULT_PROMPT;
+-  checkPlaceholders(template, "prompt", PROMPT_PLACEHOLDERS);
++  const template = opts.template ?? DEFAULT_PROMPT; // placeholders were validated with the config
+   const intent = opts.changeSet.intent;
+   return fillTemplate(template, {
+     repo: opts.repo,
+diff --git a/src/dispatch/runner.ts b/src/dispatch/runner.ts
+index 9bc6ccd..52d09ea 100644
+--- a/src/dispatch/runner.ts
++++ b/src/dispatch/runner.ts
+@@ -1,9 +1,10 @@
+ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
++import { attempt, err, ok, type Result } from "../core/result.ts";
+ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+ import type { ReviewStore } from "../core/store.ts";
+ import type { Dispatch } from "../core/types.ts";
+-import { checkPlaceholders, type Config, PLACEHOLDERS } from "./config.ts";
++import { type Config, PLACEHOLDERS } from "./config.ts";
+ import { parseDispatchOutput } from "./parse.ts";
+ import { buildPrompt, diffSlice, type DispatchScope, fillTemplate } from "./prompt.ts";
+ 
+@@ -12,9 +13,8 @@ export function shellQuote(value: string): string {
+   return `'${value.replace(/'/g, `'\\''`)}'`;
+ }
+ 
+-/** Substitute `{prompt}` `{prompt_file}` `{repo}` `{diff_file}` as shell-quoted words. */
+-export function expandCommand(cmd: string, values: Record<(typeof PLACEHOLDERS)[number], string>, where = "cmd"): string {
+-  checkPlaceholders(cmd, where, PLACEHOLDERS);
++/** Substitute `{prompt}` `{prompt_file}` `{repo}` `{diff_file}` as shell-quoted words. Placeholders were validated with the config. */
++export function expandCommand(cmd: string, values: Record<(typeof PLACEHOLDERS)[number], string>): string {
+   return fillTemplate(cmd, Object.fromEntries(Object.entries(values).map(([k, v]) => [k, shellQuote(v)])));
+ }
+ 
+@@ -52,10 +52,11 @@ export class DispatchRunner {
+     await this.current?.finished;
+   }
+ 
+-  start(dispatcherName: string, scope: DispatchScope): Dispatch {
+-    if (this.current) throw new Error("a dispatch is already running (x cancels it)");
++  /** Start a dispatch; a running dispatch or an unknown dispatcher is an expected failure. */
++  start(dispatcherName: string, scope: DispatchScope): Result<Dispatch> {
++    if (this.current) return err("a dispatch is already running (x cancels it)");
+     const dispatcher = this.opts.config.dispatchers.find((d) => d.name === dispatcherName);
+-    if (!dispatcher) throw new Error(`unknown dispatcher "${dispatcherName}"`);
++    if (!dispatcher) return err(`unknown dispatcher "${dispatcherName}"`);
+ 
+     const review = this.store.getSnapshot();
+     const id = `d${++this.seq}`;
+@@ -65,8 +66,7 @@ export class DispatchRunner {
+     const prompt = buildPrompt({ changeSet: review.changeSet, scope, repo: this.opts.repo, template: this.opts.config.prompt });
+     writeFileSync(promptFile, prompt);
+     writeFileSync(diffFile, diffSlice(review.changeSet, scope) + "\n");
+-    const where = `dispatch.${dispatcher.name}.cmd`;
+-    const command = expandCommand(dispatcher.cmd, { prompt, prompt_file: promptFile, repo: this.opts.repo, diff_file: diffFile }, where);
++    const command = expandCommand(dispatcher.cmd, { prompt, prompt_file: promptFile, repo: this.opts.repo, diff_file: diffFile });
+ 
+     const dispatch: Dispatch = {
+       id,
+@@ -81,20 +81,21 @@ export class DispatchRunner {
+     if (scope.kind === "hunk") dispatch.hunkId = scope.hunk.id;
+     this.store.startDispatch(dispatch);
+ 
+-    let proc: ReturnType<typeof Bun.spawn>;
+-    try {
+-      proc = Bun.spawn(["/bin/sh", "-c", command], {
++    const spawned = attempt(() =>
++      Bun.spawn(["/bin/sh", "-c", command], {
+         cwd: this.opts.repo,
+         stdin: "ignore",
+         stdout: "pipe",
+         stderr: "pipe",
+         detached: true, // own process group, so cancel reaches the agent's children too
+-      });
+-    } catch (err) {
++      }),
++    );
++    if (!spawned.ok) {
+       rmSync(dir, { recursive: true, force: true });
+-      this.store.finishDispatch(id, { status: "failed", error: err instanceof Error ? err.message : String(err) });
+-      return this.store.getSnapshot().dispatches.find((d) => d.id === id)!;
++      this.store.finishDispatch(id, { status: "failed", error: spawned.error });
++      return ok(this.store.getSnapshot().dispatches.find((d) => d.id === id)!);
+     }
++    const proc = spawned.value;
+ 
+     const pump = async (stream: ReadableStream<Uint8Array>) => {
+       const decoder = new TextDecoder();
+@@ -125,7 +126,7 @@ export class DispatchRunner {
+       this.store.finishDispatch(id, patch);
+     })();
+     this.current = running;
+-    return dispatch;
++    return ok(dispatch);
+   }
+ 
+   /** Cancel any running dispatch and wait for it to exit (used on quit). */
+@@ -139,12 +140,9 @@ export class DispatchRunner {
+     const running = this.current;
+     if (!running || running.cancelled) return false;
+     running.cancelled = true;
++    // The group may already be gone; fall back to the process itself.
+     const signalGroup = (signal: NodeJS.Signals) => {
+-      try {
+-        process.kill(-running.proc.pid, signal);
+-      } catch {
+-        running.proc.kill(signal);
+-      }
++      if (!attempt(() => process.kill(-running.proc.pid, signal)).ok) running.proc.kill(signal);
+     };
+     signalGroup("SIGTERM");
+     running.killTimer = setTimeout(() => signalGroup("SIGKILL"), this.opts.killGraceMs ?? 2000);
+diff --git a/src/rank/cache.ts b/src/rank/cache.ts
+index 588d450..8356e6b 100644
+--- a/src/rank/cache.ts
++++ b/src/rank/cache.ts
+@@ -1,4 +1,5 @@
+ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
++import { attempt } from "../core/result.ts";
+ import { homedir } from "node:os";
+ import { join } from "node:path";
+ 
+@@ -11,12 +12,9 @@ export class RankCache {
+ 
+   constructor(private readonly dir: string = DEFAULT_CACHE_DIR) {
+     this.file = join(dir, "rank-cache.json");
+-    try {
+-      const parsed: unknown = JSON.parse(readFileSync(this.file, "utf8"));
+-      this.entries = parsed && typeof parsed === "object" ? (parsed as Record<string, number>) : {};
+-    } catch {
+-      this.entries = {};
+-    }
++    // A missing or corrupt cache file only costs a re-rank.
++    const parsed = attempt((): unknown => JSON.parse(readFileSync(this.file, "utf8")));
++    this.entries = parsed.ok && parsed.value && typeof parsed.value === "object" ? (parsed.value as Record<string, number>) : {};
+   }
+ 
+   private static key(model: string, hunkId: string): string {
+diff --git a/src/rank/model.ts b/src/rank/model.ts
+index d4ac0d5..412b9b8 100644
+--- a/src/rank/model.ts
++++ b/src/rank/model.ts
+@@ -6,6 +6,7 @@ import { createPerplexity } from "@ai-sdk/perplexity";
+ import { createTypeSafeAi } from "@ai-sdk/typesafe-ai";
+ import { createProviderRegistry, experimental_decide, type Experimental_DecisionModel, type Experimental_DecisionQuestion } from "ai";
+ import { blockText, type BlockRef } from "../core/blocks.ts";
++import { attempt } from "../core/result.ts";
+ import type { Intent } from "../core/types.ts";
+ 
+ export type AttentionModel = Experimental_DecisionModel;
+@@ -45,11 +46,8 @@ export function resolveAttentionModel(spec: string, env: Env): ResolvedModel {
+   }
+   if (!providers[providerId]) return { ok: false, reason: `no ${PROVIDER_KEYS[providerId as ProviderId]} set` };
+   const registry = createProviderRegistry(providers);
+-  try {
+-    return { ok: true, model: registry.decisionModel(spec as `${string}:${string}`) };
+-  } catch (err) {
+-    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+-  }
++  const model = attempt(() => registry.decisionModel(spec as `${string}:${string}`));
++  return model.ok ? { ok: true, model: model.value } : { ok: false, reason: model.error };
+ }
+ 
+ /** Levels of the `review_attention` score question; index = score. */
+diff --git a/src/sources/exec.ts b/src/sources/exec.ts
+index d565ef4..c72c794 100644
+--- a/src/sources/exec.ts
++++ b/src/sources/exec.ts
+@@ -1,11 +1,9 @@
+-/** Run a command and return stdout; throw with stderr on non-zero exit. */
+-export async function run(cmd: string[], cwd: string = process.cwd()): Promise<string> {
++import { err, ok, type Result } from "../core/result.ts";
++
++/** Run a command and return stdout, or the failure with stderr on non-zero exit. A missing binary is a failure too. */
++export async function run(cmd: string[], cwd: string = process.cwd()): Promise<Result<string>> {
+   const proc = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+-  const [out, err, code] = await Promise.all([
+-    new Response(proc.stdout).text(),
+-    new Response(proc.stderr).text(),
+-    proc.exited,
+-  ]);
+-  if (code !== 0) throw new Error(`${cmd.join(" ")} failed (exit ${code}): ${err.trim() || out.trim()}`);
+-  return out;
++  const [out, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
++  if (code !== 0) return err(`${cmd.join(" ")} failed (exit ${code}): ${stderr.trim() || out.trim()}`);
++  return ok(out);
+ }
+diff --git a/src/sources/git.ts b/src/sources/git.ts
+index 249a9f6..7d36cff 100644
+--- a/src/sources/git.ts
++++ b/src/sources/git.ts
+@@ -1,35 +1,41 @@
+ import { parseDiff } from "../core/diff.ts";
++import { ok, type Result } from "../core/result.ts";
+ import type { ChangeSet } from "../core/types.ts";
+ import { run } from "./exec.ts";
+ 
+ /** Flags that pin git's diff output to the format parseDiff expects regardless of user config. */
+ export const DIFF_FLAGS = ["--no-color", "--no-ext-diff", "--no-textconv", "-M", "--src-prefix=a/", "--dst-prefix=b/"];
+ 
+-export async function repoRoot(cwd: string = process.cwd()): Promise<string> {
+-  return (await run(["git", "rev-parse", "--show-toplevel"], cwd)).trim();
++const trimmed = (r: Result<string>): Result<string> => (r.ok ? ok(r.value.trim()) : r);
++
++export async function repoRoot(cwd: string = process.cwd()): Promise<Result<string>> {
++  return trimmed(await run(["git", "rev-parse", "--show-toplevel"], cwd));
+ }
+ 
+-async function revParse(rev: string, cwd: string): Promise<string> {
+-  return (await run(["git", "rev-parse", "--verify", "--end-of-options", `${rev}^{commit}`], cwd)).trim();
++async function revParse(rev: string, cwd: string): Promise<Result<string>> {
++  return trimmed(await run(["git", "rev-parse", "--verify", "--end-of-options", `${rev}^{commit}`], cwd));
+ }
+ 
+ /** Working tree (staged + unstaged) vs HEAD. */
+-export async function loadWorktree(cwd: string = process.cwd()): Promise<ChangeSet> {
++export async function loadWorktree(cwd: string = process.cwd()): Promise<Result<ChangeSet>> {
+   const head = await revParse("HEAD", cwd);
++  if (!head.ok) return head;
+   const text = await run(["git", "diff", ...DIFF_FLAGS, "HEAD", "--"], cwd);
+-  return { target: "worktree", base: head, head: "worktree", files: parseDiff(text) };
++  if (!text.ok) return text;
++  return ok({ target: "worktree", base: head.value, head: "worktree", files: parseDiff(text.value) });
+ }
+ 
+ /** `A..B` (B defaults to HEAD) or `A...B` (diff from merge-base). */
+-export async function loadRange(range: string, cwd: string = process.cwd()): Promise<ChangeSet> {
++export async function loadRange(range: string, cwd: string = process.cwd()): Promise<Result<ChangeSet>> {
+   const threeDot = range.includes("...");
+   const [left, right] = range.split(threeDot ? "..." : "..");
+   const a = left || "HEAD";
+   const b = right || "HEAD";
+-  const headSha = await revParse(b, cwd);
+-  const baseSha = threeDot
+-    ? (await run(["git", "merge-base", a, b], cwd)).trim()
+-    : await revParse(a, cwd);
+-  const text = await run(["git", "diff", ...DIFF_FLAGS, baseSha, headSha, "--"], cwd);
+-  return { target: range, base: baseSha, head: headSha, files: parseDiff(text) };
++  const head = await revParse(b, cwd);
++  if (!head.ok) return head;
++  const base = threeDot ? trimmed(await run(["git", "merge-base", a, b], cwd)) : await revParse(a, cwd);
++  if (!base.ok) return base;
++  const text = await run(["git", "diff", ...DIFF_FLAGS, base.value, head.value, "--"], cwd);
++  if (!text.ok) return text;
++  return ok({ target: range, base: base.value, head: head.value, files: parseDiff(text.value) });
+ }
+diff --git a/src/sources/github.ts b/src/sources/github.ts
+index df46494..d17b34c 100644
+--- a/src/sources/github.ts
++++ b/src/sources/github.ts
+@@ -1,4 +1,5 @@
+ import { parseDiff } from "../core/diff.ts";
++import { attempt, err, ok, type Result } from "../core/result.ts";
+ import type { ChangeSet } from "../core/types.ts";
+ import { run } from "./exec.ts";
+ 
+@@ -25,19 +26,22 @@ interface PrView {
+ }
+ 
+ /** Read-only PR load through `gh` (uses gh's own auth). */
+-export async function loadPullRequest(ref: PrRef, target: string): Promise<ChangeSet> {
++export async function loadPullRequest(ref: PrRef, target: string): Promise<Result<ChangeSet>> {
+   const repo = `${ref.owner}/${ref.repo}`;
+   const n = String(ref.number);
+   const [text, viewJson] = await Promise.all([
+     run(["gh", "pr", "diff", n, "--repo", repo, "--color", "never"]),
+     run(["gh", "pr", "view", n, "--repo", repo, "--json", "title,body,baseRefOid,headRefOid"]),
+   ]);
+-  const view = JSON.parse(viewJson) as PrView;
+-  return {
++  if (!text.ok) return text;
++  if (!viewJson.ok) return viewJson;
++  const view = attempt(() => JSON.parse(viewJson.value) as PrView);
++  if (!view.ok) return err(`gh pr view returned invalid JSON: ${view.error}`);
++  return ok({
+     target,
+-    base: view.baseRefOid,
+-    head: view.headRefOid,
+-    files: parseDiff(text),
+-    intent: { title: view.title, body: view.body ?? "" },
+-  };
++    base: view.value.baseRefOid,
++    head: view.value.headRefOid,
++    files: parseDiff(text.value),
++    intent: { title: view.value.title, body: view.value.body ?? "" },
++  });
+ }
+diff --git a/src/sources/resolve.ts b/src/sources/resolve.ts
+index e3ddaa0..5be3c36 100644
+--- a/src/sources/resolve.ts
++++ b/src/sources/resolve.ts
+@@ -1,3 +1,4 @@
++import { err, ok, type Result } from "../core/result.ts";
+ import type { ChangeSet } from "../core/types.ts";
+ import { loadRange, loadWorktree } from "./git.ts";
+ import { loadPullRequest, parsePrRef } from "./github.ts";
+@@ -7,17 +8,15 @@ export type SourceSpec =
+   | { kind: "range"; range: string }
+   | { kind: "pr"; owner: string; repo: string; number: number; target: string };
+ 
+-export function resolveTarget(arg: string | undefined): SourceSpec {
+-  if (arg === undefined) return { kind: "worktree" };
++export function resolveTarget(arg: string | undefined): Result<SourceSpec> {
++  if (arg === undefined) return ok({ kind: "worktree" });
+   const pr = parsePrRef(arg);
+-  if (pr) return { kind: "pr", ...pr, target: arg };
+-  if (arg.includes("..")) return { kind: "range", range: arg };
+-  throw new Error(
+-    `Unrecognised target "${arg}". Use: (nothing) for working tree vs HEAD, A..B / A...B / main.. for a range, or a PR URL / owner/repo#N.`,
+-  );
++  if (pr) return ok({ kind: "pr", ...pr, target: arg });
++  if (arg.includes("..")) return ok({ kind: "range", range: arg });
++  return err(`Unrecognised target "${arg}". Use: (nothing) for working tree vs HEAD, A..B / A...B / main.. for a range, or a PR URL / owner/repo#N.`);
+ }
+ 
+-export function loadChangeSet(spec: SourceSpec, cwd: string = process.cwd()): Promise<ChangeSet> {
++export function loadChangeSet(spec: SourceSpec, cwd: string = process.cwd()): Promise<Result<ChangeSet>> {
+   switch (spec.kind) {
+     case "worktree":
+       return loadWorktree(cwd);
+diff --git a/test/dispatch.test.ts b/test/dispatch.test.ts
+index 128b646..aca2640 100644
+--- a/test/dispatch.test.ts
++++ b/test/dispatch.test.ts
+@@ -5,7 +5,8 @@ import { join } from "node:path";
+ import { parseDiff } from "../src/core/diff.ts";
+ import { ReviewStore } from "../src/core/store.ts";
+ import type { Review } from "../src/core/types.ts";
+-import { BUILTIN_DISPATCHERS, type Config, ConfigError, loadConfig, validateConfig } from "../src/dispatch/config.ts";
++import type { Result } from "../src/core/result.ts";
++import { BUILTIN_DISPATCHERS, type Config, loadConfig, validateConfig } from "../src/dispatch/config.ts";
+ import { buildPrompt, FINDINGS_CONTRACT } from "../src/dispatch/prompt.ts";
+ import { DispatchRunner, expandCommand, shellQuote } from "../src/dispatch/runner.ts";
+ import { classify, evaluate } from "../src/policy/evaluate.ts";
+@@ -21,11 +22,18 @@ async function review(): Promise<Review> {
+   const classification = classify(changeSet, DEFAULT_POLICY);
+   return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), dispatches: [], rankedBy: "rules" };
+ }
++
++/** Unwrap a Result in tests; a failure is a test failure with the message. */
++function must<T>(r: Result<T>): T {
++  if (!r.ok) throw new Error(String(r.error));
++  return r.value;
++}
++
+ const config = (cmd: string, extra: Partial<Config> = {}): Config => ({ rank: { model: "openai:gpt-6-luna" }, dispatchers: [{ name: "fake", cmd }], policy: DEFAULT_POLICY, source: "test", ...extra });
+ 
+ describe("config", () => {
+   test("missing file → built-in pi dispatcher", () => {
+-    const c = loadConfig(join(tmp, "nope.toml"));
++    const c = must(loadConfig(join(tmp, "nope.toml")));
+     expect(c.dispatchers).toEqual(BUILTIN_DISPATCHERS);
+     expect(c.dispatchers[0]!.cmd).toBe("pi -p @{prompt_file}");
+     expect(c.rank.model).toBe("openai:gpt-6-luna");
+@@ -34,24 +42,30 @@ describe("config", () => {
+   test("PLAN.md example parses", () => {
+     const p = join(tmp, "config.toml");
+     writeFileSync(p, `[rank]\nmodel = "anthropic:claude-haiku-4-5-20251001"\n\n[dispatch.pi]\ncmd = "pi -p @{prompt_file}"\n\n[dispatch.claude]\ncmd = "claude -p {prompt}"\n`);
+-    const c = loadConfig(p);
++    const c = must(loadConfig(p));
+     expect(c.rank.model).toBe("anthropic:claude-haiku-4-5-20251001");
+     expect(c.dispatchers.map((d) => d.name)).toEqual(["pi", "claude"]);
+   });
+ 
+-  test("clear errors", () => {
+-    expect(() => validateConfig({ dispatch: { x: { cmd: "run {promt}" } } }, "c.toml")).toThrow("c.toml: dispatch.x.cmd: unknown placeholder {promt}. Allowed: {prompt} {prompt_file} {repo} {diff_file}");
+-    expect(() => validateConfig({ dispatch: { x: { command: "a" } } }, "c.toml")).toThrow('unknown key "dispatch.x.command"');
+-    expect(() => validateConfig({ rank: { model: "gpt" } }, "c.toml")).toThrow("provider:model");
+-    expect(() => validateConfig({ prompt: "Review {diff} for {target}" }, "c.toml")).toThrow("c.toml: prompt: unknown placeholder {target}");
+-    expect(() => validateConfig({ foo: 1 }, "c.toml")).toThrow(ConfigError);
++  test("clear errors, returned not thrown", () => {
++    const error = (raw: unknown) => {
++      const r = validateConfig(raw, "c.toml");
++      return r.ok ? "ok" : r.error;
++    };
++    expect(error({ dispatch: { x: { cmd: "run {promt}" } } })).toBe("c.toml: dispatch.x.cmd: unknown placeholder {promt}. Allowed: {prompt} {prompt_file} {repo} {diff_file}");
++    expect(error({ dispatch: { x: { command: "a" } } })).toContain('unknown key "dispatch.x.command"');
++    expect(error({ rank: { model: "gpt" } })).toContain("provider:model");
++    expect(error({ prompt: "Review {diff} for {target}" })).toContain("c.toml: prompt: unknown placeholder {target}");
++    expect(error({ foo: 1 })).toContain('unknown key "foo"');
+     const p = join(tmp, "bad.toml");
+     writeFileSync(p, "[dispatch.pi\ncmd=1");
+-    expect(() => loadConfig(p)).toThrow(/invalid TOML/);
++    const loaded = loadConfig(p);
++    expect(loaded.ok).toBe(false);
++    if (!loaded.ok) expect(loaded.error).toMatch(/invalid TOML/);
+   });
+ 
+   test("JSON braces in a prompt override are not placeholders", () => {
+-    expect(validateConfig({ prompt: 'Return {"findings": []}. Diff:\n{diff}' }, "c").prompt).toContain("{diff}");
++    expect(must(validateConfig({ prompt: 'Return {"findings": []}. Diff:\n{diff}' }, "c")).prompt).toContain("{diff}");
+   });
+ });
+ 
+@@ -80,7 +94,6 @@ describe("prompt", () => {
+ describe("expandCommand", () => {
+   test("values are shell-quoted words", () => {
+     expect(expandCommand("claude -p {prompt}", { prompt: "it's $HOME `x`", prompt_file: "", repo: "", diff_file: "" })).toBe(`claude -p ${shellQuote("it's $HOME `x`")}`);
+-    expect(() => expandCommand("x {nope}", { prompt: "", prompt_file: "", repo: "", diff_file: "" })).toThrow("unknown placeholder {nope}");
+   });
+   test("a quoted prompt survives the shell intact", async () => {
+     const tricky = `a 'b' "c" $(rm -rf /) \`d\` \\ e\nline2`;
+@@ -98,7 +111,9 @@ describe("DispatchRunner with a fake dispatcher", () => {
+     store.onEvent((e) => events.push(e.type));
+     runner.start("fake", { kind: "hunk", hunk });
+     expect(runner.running).toBe(true);
+-    expect(() => runner.start("fake", { kind: "change" })).toThrow("already running");
++    const second = runner.start("fake", { kind: "change" });
++    expect(second.ok).toBe(false);
++    if (!second.ok) expect(second.error).toContain("already running");
+     await runner.settled();
+     const d = store.getSnapshot().dispatches[0]!;
+     expect(d.status).toBe("done");
+diff --git a/test/policy.test.ts b/test/policy.test.ts
+index 09988a4..341f5d5 100644
+--- a/test/policy.test.ts
++++ b/test/policy.test.ts
+@@ -4,11 +4,19 @@ import { tmpdir } from "node:os";
+ import { join } from "node:path";
+ import { parseDiff } from "../src/core/diff.ts";
+ import type { ChangeKind, Classification, Tier } from "../src/core/types.ts";
+-import { ConfigError, loadConfig } from "../src/dispatch/config.ts";
++import type { Result } from "../src/core/result.ts";
++import { loadConfig } from "../src/dispatch/config.ts";
+ import { areasOf, classify, evaluate, kindOf } from "../src/policy/evaluate.ts";
+ import { DEFAULT_POLICY, validatePolicy } from "../src/policy/schema.ts";
+ import { applyRules } from "../src/rank/rules.ts";
+ 
++
++/** Unwrap a Result in tests; a failure is a test failure with the message. */
++function must<T>(r: Result<T>): T {
++  if (!r.ok) throw new Error(String(r.error));
++  return r.value;
++}
++
+ const c = (over: Partial<Classification>): Classification => ({ kind: "logic", areas: [], maxAttention: "routine", sensitivePaths: [], counts: { files: 1, blocks: 1, inert: 0 }, ...over });
+ 
+ describe("evaluate: tier table", () => {
+@@ -148,7 +156,7 @@ describe("config layering", () => {
+   const cleanup = () => rmSync(tmp, { recursive: true, force: true });
+ 
+   test("repo .lookout.toml layers over the global file; dispatch/rank come from global", () => {
+-    const cfg = loadConfig(g, repo);
++    const cfg = must(loadConfig(g, repo));
+     expect(cfg.dispatchers.map((d) => d.name)).toEqual(["pi"]);
+     expect(cfg.policy.source).toContain(".lookout.toml");
+     expect(areasOf(cfg.policy, "money/charge.ts")).toEqual(["billing"]); // from global
+@@ -159,15 +167,16 @@ describe("config layering", () => {
+     expect(cfg.policy.rules).toEqual([{ area: "auth", tier: "medium", reason: "identity is well-tested here" }]);
+   });
+   test("no repo file → global only; no files → defaults", () => {
+-    expect(loadConfig(g, tmp).policy.rules).toEqual(DEFAULT_POLICY.rules);
+-    expect(loadConfig(join(tmp, "missing.toml")).policy).toBe(DEFAULT_POLICY);
++    expect(must(loadConfig(g, tmp)).policy.rules).toEqual(DEFAULT_POLICY.rules);
++    expect(must(loadConfig(join(tmp, "missing.toml"))).policy).toBe(DEFAULT_POLICY);
+   });
+   test("a bad repo file names the repo file", () => {
+     const bad = join(tmp, "bad");
+     Bun.spawnSync(["mkdir", "-p", bad]);
+     writeFileSync(join(bad, ".lookout.toml"), `[policy]\nkinds = { docs = "silly" }\n`);
+-    expect(() => loadConfig(g, bad)).toThrow(ConfigError);
+-    expect(() => loadConfig(g, bad)).toThrow(/bad\/\.lookout\.toml: policy\.kinds\.docs/);
++    const r = loadConfig(g, bad);
++    expect(r.ok).toBe(false);
++    if (!r.ok) expect(r.error).toMatch(/bad\/\.lookout\.toml: policy\.kinds\.docs/);
+     cleanup();
+   });
+ });
+diff --git a/test/sources.test.ts b/test/sources.test.ts
+index 3a10aee..6d0c192 100644
+--- a/test/sources.test.ts
++++ b/test/sources.test.ts
+@@ -5,6 +5,13 @@ import { join } from "node:path";
+ import { loadRange, loadWorktree } from "../src/sources/git.ts";
+ import { parsePrRef } from "../src/sources/github.ts";
+ import { resolveTarget } from "../src/sources/resolve.ts";
++import type { Result } from "../src/core/result.ts";
++/** Unwrap a Result in tests; a failure is a test failure with the message. */
++function must<T>(r: Result<T>): T {
++  if (!r.ok) throw new Error(String(r.error));
++  return r.value;
++}
++
+ 
+ let dir: string;
+ const git = (...args: string[]) => {
+@@ -40,7 +47,7 @@ describe("git source", () => {
+     write("a.ts", "export const a = 5;\n");
+     write("b.ts", "export const b = 6;\n");
+     git("add", "b.ts");
+-    const cs = await loadWorktree(dir);
++    const cs = must(await loadWorktree(dir));
+     expect(cs.files.map((f) => f.path).sort()).toEqual(["a.ts", "b.ts"]);
+     expect(cs.head).toBe("worktree");
+     git("checkout", "-q", "--", ".");
+@@ -48,19 +55,19 @@ describe("git source", () => {
+   });
+ 
+   test("A..B compares the two tips", async () => {
+-    const cs = await loadRange("main..feature", dir);
++    const cs = must(await loadRange("main..feature", dir));
+     // main has c.ts that feature lacks, so two-dot shows it as deleted.
+     expect(cs.files.map((f) => `${f.status}:${f.path}`).sort()).toEqual(["added:b.ts", "deleted:c.ts", "modified:a.ts"]);
+   });
+ 
+   test("A...B diffs from the merge-base", async () => {
+-    const cs = await loadRange("main...feature", dir);
++    const cs = must(await loadRange("main...feature", dir));
+     expect(cs.files.map((f) => f.path).sort()).toEqual(["a.ts", "b.ts"]);
+     expect(cs.base).toBe(git("merge-base", "main", "feature"));
+   });
+ 
+   test("main.. defaults the right side to HEAD", async () => {
+-    const cs = await loadRange("main..", dir);
++    const cs = must(await loadRange("main..", dir));
+     expect(cs.head).toBe(git("rev-parse", "HEAD"));
+     expect(cs.files).toHaveLength(3);
+   });
+@@ -68,12 +75,14 @@ describe("git source", () => {
+ 
+ describe("resolveTarget", () => {
+   test("forms", () => {
+-    expect(resolveTarget(undefined)).toEqual({ kind: "worktree" });
+-    expect(resolveTarget("main..")).toEqual({ kind: "range", range: "main.." });
+-    expect(resolveTarget("a...b")).toEqual({ kind: "range", range: "a...b" });
+-    expect(resolveTarget("https://github.com/o/r/pull/12/files")).toMatchObject({ kind: "pr", owner: "o", repo: "r", number: 12 });
+-    expect(resolveTarget("o/r#7")).toMatchObject({ kind: "pr", owner: "o", repo: "r", number: 7 });
+-    expect(() => resolveTarget("main")).toThrow(/Unrecognised target/);
++    expect(must(resolveTarget(undefined))).toEqual({ kind: "worktree" });
++    expect(must(resolveTarget("main.."))).toEqual({ kind: "range", range: "main.." });
++    expect(must(resolveTarget("a...b"))).toEqual({ kind: "range", range: "a...b" });
++    expect(must(resolveTarget("https://github.com/o/r/pull/12/files"))).toMatchObject({ kind: "pr", owner: "o", repo: "r", number: 12 });
++    expect(must(resolveTarget("o/r#7"))).toMatchObject({ kind: "pr", owner: "o", repo: "r", number: 7 });
++    const bad = resolveTarget("main");
++    expect(bad.ok).toBe(false);
++    if (!bad.ok) expect(bad.error).toMatch(/Unrecognised target/);
+   });
+ 
+   test("parsePrRef rejects non-PR URLs", () => {

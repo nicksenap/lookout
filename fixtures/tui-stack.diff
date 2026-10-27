@@ -1,0 +1,828 @@
+diff --git a/package.json b/package.json
+index 8c3b6f5..dde3c4a 100644
+--- a/package.json
++++ b/package.json
+@@ -8,7 +8,8 @@
+   },
+   "scripts": {
+     "typecheck": "tsc --noEmit",
+-    "test": "bun test"
++    "test": "bun test",
++    "story": "bun stories/run.ts"
+   },
+   "dependencies": {
+     "@ai-sdk/anthropic": "4.0.89",
+@@ -16,10 +17,14 @@
+     "@ai-sdk/openai": "4.0.103",
+     "@ai-sdk/perplexity": "5.0.21",
+     "@ai-sdk/typesafe-ai": "3.0.28",
+-    "ai": "7.0.154"
++    "ai": "7.0.154",
++    "ink": "6.8.0",
++    "react": "19.3.1"
+   },
+   "devDependencies": {
+     "@types/bun": "^1.4.4",
++    "@types/react": "19.3.0",
++    "ink-testing-library": "4.0.0",
+     "typescript": "^7.0.2"
+   }
+ }
+diff --git a/src/cards/findings.ts b/src/cards/findings.ts
+new file mode 100644
+index 0000000..fb8510c
+--- /dev/null
++++ b/src/cards/findings.ts
+@@ -0,0 +1,20 @@
++import type { Card, Dispatch, Finding, Review } from "../core/types.ts";
++
++/** Whether a finding's anchor lies on a new-side line of one of the card's blocks. */
++function anchoredIn(review: Review, card: Card, finding: Finding): boolean {
++  if (!finding.anchor) return false;
++  const ids = new Set(card.blockIds);
++  return review.changeSet.files.some(
++    (f) => f.path === finding.anchor!.path && f.hunks.some((h) => h.blocks.some((b) => ids.has(b.id) && b.newRange !== undefined && finding.anchor!.line >= b.newRange.start && finding.anchor!.line <= b.newRange.end)),
++  );
++}
++
++/** Findings that belong to a card: anchored in its blocks, or unanchored from a dispatch of this card. */
++export function cardFindings(review: Review, card: Card): Finding[] {
++  return review.dispatches.flatMap((d) => d.findings.filter((f) => anchoredIn(review, card, f) || (!f.anchor && d.cardId === card.id)));
++}
++
++/** Dispatches that targeted this card, newest first. */
++export function cardDispatches(review: Review, card: Card): Dispatch[] {
++  return review.dispatches.filter((d) => d.cardId === card.id).reverse();
++}
+diff --git a/src/cli/main.ts b/src/cli/main.ts
+index c7d89e9..4a66e1e 100644
+--- a/src/cli/main.ts
++++ b/src/cli/main.ts
+@@ -1,6 +1,7 @@
+ import pkg from "../../package.json" with { type: "json" };
+ import { LocalSession } from "../core/session.ts";
+ import { loadConfig } from "../dispatch/config.ts";
++import { DispatchRunner } from "../dispatch/runner.ts";
+ import { repoRoot } from "../sources/git.ts";
+ import { loadChangeSet, resolveTarget } from "../sources/resolve.ts";
+ 
+@@ -13,7 +14,7 @@ Usage:
+   lookout owner/repo#N
+ 
+ Options:
+-  --json        print the Review as JSON
++  --json        print the Review as JSON instead of opening the card stack
+   --version     print version
+   --help        this help`;
+ 
+@@ -49,12 +50,23 @@ async function main(): Promise<number> {
+   if (!spec.ok) return fail(spec.error);
+   const loaded = await loadChangeSet(spec.value);
+   if (!loaded.ok) return fail(loaded.error);
+-  const session = new LocalSession({ config: config.value, changeSet: loaded.value });
+-  await session.ready();
+-  const review = session.snapshot();
+-  if (review.warning) console.error(`lookout: ${review.warning}`);
+-  // The card stack replaces this once it exists; until then every mode prints JSON.
+-  process.stdout.write(JSON.stringify(review, null, 2) + "\n");
++  const repo = root.ok ? root.value : process.cwd();
++  let runner: DispatchRunner | undefined;
++  const session = new LocalSession({
++    config: config.value,
++    changeSet: loaded.value,
++    runner: (store) => (runner = new DispatchRunner(store, { repo, config: config.value })),
++  });
++
++  if (args.json || !process.stdout.isTTY) {
++    await session.ready();
++    const review = session.snapshot();
++    if (review.warning) console.error(`lookout: ${review.warning}`);
++    process.stdout.write(JSON.stringify(review, null, 2) + "\n");
++    return 0;
++  }
++  const { runTui } = await import("../tui/App.tsx");
++  await runTui(session, config.value.dispatchers.length > 0, async () => runner?.shutdown());
+   return 0;
+ }
+ 
+diff --git a/src/core/session.ts b/src/core/session.ts
+index ba8b2be..6ce65a3 100644
+--- a/src/core/session.ts
++++ b/src/core/session.ts
+@@ -9,6 +9,8 @@ import { type ReviewEvent, ReviewStore } from "./store.ts";
+ import type { Card, ChangeSet, Review } from "./types.ts";
+ 
+ export type { ReviewEvent } from "./store.ts";
++// Pure view helpers a UI needs; re-exported here so the TUI imports only this file and types.
++export { cardDispatches, cardFindings } from "../cards/findings.ts";
+ 
+ export type ReviewCommand =
+   | { type: "dispatchCard"; cardId: string; dispatcher?: string }
+diff --git a/src/tui/App.tsx b/src/tui/App.tsx
+new file mode 100644
+index 0000000..b8abf10
+--- /dev/null
++++ b/src/tui/App.tsx
+@@ -0,0 +1,229 @@
++import { Box, render, Text, useApp, useInput, useStdout } from "ink";
++import { useEffect, useMemo, useRef, useState } from "react";
++import { cardDispatches, cardFindings, type ReviewSession } from "../core/session.ts";
++import type { Card, Dispatch, Review } from "../core/types.ts";
++import { type CardContext, cardLines, expandedLines, fit, type Line, plural, Row, sides } from "./Card.tsx";
++import { HELP_LINES, keyAction, keyHelp, type Mode } from "./keys.ts";
++import { theme } from "./theme.ts";
++
++export interface Size {
++  columns: number;
++  rows: number;
++}
++
++export interface AppProps {
++  session: ReviewSession;
++  dispatchable: boolean;
++  /** Fixed size for tests; otherwise follows the terminal. */
++  size?: Size;
++  /** Fixed spinner frame for tests. */
++  frame?: number;
++  /** Render throttle while events stream; 0 in tests so a frame follows each event. */
++  throttleMs?: number;
++}
++
++/** Re-render at most ~10/s while events stream; immediately when idle. */
++function useReview(session: ReviewSession, throttleMs: number): { review: Review; pending: boolean } {
++  const [state, setState] = useState(() => ({ review: session.snapshot(), pending: true }));
++  const pending = useRef(true);
++  useEffect(() => {
++    let timer: ReturnType<typeof setTimeout> | undefined;
++    const flush = () => {
++      timer = undefined;
++      setState({ review: session.snapshot(), pending: pending.current });
++    };
++    const off = session.subscribe((e) => {
++      if (e.type === "done") pending.current = false;
++      if (!timer) timer = setTimeout(flush, throttleMs);
++    });
++    return () => {
++      off();
++      if (timer) clearTimeout(timer);
++    };
++  }, [session, throttleMs]);
++  return state;
++}
++
++function useSize(override?: Size): Size {
++  const { stdout } = useStdout();
++  const read = () => override ?? { columns: stdout.columns || 80, rows: stdout.rows || 24 };
++  const [size, setSize] = useState(read);
++  useEffect(() => {
++    if (override) return;
++    const onResize = () => setSize(read());
++    stdout.on("resize", onResize);
++    return () => void stdout.off("resize", onResize);
++  }, [stdout, override]);
++  return size;
++}
++
++function useFrame(active: boolean, override?: number): number {
++  const [frame, setFrame] = useState(0);
++  useEffect(() => {
++    if (!active || override !== undefined) return;
++    const t = setInterval(() => setFrame((f) => f + 1), 100);
++    return () => clearInterval(t);
++  }, [active, override]);
++  return override ?? frame;
++}
++
++/** The visible slice of `lines` keeping the selected card fully visible when it fits, else its top. */
++export function windowLines(lines: Line[], selected: number, height: number, prevTop: number): number {
++  const first = lines.findIndex((l) => l.card === selected);
++  if (first < 0) return Math.max(0, Math.min(prevTop, lines.length - height));
++  let last = first;
++  while (last + 1 < lines.length && lines[last + 1]!.card === selected) last++;
++  let top = prevTop;
++  if (first < top) top = first;
++  if (last >= top + height) top = Math.min(first, last - height + 1);
++  return Math.max(0, Math.min(top, Math.max(0, lines.length - height)));
++}
++
++export function App({ session, dispatchable, size: sizeOverride, frame: frameOverride, throttleMs = 100 }: AppProps) {
++  const { exit } = useApp();
++  const { review, pending } = useReview(session, throttleMs);
++  const size = useSize(sizeOverride);
++  const running = review.dispatches.find((d) => d.status === "running");
++  const frame = useFrame(pending || running !== undefined, frameOverride);
++  const [selected, setSelected] = useState(0);
++  const [mode, setMode] = useState<Mode>("stack");
++  const [help, setHelp] = useState(false);
++  const [scroll, setScroll] = useState(0);
++  const [top, setTop] = useState(0);
++  const [notice, setNotice] = useState<string>();
++  const startedAt = useRef(new Map<string, number>());
++  for (const d of review.dispatches) if (!startedAt.current.has(d.id)) startedAt.current.set(d.id, Date.now());
++  const elapsed = (d: Dispatch) => Date.now() - (startedAt.current.get(d.id) ?? Date.now());
++
++  const cards = review.cards;
++  const sel = Math.max(0, Math.min(selected, cards.length - 1));
++  const card: Card | undefined = cards[sel];
++  const w = size.columns;
++  const bodyH = Math.max(3, size.rows - 1 - 2); // header, footer; one row spare for Ink
++
++  const ctxFor = (c: Card): CardContext => ({ review, findings: cardFindings(review, c), dispatches: cardDispatches(review, c), pending, frame, elapsed });
++
++  const stackLines = useMemo(() => {
++    const out: Line[] = [];
++    cards.forEach((c, k) => {
++      out.push(...cardLines(c, k, k === sel, w, ctxFor(c)));
++      out.push({ segments: [{ text: "" }], card: k });
++    });
++    if (review.untouched.length > 0) out.push({ segments: [{ text: "┃ ", color: theme.faint }, { text: "UNTOUCHED", color: theme.faint, bold: true }, { text: `  ${fit(review.untouched.join(" · "), w - 13)}`, dim: true }] });
++    if (cards.length === 0) out.push({ segments: [{ text: "No edits in this change.", dim: true }] });
++    return out;
++  }, [review, sel, w, frame, pending]);
++
++  const bodyLines = useMemo(() => (mode === "expanded" && card ? [...cardLines(card, sel, true, w, ctxFor(card)), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctxFor(card))] : stackLines), [mode, card, stackLines, w, frame]);
++  const windowTop = mode === "stack" ? windowLines(bodyLines, sel, bodyH, top) : Math.max(0, Math.min(scroll, bodyLines.length - bodyH));
++  useEffect(() => {
++    if (mode === "stack" && windowTop !== top) setTop(windowTop);
++  }, [windowTop, mode, top]);
++  const visible = bodyLines.slice(windowTop, windowTop + bodyH);
++
++  const review1 = async (c: Card) => {
++    setNotice(undefined);
++    const r = await session.command({ type: "dispatchCard", cardId: c.id });
++    if (!r.ok) setNotice(r.error);
++  };
++
++  useInput((input, key) => {
++    if (help) {
++      if (key.escape || input === "?" || input === "q" || key.return) setHelp(false);
++      return;
++    }
++    const action = keyAction(input, key);
++    if (!action) return;
++    setNotice(undefined);
++    switch (action.type) {
++      case "quit":
++        return exit();
++      case "help":
++        return setHelp(true);
++      case "expand":
++        if (card && card.fixed !== "clean") {
++          setScroll(0);
++          setMode("expanded");
++        }
++        return;
++      case "back":
++        return setMode("stack");
++      case "move":
++      case "page":
++      case "edge": {
++        if (mode === "expanded") {
++          const step = action.type === "move" ? action.delta : action.type === "page" ? action.delta * (bodyH - 1) : 0;
++          const to = action.type === "edge" ? (action.to === "top" ? 0 : bodyLines.length) : scroll + step;
++          return setScroll(Math.max(0, Math.min(to, Math.max(0, bodyLines.length - bodyH))));
++        }
++        const step = action.type === "move" ? action.delta : action.type === "page" ? action.delta * 3 : 0;
++        const to = action.type === "edge" ? (action.to === "top" ? 0 : cards.length - 1) : sel + step;
++        return setSelected(Math.max(0, Math.min(to, cards.length - 1)));
++      }
++      case "review":
++        if (!dispatchable) return setNotice("no dispatchers configured");
++        if (!card || card.fixed === "clean") return setNotice("nothing to review on this card");
++        return void review1(card);
++      case "reviewAll":
++        if (!dispatchable) return setNotice("no dispatchers configured");
++        return void session.command({ type: "dispatchAll" }).then((r) => !r.ok && setNotice(r.error));
++      case "cancel":
++        return void session.command({ type: "cancel" }).then((r) => setNotice(r.ok ? "cancelling…" : r.error));
++    }
++  });
++
++  const v = review.verdict;
++  const title = review.changeSet.intent?.title ? `${review.changeSet.target} · ${review.changeSet.intent.title}` : review.changeSet.target;
++  const headerRight = `${v.tier.toUpperCase()} · ${plural(v.requiredHumans, "human")} · ${plural(cards.length, "card")}${pending ? ` · ${theme.spinner[frame % theme.spinner.length]} ranking` : ""}`;
++  const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
++  const footerText = notice ?? review.warning ?? keyHelp(mode, running !== undefined, dispatchable).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
++  const footer: Line = { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: notice ? theme.card.amber : undefined, dim: !notice }] };
++
++  return (
++    <Box flexDirection="column" width={w} height={size.rows - 1}>
++      <Row line={header} w={w} />
++      <Box flexDirection="column" height={bodyH}>
++        {help
++          ? HELP_LINES.slice(0, bodyH).map((l, k) => <Row key={k} line={{ segments: [{ text: ` ${fit(l, w - 1)}` }] }} w={w} />)
++          : visible.map((l, k) => <Row key={k} line={l} w={w} selected={mode === "stack" && l.card === sel && l.segments.length > 1} />)}
++        {!help && visible.length < bodyH ? Array.from({ length: bodyH - visible.length }, (_, k) => <Text key={`pad${k}`}> </Text>) : null}
++      </Box>
++      <Row line={footer} w={w} />
++    </Box>
++  );
++}
++
++const ENTER_ALT = "\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l";
++const LEAVE_ALT = "\x1b[?25h\x1b[?1049l";
++
++/** Run the stack in the alternate screen; the terminal is restored on quit, signals and crashes. */
++export async function runTui(session: ReviewSession, dispatchable: boolean, onExit: () => Promise<void>): Promise<void> {
++  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("the TUI needs a terminal; use --json for non-interactive output");
++  process.stdout.write(ENTER_ALT);
++  let restored = false;
++  const restore = () => {
++    if (restored) return;
++    restored = true;
++    process.stdout.write(LEAVE_ALT);
++  };
++  process.once("exit", restore);
++  const onSignal = () => {
++    instance.unmount();
++    restore();
++    process.exit(130);
++  };
++  process.once("SIGTERM", onSignal);
++  process.once("SIGHUP", onSignal);
++  // No incrementalRendering: with a frame shorter than the terminal Ink 6.8's incremental
++  // writer drifts one row per frame. Full redraws are wrapped in synchronized output on TTYs.
++  const instance = render(<App session={session} dispatchable={dispatchable} />, { exitOnCtrlC: true, patchConsole: true });
++  try {
++    await instance.waitUntilExit();
++  } finally {
++    instance.cleanup();
++    restore();
++    await onExit();
++    process.off("SIGTERM", onSignal);
++    process.off("SIGHUP", onSignal);
++  }
++}
+diff --git a/src/tui/Card.tsx b/src/tui/Card.tsx
+new file mode 100644
+index 0000000..3e5f5bc
+--- /dev/null
++++ b/src/tui/Card.tsx
+@@ -0,0 +1,204 @@
++import { Text } from "ink";
++import type { Card, Dispatch, Finding, Hunk, Review } from "../core/types.ts";
++import { COLOR_LABEL, theme } from "./theme.ts";
++
++export interface Segment {
++  text: string;
++  color?: string;
++  dim?: boolean;
++  bold?: boolean;
++  inverse?: boolean;
++}
++/** One terminal row. `card` is the stack index it belongs to (undefined for chrome). */
++export interface Line {
++  segments: Segment[];
++  card?: number;
++}
++
++export const width = (s: string): number => Bun.stringWidth(s);
++
++/** Cut `s` to at most `w` columns, with an ellipsis when cut. */
++export function fit(s: string, w: number): string {
++  if (w <= 0) return "";
++  if (width(s) <= w) return s;
++  let out = "";
++  for (const ch of s) {
++    if (width(out + ch) > w - 1) break;
++    out += ch;
++  }
++  return out + "…";
++}
++
++export function wrap(text: string, w: number): string[] {
++  if (w <= 0) return [];
++  const out: string[] = [];
++  for (const para of text.split("\n")) {
++    let line = "";
++    for (const word of para.split(/\s+/).filter(Boolean)) {
++      if (line === "") line = fit(word, w);
++      else if (width(`${line} ${word}`) <= w) line += ` ${word}`;
++      else {
++        out.push(line);
++        line = fit(word, w);
++      }
++    }
++    out.push(line);
++  }
++  return out;
++}
++
++export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
++
++/** Fit a left and right part into `w` columns; the left part yields. */
++export function sides(left: Segment[], right: string, w: number, color?: string): Segment[] {
++  const leftText = left.map((s) => s.text).join("");
++  const rightW = width(right);
++  const gap = Math.max(1, w - width(leftText) - rightW);
++  if (width(leftText) + 1 + rightW > w) {
++    const cut = fit(leftText, Math.max(0, w - rightW - 1));
++    return [{ text: cut, color }, { text: " ".repeat(Math.max(1, w - width(cut) - rightW)) }, { text: right, dim: true }];
++  }
++  return [...left, { text: " ".repeat(gap) }, { text: right, dim: true }];
++}
++
++const BAR = "┃";
++
++export interface CardContext {
++  review: Review;
++  findings: Finding[];
++  dispatches: Dispatch[];
++  pending: boolean;
++  frame: number;
++  /** Elapsed ms for a running dispatch, by id. */
++  elapsed: (d: Dispatch) => number;
++}
++
++export function filesOf(review: Review, card: Card): string[] {
++  const ids = new Set(card.blockIds);
++  return review.changeSet.files.filter((f) => f.hunks.some((h) => h.blocks.some((b) => ids.has(b.id)))).map((f) => f.path);
++}
++
++/** A card as it appears in the stack: badge line, title, paragraph or summary, findings, running review. */
++export function cardLines(card: Card, index: number, selected: boolean, w: number, ctx: CardContext): Line[] {
++  const color = theme.card[card.color];
++  // The selected card gets a solid bar; others a thin one. Visible without color.
++  const bar: Segment = { text: `${selected ? "█" : BAR} `, color, bold: selected };
++  const inner = w - 2;
++  const row = (segs: Segment[]): Line => ({ segments: [bar, ...segs], card: index });
++
++  const files = filesOf(ctx.review, card);
++  const badges = [COLOR_LABEL[card.color], card.kind, ...card.labels.filter((l) => l !== "test" || card.kind !== "test"), ...card.areas.map((a) => `${a}/*`)];
++  const right = `${plural(card.blockIds.length, "edit")} · ${plural(files.length, "file")}${ctx.findings.length ? ` · ${plural(ctx.findings.length, "finding")}` : ""}`;
++  const badgeSegs: Segment[] = [{ text: badges[0]!, color, bold: true }, { text: badges.length > 1 ? `  ${badges.slice(1).join(" · ")}` : "", dim: true }];
++  const lines: Line[] = [row(sides(badgeSegs, right, inner, color))];
++
++  if (card.fixed === "clean") {
++    lines.push(row([{ text: fit(files.join(", "), inner), dim: true }]));
++    return lines;
++  }
++
++  lines.push(row([{ text: fit(card.title, inner), bold: true }]));
++  if (card.paragraph) for (const l of wrap(card.paragraph, inner)) lines.push(row([{ text: l }]));
++  else {
++    const spin = ctx.pending ? `${theme.spinner[ctx.frame % theme.spinner.length]} ` : "";
++    const summary = files.length === 1 ? `${card.attention}, score ${card.score.toFixed(2)}` : `${card.attention} · ${files.join(", ")}`;
++    lines.push(row([{ text: fit(`${spin}${summary}`, inner), dim: true }]));
++  }
++  for (const f of ctx.findings.slice(0, 4)) lines.push(row(findingLine(f, inner)));
++  if (ctx.findings.length > 4) lines.push(row([{ text: `  +${ctx.findings.length - 4} more`, dim: true }]));
++  const running = ctx.dispatches.find((d) => d.status === "running");
++  if (running) lines.push(row([{ text: `  ${theme.spinner[ctx.frame % theme.spinner.length]} ${running.dispatcher} reviewing… ${clock(ctx.elapsed(running))}`, color: theme.accent }]));
++  else {
++    const last = ctx.dispatches[0];
++    if (last && last.status !== "done") lines.push(row([{ text: `  ${last.dispatcher} ${last.status}${last.error ? `: ${fit(last.error, inner - 20)}` : ""}`, dim: true }]));
++    else if (last && ctx.findings.length === 0) lines.push(row([{ text: `  ✓ ${last.dispatcher} found nothing to report`, color: theme.card.green }]));
++  }
++  return lines;
++}
++
++export function findingLine(f: Finding, w: number): Segment[] {
++  const where = f.anchor ? `${f.anchor.path.split("/").pop()}:${f.anchor.line}` : "";
++  return sides([{ text: "  " }, { text: f.severity.toUpperCase(), color: theme.severity[f.severity], bold: true }, { text: ` ${f.title}` }], where, w);
++}
++
++export const clock = (ms: number) => {
++  const s = Math.floor(ms / 1000);
++  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
++};
++
++/**
++ * Expanded card: findings in full, then the agent's status (its log while running or when it
++ * produced no findings), then the diff of its hunks with other cards' edits faded. Review first,
++ * diff as the appendix.
++ */
++export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
++  const color = theme.card[card.color];
++  const ids = new Set(card.blockIds);
++  const lines: Line[] = [];
++  const push = (segs: Segment[]) => lines.push({ segments: segs });
++
++  if (ctx.findings.length > 0) {
++    push([{ text: `findings (${ctx.findings.length})`, color, bold: true }]);
++    for (const f of ctx.findings) {
++      push(findingLine(f, w));
++      for (const l of wrap(f.body, w - 5)) push([{ text: `     ${l}`, dim: true }]);
++      push([{ text: `     by ${f.dispatcher}`, dim: true }]);
++    }
++    push([{ text: "" }]);
++  }
++
++  const d = ctx.dispatches[0];
++  if (d) {
++    const status = d.status === "running" ? `${theme.spinner[ctx.frame % theme.spinner.length]} running ${clock(ctx.elapsed(d))}` : d.status;
++    push([{ text: `${d.dispatcher} · ${status}`, color: theme.accent, bold: true }, { text: `  ${fit(d.cmd, Math.max(0, w - 30))}`, dim: true }]);
++    const showLog = d.status === "running" || (d.status === "done" && d.findings.length === 0) || d.status === "failed";
++    if (showLog) {
++      const text = (d.status === "running" ? d.output : d.freeform || d.output || d.error || "").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
++      const rows = text.split("\n").filter((l) => l.trim() !== "");
++      for (const raw of rows.slice(d.status === "running" ? -12 : -60)) push([{ text: fit(raw.replace(/\r.*$/, ""), w), dim: true }]);
++    }
++    push([{ text: "" }]);
++  }
++
++  push([{ text: `diff · ${plural(card.blockIds.length, "edit")}`, color, bold: true }, { text: "   other cards' edits in these hunks are faded", dim: true }]);
++  for (const file of ctx.review.changeSet.files) {
++    const hunks = file.hunks.filter((h) => h.blocks.some((b) => ids.has(b.id)));
++    if (hunks.length === 0) continue;
++    push([{ text: fit(file.path, w), color: theme.accent, bold: true }]);
++    for (const h of hunks) {
++      push([{ text: fit(h.header, w), dim: true }]);
++      for (const l of hunkRows(h, ids, w)) push(l);
++    }
++    push([{ text: "" }]);
++  }
++  return lines;
++}
++
++function hunkRows(h: Hunk, ids: Set<string>, w: number): Segment[][] {
++  const owned = new Set<number>();
++  for (const b of h.blocks) if (ids.has(b.id)) for (let k = b.from; k < b.to; k++) owned.add(k);
++  return h.lines.map((l, k) => {
++    const sign = l.kind === "add" ? "+" : l.kind === "del" ? "-" : " ";
++    const no = String(l.newLine ?? l.oldLine ?? "").padStart(4);
++    const text = fit(`${no} ${sign} ${l.text}`, w);
++    if (l.kind === "context") return [{ text, color: theme.context }];
++    if (!owned.has(k)) return [{ text, dim: true }];
++    return [{ text, color: l.kind === "add" ? theme.add : theme.del }];
++  });
++}
++
++/** Render one Line as Ink, truncated to `w` columns. */
++export function Row({ line, w, selected }: { line: Line; w: number; selected?: boolean }) {
++  const total = line.segments.map((s) => s.text).join("");
++  const pad = Math.max(0, w - width(total));
++  return (
++    <Text wrap="truncate-end" backgroundColor={selected ? theme.selectedBg : undefined}>
++      {line.segments.map((s, k) => (
++        <Text key={k} color={s.color} dimColor={s.dim} bold={s.bold} inverse={s.inverse}>
++          {s.text}
++        </Text>
++      ))}
++      {pad > 0 ? <Text>{" ".repeat(pad)}</Text> : null}
++    </Text>
++  );
++}
+diff --git a/src/tui/keys.ts b/src/tui/keys.ts
+new file mode 100644
+index 0000000..ebb303f
+--- /dev/null
++++ b/src/tui/keys.ts
+@@ -0,0 +1,64 @@
++import type { Key } from "ink";
++
++export type Mode = "stack" | "expanded";
++
++export type Action =
++  | { type: "move"; delta: 1 | -1 }
++  | { type: "page"; delta: 1 | -1 }
++  | { type: "edge"; to: "top" | "bottom" }
++  | { type: "expand" }
++  | { type: "back" }
++  | { type: "review" }
++  | { type: "reviewAll" }
++  | { type: "cancel" }
++  | { type: "help" }
++  | { type: "quit" };
++
++export function keyAction(input: string, key: Key): Action | undefined {
++  if (input === "j" || key.downArrow) return { type: "move", delta: 1 };
++  if (input === "k" || key.upArrow) return { type: "move", delta: -1 };
++  if (input === "J" || key.pageDown || input === " ") return { type: "page", delta: 1 };
++  if (input === "K" || key.pageUp) return { type: "page", delta: -1 };
++  if (input === "g" || key.home) return { type: "edge", to: "top" };
++  if (input === "G" || key.end) return { type: "edge", to: "bottom" };
++  if (key.return || input === "l" || key.rightArrow) return { type: "expand" };
++  if (key.escape || input === "h" || key.leftArrow) return { type: "back" };
++  if (input === "a") return { type: "review" };
++  if (input === "A") return { type: "reviewAll" };
++  if (input === "x") return { type: "cancel" };
++  if (input === "?") return { type: "help" };
++  if (input === "q") return { type: "quit" };
++  return undefined;
++}
++
++export interface KeyHelp {
++  keys: string;
++  label: string;
++}
++
++export function keyHelp(mode: Mode, running: boolean, dispatchable: boolean): KeyHelp[] {
++  const out: KeyHelp[] = [];
++  if (mode === "stack") {
++    out.push({ keys: "j/k", label: "card" }, { keys: "enter", label: "expand" });
++    if (dispatchable) out.push({ keys: "a", label: "review card" }, { keys: "A", label: "review all" });
++  } else {
++    out.push({ keys: "j/k", label: "scroll" }, { keys: "J/K", label: "page" }, { keys: "esc", label: "back" });
++    if (dispatchable) out.push({ keys: "a", label: "review card" });
++  }
++  if (running) out.push({ keys: "x", label: "cancel" });
++  out.push({ keys: "?", label: "keys" }, { keys: "q", label: "quit" });
++  return out;
++}
++
++export const HELP_LINES: readonly string[] = [
++  "j/k ↓/↑      move between cards · scroll when expanded",
++  "J/K space    page",
++  "g/G          first / last",
++  "enter l →    expand the card: its diff, findings, agent log",
++  "esc h ←      back to the stack",
++  "a            review this card with the default agent (proposer)",
++  "A            review every red and amber card, one after another",
++  "x            cancel the running review",
++  "?            this list",
++  "q            quit",
++];
+diff --git a/src/tui/theme.ts b/src/tui/theme.ts
+new file mode 100644
+index 0000000..f35d2a4
+--- /dev/null
++++ b/src/tui/theme.ts
+@@ -0,0 +1,19 @@
++import type { CardColor, Severity, Tier } from "../core/types.ts";
++
++/** Semantic tokens; choose by role, not by the color's current look. */
++export const theme = {
++  card: { red: "#ff5f5f", amber: "#ffb000", green: "#5fd75f", grey: "#6c6c6c" } satisfies Record<CardColor, string>,
++  tier: { low: "#5fd75f", medium: "#ffb000", high: "#ff5f5f" } satisfies Record<Tier, string>,
++  severity: { p0: "#ff5f5f", p1: "#ffb000", p2: "#87afff" } satisfies Record<Severity, string>,
++  accent: "#87afff",
++  text: "#e4e4e4",
++  dim: "#8a8a8a",
++  faint: "#585858",
++  add: "#5fd75f",
++  del: "#ff5f5f",
++  context: "#8a8a8a",
++  selectedBg: "#1c1c1c",
++  spinner: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
++} as const;
++
++export const COLOR_LABEL: Record<CardColor, string> = { red: "RED", amber: "AMBER", green: "GREEN", grey: "GREY" };
+diff --git a/test/tui.test.tsx b/test/tui.test.tsx
+new file mode 100644
+index 0000000..a6441f7
+--- /dev/null
++++ b/test/tui.test.tsx
+@@ -0,0 +1,151 @@
++import { afterEach, describe, expect, test } from "bun:test";
++import { render } from "ink-testing-library";
++import { App, windowLines } from "../src/tui/App.tsx";
++import { fit, wrap } from "../src/tui/Card.tsx";
++import type { Line } from "../src/tui/Card.tsx";
++import { FixtureSession, loadReview } from "../stories/fixture-session.ts";
++
++/** Frame → lines with ANSI stripped; the frame is the whole fixed-height screen. */
++const ANSI = /\x1b\[[0-9;]*m/g;
++const lines = (frame: string | undefined) => (frame ?? "").split("\n").map((l) => l.replace(ANSI, ""));
++const widest = (ls: string[]) => Math.max(...ls.map((l) => Bun.stringWidth(l)));
++/** Let React commit and Ink paint one frame. The spinner frame is injected and the throttle is 0, so one tick is one frame. */
++const tick = () => new Promise((r) => setTimeout(r, 30));
++/** Wait on the signal, not on time: resolves when the session emits `type`, then paints a frame. */
++const until = (session: FixtureSession, type: string) =>
++  new Promise<void>((resolve) => {
++    const off = session.subscribe((e) => {
++      if (e.type !== type) return;
++      off();
++      void tick().then(() => resolve());
++    });
++  });
++
++const sessions: FixtureSession[] = [];
++afterEach(() => sessions.splice(0).forEach((s) => s.dispose()));
++
++async function mount(name: string, columns: number, rows: number, opts: { dispatchable?: boolean } = {}) {
++  const session = new FixtureSession(await loadReview(name), { dispatchMs: 0, dispatchable: opts.dispatchable });
++  sessions.push(session);
++  const app = render(<App session={session} dispatchable={opts.dispatchable ?? true} size={{ columns, rows }} frame={0} throttleMs={0} />);
++  await tick();
++  return { app, session, screen: () => lines(app.lastFrame()) };
++}
++
++describe.each([
++  [80, 24],
++  [120, 40],
++  [200, 60],
++])("stack at %dx%d", (columns, rows) => {
++  test("fixed height, no line wider than the terminal, header has the verdict, cards have bars", async () => {
++    const { screen } = await mount("review-a", columns, rows);
++    const s = screen();
++    expect(s.length).toBe(rows - 1);
++    expect(widest(s)).toBeLessThanOrEqual(columns);
++    expect(s[0]).toMatch(/MEDIUM · 1 human · \d+ cards/);
++    expect(s.filter((l) => l.startsWith("┃")).length).toBeGreaterThan(3);
++    expect(s.at(-1)).toContain("j/k card");
++  });
++
++  test("j moves the selection; enter expands to a diff with hunk headers; esc returns", async () => {
++    const { app, screen } = await mount("review-a", columns, rows);
++    const before = screen().join("\n");
++    app.stdin.write("j");
++    await tick();
++    expect(screen().join("\n")).not.toBe(before);
++    app.stdin.write("\r");
++    await tick();
++    const expanded = screen();
++    expect(expanded.some((l) => l.includes("@@"))).toBe(true);
++    expect(widest(expanded)).toBeLessThanOrEqual(columns);
++    expect(expanded.at(-1)).toContain("esc back");
++    app.stdin.write("\x1b");
++    await tick();
++    expect(screen().some((l) => l.includes("@@"))).toBe(false);
++  });
++
++  test("? shows the key list and esc closes it", async () => {
++    const { app, screen } = await mount("review-b", columns, rows);
++    app.stdin.write("?");
++    await tick();
++    expect(screen().some((l) => l.includes("review this card"))).toBe(true);
++    app.stdin.write("\x1b");
++    await tick();
++    expect(screen().some((l) => l.includes("review this card"))).toBe(false);
++  });
++});
++
++describe("stack contents", () => {
++  test("cards are riskiest first and the untouched line closes the stack", async () => {
++    const { screen } = await mount("review-a", 120, 50);
++    const s = screen();
++    const badges = s.filter((l) => /^┃ (RED|AMBER|GREEN|GREY)/.test(l)).map((l) => l.split(/\s+/)[1]);
++    const order = ["RED", "AMBER", "GREEN", "GREY"];
++    expect([...badges]).toEqual([...badges].sort((a, b) => order.indexOf(a!) - order.indexOf(b!)));
++    expect(s.some((l) => l.includes("UNTOUCHED") && l.includes("auth"))).toBe(true);
++  });
++
++  test("a card's paragraph replaces its summary line and wraps to the width", async () => {
++    const { app, session, screen } = await mount("review-c", 60, 30);
++    const card = session.snapshot().cards[0]!;
++    session.setParagraph(card.id, "Adds a conversation tick rail so a reader can jump between messages. ".repeat(3));
++    await tick();
++    const s = screen();
++    expect(s.some((l) => l.includes("Adds a conversation tick rail"))).toBe(true);
++    expect(widest(s)).toBeLessThanOrEqual(60);
++    void app;
++  });
++
++  test("a reviews the selected card: running row, then the finding lands on the card and in the expanded view", async () => {
++    const { app, session, screen } = await mount("review-b", 100, 40);
++    const finished = until(session, "dispatch.finished");
++    app.stdin.write("a");
++    await finished;
++    const s = screen();
++    expect(s.some((l) => l.includes("P1") && l.includes("swallowed"))).toBe(true);
++    expect(s.some((l) => l.includes("1 finding"))).toBe(true);
++    app.stdin.write("\r");
++    await tick();
++    const e = screen();
++    expect(e.some((l) => l.startsWith("findings (1)"))).toBe(true);
++    expect(e.some((l) => l.includes("fixture · done"))).toBe(true);
++  });
++
++  test("a without dispatchers shows a notice in the footer, not a crash", async () => {
++    const { app, screen } = await mount("review-b", 100, 30, { dispatchable: false });
++    app.stdin.write("a");
++    await tick();
++    expect(screen().at(-1)).toContain("no dispatchers configured");
++  });
++
++  test("one card in a tiny terminal still renders within bounds", async () => {
++    const { screen } = await mount("review-c", 40, 10);
++    const s = screen();
++    expect(s.length).toBe(9);
++    expect(widest(s)).toBeLessThanOrEqual(40);
++  });
++});
++
++describe("text helpers", () => {
++  test("fit never exceeds the width, including wide characters", () => {
++    for (const w of [0, 1, 5, 12]) {
++      expect(Bun.stringWidth(fit("日本語のテキストです", w))).toBeLessThanOrEqual(w);
++      expect(Bun.stringWidth(fit("plain ascii text here", w))).toBeLessThanOrEqual(w);
++    }
++    expect(fit("short", 10)).toBe("short");
++  });
++  test("wrap breaks on words and hard-cuts words longer than the width", () => {
++    expect(wrap("one two three four", 9)).toEqual(["one two", "three", "four"]);
++    expect(wrap("abcdefghijkl", 5)).toEqual(["abcd…"]);
++    expect(wrap("a\nb", 10)).toEqual(["a", "b"]);
++  });
++  test("windowLines keeps the selected card visible and moves minimally", () => {
++    const ls: Line[] = [];
++    for (let c = 0; c < 10; c++) for (let k = 0; k < 4; k++) ls.push({ segments: [], card: c });
++    expect(windowLines(ls, 0, 10, 0)).toBe(0);
++    expect(windowLines(ls, 3, 10, 0)).toBe(6); // card 3 spans 12..15 → top so its last line is visible
++    expect(windowLines(ls, 3, 10, 6)).toBe(6); // no movement when already visible
++    expect(windowLines(ls, 9, 10, 6)).toBe(30);
++    expect(windowLines(ls, 0, 10, 30)).toBe(0);
++  });
++});
+diff --git a/tsconfig.json b/tsconfig.json
+index 051b514..fd484b8 100644
+--- a/tsconfig.json
++++ b/tsconfig.json
+@@ -18,5 +18,5 @@
+     "isolatedModules": true,
+     "resolveJsonModule": true
+   },
+-  "include": ["src", "test", "bin", "fixtures", "scripts"]
++  "include": ["src", "test", "bin", "fixtures", "scripts", "stories"]
+ }

@@ -1,0 +1,30 @@
+{
+  "name": "lookout",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "lookout": "bin/lookout"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "story": "bun stories/run.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.89",
+    "@ai-sdk/google": "4.0.106",
+    "@ai-sdk/openai": "4.0.103",
+    "@ai-sdk/perplexity": "5.0.21",
+    "@ai-sdk/typesafe-ai": "3.0.28",
+    "ai": "7.0.154",
+    "ink": "6.8.0",
+    "react": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/react": "19.3.0",
+    "ink-testing-library": "4.0.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,4926 @@
+{
+  "changeSet": {
+    "target": "34fc149^..34fc149",
+    "base": "61e56374c02dfac0de7b034933f9afaef7ce206a",
+    "head": "34fc1496e2911d7c215eac2ca164a78359d989fa",
+    "files": [
+      {
+        "path": "PLAN.md",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "a5724299031e",
+            "path": "PLAN.md",
+            "header": "@@ -98,6 +98,8 @@ Without a key: steps 1 and 8's rule floors only → one card per file, rule colo",
+            "oldStart": 98,
+            "oldLines": 6,
+            "newStart": 98,
+            "newLines": 8,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 98,
+                "newLine": 98
+              },
+              {
+                "kind": "context",
+                "text": "## Stack",
+                "oldLine": 99,
+                "newLine": 99
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 100,
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "**Errors**: expected, recoverable failures are returned as `Result<T, E>` (`core/result.ts`), never thrown: missing key, failed model call, `gh` missing, invalid config, unparseable agent output, a claim with no evidence. Every pipeline step returns a `Result` or a value carrying a `warning`. Programmer errors and impossible states throw. Modules that call throwing libraries convert once at the call site (`attempt`/`attemptAsync`); callers never see try/catch. `cli/main.ts` is the only place that catches everything and maps to an exit code.",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 102
+              },
+              {
+                "kind": "context",
+                "text": "Bun + strict TS. **Ink 6** for the stack (single column is what it renders well; windowed rows, ~10/s throttle, alt screen, one `theme.ts`). AI SDK `ai` pinned exact: `experimental_decide` + `createProviderRegistry` (BYOK, no gateway) for every typed step, `generateText` on a small chat model from the same registry for steps 3, 5, 6; all `experimental_*` in `rank/model.ts`. Own diff parser. `git`/`gh` via shell. Hand-written config validation. Mock decision/language models in tests; no network.",
+                "oldLine": 101,
+                "newLine": 103
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 102,
+                "newLine": 104
+              },
+              {
+                "kind": "context",
+                "text": "## Layout",
+                "oldLine": 103,
+                "newLine": 105
+              }
+            ],
+            "blocks": [
+              {
+                "id": "79aae49d3106",
+                "hunkId": "a5724299031e",
+                "path": "PLAN.md",
+                "from": 3,
+                "to": 5,
+                "labels": [
+                  "docs"
+                ],
+                "attention": "routine",
+                "score": 0.254,
+                "newRange": {
+                  "start": 101,
+                  "end": 102
+                },
+                "kind": "docs"
+              }
+            ],
+            "labels": [
+              "docs"
+            ],
+            "attention": "routine",
+            "score": 0.254
+          },
+          {
+            "id": "f67fb2a78bb9",
+            "path": "PLAN.md",
+            "header": "@@ -121,7 +123,7 @@ fixtures/     real diffs, PR bodies (incl. /pr template), recorded agent outputs",
+            "oldStart": 121,
+            "oldLines": 7,
+            "newStart": 123,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "## Data model",
+                "oldLine": 121,
+                "newLine": 123
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 122,
+                "newLine": 124
+              },
+              {
+                "kind": "context",
+                "text": "```ts",
+                "oldLine": 123,
+                "newLine": 125
+              },
+              {
+                "kind": "del",
+                "text": "EditBlock  { id, path, hunkId, startNew, endNew, startOld, endOld, lines, labels, attention, score }",
+                "oldLine": 124
+              },
+              {
+                "kind": "add",
+                "text": "EditBlock  { id, path, hunkId, from, to (index range into hunk.lines), oldRange?, newRange?, labels, attention, score }   // lives on Hunk.blocks; hunk labels/attention/score derive from its blocks",
+                "newLine": 126
+              },
+              {
+                "kind": "context",
+                "text": "Card       { id, title, color: red|amber|green|grey, kind, flags, areas: string[], blockIds, paragraph?,",
+                "oldLine": 125,
+                "newLine": 127
+              },
+              {
+                "kind": "context",
+                "text": "             claimIds, unmentioned: boolean, findings: Finding[], questions: Question[], testsTouched: boolean }",
+                "oldLine": 126,
+                "newLine": 128
+              },
+              {
+                "kind": "context",
+                "text": "Claim      { id, text, section?: summary|evidence|door|radius, status: supported|contradicted|not-in-diff, cardId? }",
+                "oldLine": 127,
+                "newLine": 129
+              }
+            ],
+            "blocks": [
+              {
+                "id": "e9c548142d67",
+                "hunkId": "f67fb2a78bb9",
+                "path": "PLAN.md",
+                "from": 3,
+                "to": 5,
+                "labels": [
+                  "docs"
+                ],
+                "attention": "routine",
+                "score": 0.14,
+                "oldRange": {
+                  "start": 124,
+                  "end": 124
+                },
+                "newRange": {
+                  "start": 126,
+                  "end": 126
+                },
+                "kind": "docs"
+              }
+            ],
+            "labels": [
+              "docs"
+            ],
+            "attention": "routine",
+            "score": 0.14
+          },
+          {
+            "id": "2804376b2f8b",
+            "path": "PLAN.md",
+            "header": "@@ -129,7 +131,7 @@ Finding    { id, severity, title, body, anchor?, dispatcher, status: proposed|co",
+            "oldStart": 129,
+            "oldLines": 7,
+            "newStart": 131,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "             evidence?, verifierNote?, preExisting: boolean }",
+                "oldLine": 129,
+                "newLine": 131
+              },
+              {
+                "kind": "context",
+                "text": "Question   { id, text, answer?: yes|no|unsure }",
+                "oldLine": 130,
+                "newLine": 132
+              },
+              {
+                "kind": "context",
+                "text": "Verdict    { tier: low|medium|high, requiredHumans: 0|1|2, reasons: string[] }",
+                "oldLine": 131,
+                "newLine": 133
+              },
+              {
+                "kind": "del",
+                "text": "Review     { changeSet, blocks, cards, verdict, untouched: string[], claims, dispatches, depth, rankedBy, timing, warning? }",
+                "oldLine": 132
+              },
+              {
+                "kind": "add",
+                "text": "Review     { changeSet, cards, verdict, untouched: string[], claims, dispatches, depth, rankedBy, timing, warning? }",
+                "newLine": 134
+              },
+              {
+                "kind": "context",
+                "text": "ReviewEvent   { type: card.updated | finding.added | claim.updated | dispatch.output | verdict.updated | done, id?, patch? }",
+                "oldLine": 133,
+                "newLine": 135
+              },
+              {
+                "kind": "context",
+                "text": "ReviewCommand { type: dispatchCard | dispatchAll | cancel | answerQuestion | setDepth | refresh, ... }",
+                "oldLine": 134,
+                "newLine": 136
+              },
+              {
+                "kind": "context",
+                "text": "```",
+                "oldLine": 135,
+                "newLine": 137
+              }
+            ],
+            "blocks": [
+              {
+                "id": "52c525e842ad",
+                "hunkId": "2804376b2f8b",
+                "path": "PLAN.md",
+                "from": 3,
+                "to": 5,
+                "labels": [
+                  "docs"
+                ],
+                "attention": "routine",
+                "score": 0.093,
+                "oldRange": {
+                  "start": 132,
+                  "end": 132
+                },
+                "newRange": {
+                  "start": 134,
+                  "end": 134
+                },
+                "kind": "docs"
+              }
+            ],
+            "labels": [
+              "docs"
+            ],
+            "attention": "routine",
+            "score": 0.093
+          }
+        ]
+      },
+      {
+        "path": "scripts/inert-audit.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "82c9dcb60356",
+            "path": "scripts/inert-audit.ts",
+            "header": "@@ -1,4 +1,4 @@",
+            "oldStart": 1,
+            "oldLines": 4,
+            "newStart": 1,
+            "newLines": 4,
+            "lines": [
+              {
+                "kind": "del",
+                "text": "// Step 3 check: list every hunk the rules mark inert over the last N non-merge commits of a repo (read-only).",
+                "oldLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "// Step 3/7 check: list every edit block the rules mark inert over the last N non-merge commits of a repo (read-only).",
+                "newLine": 1
+              },
+              {
+                "kind": "context",
+                "text": "// Usage: bun scripts/inert-audit.ts <repo> [n=50]",
+                "oldLine": 2,
+                "newLine": 2
+              },
+              {
+                "kind": "context",
+                "text": "import { parseDiff } from \"../src/core/diff.ts\";",
+                "oldLine": 3,
+                "newLine": 3
+              },
+              {
+                "kind": "context",
+                "text": "import { applyRules } from \"../src/rank/rules.ts\";",
+                "oldLine": 4,
+                "newLine": 4
+              }
+            ],
+            "blocks": [
+              {
+                "id": "6eae5619f49e",
+                "hunkId": "82c9dcb60356",
+                "path": "scripts/inert-audit.ts",
+                "from": 0,
+                "to": 2,
+                "labels": [
+                  "comment-only"
+                ],
+                "attention": "inert",
+                "score": 0.023,
+                "oldRange": {
+                  "start": 1,
+                  "end": 1
+                },
+                "newRange": {
+                  "start": 1,
+                  "end": 1
+                },
+                "kind": "docs"
+              }
+            ],
+            "labels": [
+              "comment-only"
+            ],
+            "attention": "inert",
+            "score": 0.023
+          },
+          {
+            "id": "2a91dccc88fe",
+            "path": "scripts/inert-audit.ts",
+            "header": "@@ -15,12 +15,14 @@ for (const sha of sh([\"git\", \"log\", `-${n}`, \"--no-merges\", \"--format=%h\"]).trim",
+            "oldStart": 15,
+            "oldLines": 12,
+            "newStart": 15,
+            "newLines": 14,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  const files = applyRules({ target: sha, base: \"\", head: \"\", files: parseDiff(sh([\"git\", \"diff\", ...DIFF_FLAGS, `${sha}^`, sha, \"--\"])) }).files;",
+                "oldLine": 15,
+                "newLine": 15
+              },
+              {
+                "kind": "context",
+                "text": "  for (const f of files) {",
+                "oldLine": 16,
+                "newLine": 16
+              },
+              {
+                "kind": "context",
+                "text": "    for (const h of f.hunks) {",
+                "oldLine": 17,
+                "newLine": 17
+              },
+              {
+                "kind": "del",
+                "text": "      total++;",
+                "oldLine": 18
+              },
+              {
+                "kind": "del",
+                "text": "      if (h.attention !== \"inert\") continue;",
+                "oldLine": 19
+              },
+              {
+                "kind": "del",
+                "text": "      inert++;",
+                "oldLine": 20
+              },
+              {
+                "kind": "del",
+                "text": "      console.log(`\\n=== ${sha} ${f.path} ${h.header}  [${h.labels.join(\", \")}]`);",
+                "oldLine": 21
+              },
+              {
+                "kind": "del",
+                "text": "      for (const l of h.lines) if (l.kind !== \"context\") console.log(`${l.kind === \"add\" ? \"+\" : \"-\"}${l.text}`);",
+                "oldLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "      for (const b of h.blocks) {",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "        total++;",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "        if (b.attention !== \"inert\") continue;",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "        inert++;",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "        console.log(`\\n=== ${sha} ${f.path} ${h.header} block ${b.from}-${b.to}  [${b.labels.join(\", \")}]`);",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "        for (const l of h.lines.slice(b.from, b.to)) console.log(`${l.kind === \"add\" ? \"+\" : \"-\"}${l.text}`);",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "      }",
+                "newLine": 24
+              },
+              {
+                "kind": "context",
+                "text": "    }",
+                "oldLine": 23,
+                "newLine": 25
+              },
+              {
+                "kind": "context",
+                "text": "  }",
+                "oldLine": 24,
+                "newLine": 26
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 25,
+                "newLine": 27
+              },
+              {
+                "kind": "del",
+                "text": "console.log(`\\n${inert} inert of ${total} hunks over ${n} commits`);",
+                "oldLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "console.log(`\\n${inert} inert of ${total} edit blocks over ${n} commits`);",
+                "newLine": 28
+              }
+            ],
+            "blocks": [
+              {
+                "id": "405f36860b83",
+                "hunkId": "2a91dccc88fe",
+                "path": "scripts/inert-audit.ts",
+                "from": 3,
+                "to": 15,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.552,
+                "oldRange": {
+                  "start": 18,
+                  "end": 22
+                },
+                "newRange": {
+                  "start": 18,
+                  "end": 24
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "29a3b9333661",
+                "hunkId": "2a91dccc88fe",
+                "path": "scripts/inert-audit.ts",
+                "from": 18,
+                "to": 20,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.111,
+                "oldRange": {
+                  "start": 26,
+                  "end": 26
+                },
+                "newRange": {
+                  "start": 28,
+                  "end": 28
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.552
+          }
+        ]
+      },
+      {
+        "path": "src/core/blocks.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "5c7fc30c9f1f",
+            "path": "src/core/blocks.ts",
+            "header": "@@ -0,0 +1,115 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 115,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import { ATTENTION_ORDER, type Attention, type ChangeSet, type DiffLine, type EditBlock, type FileChange, type Hunk } from \"./types.ts\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "export function blockId(path: string, lines: DiffLine[], position: string): string {",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "  const h = new Bun.CryptoHasher(\"sha1\");",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "  h.update(path);",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "  h.update(\"\\0\");",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "  h.update(position);",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "  for (const l of lines) h.update(`\\0${l.kind[0]}${l.text}`);",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "  return h.digest(\"hex\").slice(0, 12);",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "/** Split a hunk's lines into contiguous runs of changed lines. Pure structure: labels and attention are unset. */",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "export function splitHunk(hunk: Pick<Hunk, \"id\" | \"path\" | \"lines\">): EditBlock[] {",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "  const blocks: EditBlock[] = [];",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "  const lines = hunk.lines;",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "  let i = 0;",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "  while (i < lines.length) {",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "    if (lines[i]!.kind === \"context\") {",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "      i++;",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "      continue;",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "    }",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "    const from = i;",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "    while (i < lines.length && lines[i]!.kind !== \"context\") i++;",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "    const run = lines.slice(from, i);",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "    const olds = run.filter((l) => l.oldLine !== undefined).map((l) => l.oldLine!);",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "    const news = run.filter((l) => l.newLine !== undefined).map((l) => l.newLine!);",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "    const block: EditBlock = {",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "      id: blockId(hunk.path, run, `${olds[0] ?? \"-\"}:${news[0] ?? \"-\"}`),",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "      hunkId: hunk.id,",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "      path: hunk.path,",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "      from,",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "      to: i,",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "      labels: [],",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "      attention: \"routine\",",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "      score: 0,",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": "    };",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "    if (olds.length) block.oldRange = { start: olds[0]!, end: olds[olds.length - 1]! };",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": "    if (news.length) block.newRange = { start: news[0]!, end: news[news.length - 1]! };",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "    blocks.push(block);",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "  return blocks;",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "export const blockLines = (hunk: Hunk, block: EditBlock): DiffLine[] => hunk.lines.slice(block.from, block.to);",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 46
+              },
+              {
+                "kind": "add",
+                "text": " * The hunk's text on each side with every *other* block neutralised (shown as its new",
+                "newLine": 47
+              },
+              {
+                "kind": "add",
+                "text": " * side on both sides), so a comparison of old vs new reflects only this block while the",
+                "newLine": 48
+              },
+              {
+                "kind": "add",
+                "text": " * lexer still sees the whole hunk's context (open strings, block comments).",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "export function isolateBlock(hunk: Hunk, block: EditBlock): { oldText: string; newText: string } {",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "  const oldSide: string[] = [];",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "  const newSide: string[] = [];",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": "  hunk.lines.forEach((l, k) => {",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": "    const inside = k >= block.from && k < block.to;",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": "    if (l.kind === \"context\" || (!inside && l.kind === \"add\")) {",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "      oldSide.push(l.text);",
+                "newLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "      newSide.push(l.text);",
+                "newLine": 58
+              },
+              {
+                "kind": "add",
+                "text": "    } else if (inside && l.kind === \"del\") oldSide.push(l.text);",
+                "newLine": 59
+              },
+              {
+                "kind": "add",
+                "text": "    else if (inside && l.kind === \"add\") newSide.push(l.text);",
+                "newLine": 60
+              },
+              {
+                "kind": "add",
+                "text": "    // a `del` outside the block is dropped from both sides",
+                "newLine": 61
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 62
+              },
+              {
+                "kind": "add",
+                "text": "  return { oldText: oldSide.join(\"\\n\"), newText: newSide.join(\"\\n\") };",
+                "newLine": 63
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 65
+              },
+              {
+                "kind": "add",
+                "text": "/** The block's lines with up to `context` unchanged lines on each side, rendered as a diff. */",
+                "newLine": 66
+              },
+              {
+                "kind": "add",
+                "text": "export function blockText(hunk: Hunk, block: EditBlock, context = 3): string {",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "  const from = Math.max(0, block.from - context);",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "  const to = Math.min(hunk.lines.length, block.to + context);",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "  return hunk.lines",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "    .slice(from, to)",
+                "newLine": 71
+              },
+              {
+                "kind": "add",
+                "text": "    .map((l) => (l.kind === \"add\" ? \"+\" : l.kind === \"del\" ? \"-\" : \" \") + l.text)",
+                "newLine": 72
+              },
+              {
+                "kind": "add",
+                "text": "    .join(\"\\n\");",
+                "newLine": 73
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 74
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": "const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "const CONTENT_LABELS = [\"whitespace-only\", \"comment-only\"];",
+                "newLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 79
+              },
+              {
+                "kind": "add",
+                "text": "/** Recompute a hunk's labels, attention and score from its blocks. */",
+                "newLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "export function deriveHunk(hunk: Hunk): Hunk {",
+                "newLine": 81
+              },
+              {
+                "kind": "add",
+                "text": "  if (hunk.blocks.length === 0) return hunk;",
+                "newLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "  const labels: string[] = [];",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "  for (const b of hunk.blocks) for (const l of b.labels) if (!CONTENT_LABELS.includes(l) && !labels.includes(l)) labels.push(l);",
+                "newLine": 84
+              },
+              {
+                "kind": "add",
+                "text": "  const contents = hunk.blocks.map((b) => b.labels.find((l) => CONTENT_LABELS.includes(l)));",
+                "newLine": 85
+              },
+              {
+                "kind": "add",
+                "text": "  if (contents.every((c) => c !== undefined)) labels.push(contents.includes(\"comment-only\") ? \"comment-only\" : \"whitespace-only\");",
+                "newLine": 86
+              },
+              {
+                "kind": "add",
+                "text": "  let attention: Attention = \"inert\";",
+                "newLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "  let score = 0;",
+                "newLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "  for (const b of hunk.blocks) {",
+                "newLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "    if (rank(b.attention) > rank(attention)) attention = b.attention;",
+                "newLine": 90
+              },
+              {
+                "kind": "add",
+                "text": "    score = Math.max(score, b.score);",
+                "newLine": 91
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 92
+              },
+              {
+                "kind": "add",
+                "text": "  return { ...hunk, labels, attention, score };",
+                "newLine": 93
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 94
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 95
+              },
+              {
+                "kind": "add",
+                "text": "export interface BlockRef {",
+                "newLine": 96
+              },
+              {
+                "kind": "add",
+                "text": "  file: FileChange;",
+                "newLine": 97
+              },
+              {
+                "kind": "add",
+                "text": "  hunk: Hunk;",
+                "newLine": 98
+              },
+              {
+                "kind": "add",
+                "text": "  block: EditBlock;",
+                "newLine": 99
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "export function allBlocks(changeSet: ChangeSet): BlockRef[] {",
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "  return changeSet.files.flatMap((file) => file.hunks.flatMap((hunk) => hunk.blocks.map((block) => ({ file, hunk, block }))));",
+                "newLine": 103
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 104
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 105
+              },
+              {
+                "kind": "add",
+                "text": "/** Return the change set with `fn` applied to every block and hunks re-derived. */",
+                "newLine": 106
+              },
+              {
+                "kind": "add",
+                "text": "export function mapBlocks(changeSet: ChangeSet, fn: (ref: BlockRef) => EditBlock): ChangeSet {",
+                "newLine": 107
+              },
+              {
+                "kind": "add",
+                "text": "  return {",
+                "newLine": 108
+              },
+              {
+                "kind": "add",
+                "text": "    ...changeSet,",
+                "newLine": 109
+              },
+              {
+                "kind": "add",
+                "text": "    files: changeSet.files.map((file) => ({",
+                "newLine": 110
+              },
+              {
+                "kind": "add",
+                "text": "      ...file,",
+                "newLine": 111
+              },
+              {
+                "kind": "add",
+                "text": "      hunks: file.hunks.map((hunk) => deriveHunk({ ...hunk, blocks: hunk.blocks.map((block) => fn({ file, hunk, block })) })),",
+                "newLine": 112
+              },
+              {
+                "kind": "add",
+                "text": "    })),",
+                "newLine": 113
+              },
+              {
+                "kind": "add",
+                "text": "  };",
+                "newLine": 114
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 115
+              }
+            ],
+            "blocks": [
+              {
+                "id": "af7fa5d91547",
+                "hunkId": "5c7fc30c9f1f",
+                "path": "src/core/blocks.ts",
+                "from": 0,
+                "to": 115,
+                "labels": [
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.738,
+                "newRange": {
+                  "start": 1,
+                  "end": 115
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.738
+          }
+        ]
+      },
+      {
+        "path": "src/core/diff.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "c6a535629637",
+            "path": "src/core/diff.ts",
+            "header": "@@ -1,3 +1,4 @@",
+            "oldStart": 1,
+            "oldLines": 3,
+            "newStart": 1,
+            "newLines": 4,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import { splitHunk } from \"./blocks.ts\";",
+                "newLine": 1
+              },
+              {
+                "kind": "context",
+                "text": "import type { DiffLine, FileChange, Hunk } from \"./types.ts\";",
+                "oldLine": 1,
+                "newLine": 2
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 2,
+                "newLine": 3
+              },
+              {
+                "kind": "context",
+                "text": "/** Unquote a git C-style quoted path (\"a/\\303\\251 x\") or return it unchanged. */",
+                "oldLine": 3,
+                "newLine": 4
+              }
+            ],
+            "blocks": [
+              {
+                "id": "433165ba29f7",
+                "hunkId": "c6a535629637",
+                "path": "src/core/diff.ts",
+                "from": 0,
+                "to": 1,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.178,
+                "newRange": {
+                  "start": 1,
+                  "end": 1
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.178
+          },
+          {
+            "id": "f2e7f77dee6f",
+            "path": "src/core/diff.ts",
+            "header": "@@ -129,8 +130,9 @@ export function parseDiff(text: string): FileChange[] {",
+            "oldStart": 129,
+            "oldLines": 8,
+            "newStart": 130,
+            "newLines": 9,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "        }",
+                "oldLine": 129,
+                "newLine": 130
+              },
+              {
+                "kind": "context",
+                "text": "        i++;",
+                "oldLine": 130,
+                "newLine": 131
+              },
+              {
+                "kind": "context",
+                "text": "      }",
+                "oldLine": 131,
+                "newLine": 132
+              },
+              {
+                "kind": "add",
+                "text": "      const id = hunkId(path, header, body);",
+                "newLine": 133
+              },
+              {
+                "kind": "context",
+                "text": "      file.hunks.push({",
+                "oldLine": 132,
+                "newLine": 134
+              },
+              {
+                "kind": "del",
+                "text": "        id: hunkId(path, header, body),",
+                "oldLine": 133
+              },
+              {
+                "kind": "add",
+                "text": "        id,",
+                "newLine": 135
+              },
+              {
+                "kind": "context",
+                "text": "        path,",
+                "oldLine": 134,
+                "newLine": 136
+              },
+              {
+                "kind": "context",
+                "text": "        header,",
+                "oldLine": 135,
+                "newLine": 137
+              },
+              {
+                "kind": "context",
+                "text": "        oldStart,",
+                "oldLine": 136,
+                "newLine": 138
+              }
+            ],
+            "blocks": [
+              {
+                "id": "83a889007bb8",
+                "hunkId": "f2e7f77dee6f",
+                "path": "src/core/diff.ts",
+                "from": 3,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.122,
+                "newRange": {
+                  "start": 133,
+                  "end": 133
+                },
+                "kind": "typing-refactor"
+              },
+              {
+                "id": "90afb76d678c",
+                "hunkId": "f2e7f77dee6f",
+                "path": "src/core/diff.ts",
+                "from": 5,
+                "to": 7,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.15,
+                "oldRange": {
+                  "start": 133,
+                  "end": 133
+                },
+                "newRange": {
+                  "start": 135,
+                  "end": 135
+                },
+                "kind": "typing-refactor"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.15
+          },
+          {
+            "id": "4409308ea851",
+            "path": "src/core/diff.ts",
+            "header": "@@ -138,6 +140,7 @@ export function parseDiff(text: string): FileChange[] {",
+            "oldStart": 138,
+            "oldLines": 6,
+            "newStart": 140,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "        newStart,",
+                "oldLine": 138,
+                "newLine": 140
+              },
+              {
+                "kind": "context",
+                "text": "        newLines,",
+                "oldLine": 139,
+                "newLine": 141
+              },
+              {
+                "kind": "context",
+                "text": "        lines: body,",
+                "oldLine": 140,
+                "newLine": 142
+              },
+              {
+                "kind": "add",
+                "text": "        blocks: splitHunk({ id, path, lines: body }),",
+                "newLine": 143
+              },
+              {
+                "kind": "context",
+                "text": "        labels: [],",
+                "oldLine": 141,
+                "newLine": 144
+              },
+              {
+                "kind": "context",
+                "text": "        attention: \"routine\",",
+                "oldLine": 142,
+                "newLine": 145
+              },
+              {
+                "kind": "context",
+                "text": "        score: 0,",
+                "oldLine": 143,
+                "newLine": 146
+              }
+            ],
+            "blocks": [
+              {
+                "id": "7102fde3e8a1",
+                "hunkId": "4409308ea851",
+                "path": "src/core/diff.ts",
+                "from": 3,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.192,
+                "newRange": {
+                  "start": 143,
+                  "end": 143
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.192
+          }
+        ]
+      },
+      {
+        "path": "src/core/result.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "367d0e3798f0",
+            "path": "src/core/result.ts",
+            "header": "@@ -0,0 +1,29 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 29,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": " * Expected, recoverable failures are returned, not thrown. A missing API key, a failed",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": " * model call, `gh` not installed, invalid config, an agent's output that does not parse:",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": " * all are `Result`s the pipeline degrades past. Programmer errors and impossible states",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": " * throw. Modules that call throwing libraries convert once, at the call site.",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "export type Result<T, E = string> = { ok: true; value: T } | { ok: false; error: E };",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "/** Run a throwing function and return its outcome as a Result with the error's first line as message. */",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "export function attempt<T>(fn: () => T): Result<T> {",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "  try {",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "    return ok(fn());",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "  } catch (e) {",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "    return err(message(e));",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "export async function attemptAsync<T>(fn: () => Promise<T>): Promise<Result<T>> {",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "  try {",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "    return ok(await fn());",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "  } catch (e) {",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "    return err(message(e));",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "export const message = (e: unknown): string => (e instanceof Error ? e.message.split(\"\\n\")[0]! : String(e));",
+                "newLine": 29
+              }
+            ],
+            "blocks": [
+              {
+                "id": "ef774989deb5",
+                "hunkId": "367d0e3798f0",
+                "path": "src/core/result.ts",
+                "from": 0,
+                "to": 29,
+                "labels": [
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.632,
+                "newRange": {
+                  "start": 1,
+                  "end": 29
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.632
+          }
+        ]
+      },
+      {
+        "path": "src/core/types.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "7c13ee5077cb",
+            "path": "src/core/types.ts",
+            "header": "@@ -21,6 +21,29 @@ export interface Hunk {",
+            "oldStart": 21,
+            "oldLines": 6,
+            "newStart": 21,
+            "newLines": 29,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  newStart: number;",
+                "oldLine": 21,
+                "newLine": 21
+              },
+              {
+                "kind": "context",
+                "text": "  newLines: number;",
+                "oldLine": 22,
+                "newLine": 22
+              },
+              {
+                "kind": "context",
+                "text": "  lines: DiffLine[];",
+                "oldLine": 23,
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "  /** Contiguous runs of changed lines; the unit lookout judges. Derived from `lines`. */",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "  blocks: EditBlock[];",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "  /** Derived from `blocks`: union of path labels, content label only if every block has one. */",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "  labels: string[];",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "  /** Derived from `blocks`: the highest attention and score among them. */",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "  attention: Attention;",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "  score: number;",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": " * One contiguous run of added and/or removed lines inside a hunk. A git hunk fuses",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": " * edits that are within a few lines of each other; edit blocks undo that.",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "export interface EditBlock {",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": "  id: string;",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "  hunkId: string;",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "  path: string;",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "  /** Index range into the hunk's `lines`, `from` inclusive, `to` exclusive. */",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "  from: number;",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "  to: number;",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "  /** Line ranges on each side, inclusive; `undefined` when the block has no lines on that side. */",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": "  oldRange?: { start: number; end: number };",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "  newRange?: { start: number; end: number };",
+                "newLine": 46
+              },
+              {
+                "kind": "context",
+                "text": "  labels: string[];",
+                "oldLine": 24,
+                "newLine": 47
+              },
+              {
+                "kind": "context",
+                "text": "  attention: Attention;",
+                "oldLine": 25,
+                "newLine": 48
+              },
+              {
+                "kind": "context",
+                "text": "  score: number;",
+                "oldLine": 26,
+                "newLine": 49
+              }
+            ],
+            "blocks": [
+              {
+                "id": "286d059a0db5",
+                "hunkId": "7c13ee5077cb",
+                "path": "src/core/types.ts",
+                "from": 3,
+                "to": 26,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.611,
+                "newRange": {
+                  "start": 24,
+                  "end": 46
+                },
+                "kind": "types"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.611
+          }
+        ]
+      },
+      {
+        "path": "src/rank/model.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "1b8a253e5cfc",
+            "path": "src/rank/model.ts",
+            "header": "@@ -5,7 +5,8 @@ import { createOpenAI } from \"@ai-sdk/openai\";",
+            "oldStart": 5,
+            "oldLines": 7,
+            "newStart": 5,
+            "newLines": 8,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "import { createPerplexity } from \"@ai-sdk/perplexity\";",
+                "oldLine": 5,
+                "newLine": 5
+              },
+              {
+                "kind": "context",
+                "text": "import { createTypeSafeAi } from \"@ai-sdk/typesafe-ai\";",
+                "oldLine": 6,
+                "newLine": 6
+              },
+              {
+                "kind": "context",
+                "text": "import { createProviderRegistry, experimental_decide, type Experimental_DecisionModel, type Experimental_DecisionQuestion } from \"ai\";",
+                "oldLine": 7,
+                "newLine": 7
+              },
+              {
+                "kind": "del",
+                "text": "import type { Hunk, Intent } from \"../core/types.ts\";",
+                "oldLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "import { blockText, type BlockRef } from \"../core/blocks.ts\";",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "import type { Intent } from \"../core/types.ts\";",
+                "newLine": 9
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 9,
+                "newLine": 10
+              },
+              {
+                "kind": "context",
+                "text": "export type AttentionModel = Experimental_DecisionModel;",
+                "oldLine": 10,
+                "newLine": 11
+              },
+              {
+                "kind": "context",
+                "text": "export type Env = Record<string, string | undefined>;",
+                "oldLine": 11,
+                "newLine": 12
+              }
+            ],
+            "blocks": [
+              {
+                "id": "df3ff9e8a12f",
+                "hunkId": "1b8a253e5cfc",
+                "path": "src/rank/model.ts",
+                "from": 3,
+                "to": 6,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.166,
+                "oldRange": {
+                  "start": 8,
+                  "end": 8
+                },
+                "newRange": {
+                  "start": 8,
+                  "end": 9
+                },
+                "kind": "typing-refactor"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.166
+          },
+          {
+            "id": "492ac0725eab",
+            "path": "src/rank/model.ts",
+            "header": "@@ -59,34 +60,35 @@ export const ATTENTION_LEVELS = [",
+            "oldStart": 59,
+            "oldLines": 34,
+            "newStart": 60,
+            "newLines": 35,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  \"suspicious: likely bug, security risk, contradicts the stated intent, weakens or deletes checks/tests, or does something unexplained\",",
+                "oldLine": 59,
+                "newLine": 60
+              },
+              {
+                "kind": "context",
+                "text": "] as const;",
+                "oldLine": 60,
+                "newLine": 61
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 61,
+                "newLine": 62
+              },
+              {
+                "kind": "del",
+                "text": "const MAX_LINES_PER_HUNK = 200;",
+                "oldLine": 62
+              },
+              {
+                "kind": "add",
+                "text": "export const questionId = (blockId: string) => `review_attention_${blockId}`;",
+                "newLine": 63
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 63,
+                "newLine": 64
+              },
+              {
+                "kind": "del",
+                "text": "export const questionId = (hunkId: string) => `review_attention_${hunkId}`;",
+                "oldLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "const MAX_LINES_PER_BLOCK = 200;",
+                "newLine": 65
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 65,
+                "newLine": 66
+              },
+              {
+                "kind": "del",
+                "text": "function hunkText(h: Hunk): string {",
+                "oldLine": 66
+              },
+              {
+                "kind": "del",
+                "text": "  const body = h.lines.slice(0, MAX_LINES_PER_HUNK).map((l) => (l.kind === \"add\" ? \"+\" : l.kind === \"del\" ? \"-\" : \" \") + l.text);",
+                "oldLine": 67
+              },
+              {
+                "kind": "del",
+                "text": "  if (h.lines.length > MAX_LINES_PER_HUNK) body.push(`… ${h.lines.length - MAX_LINES_PER_HUNK} more lines`);",
+                "oldLine": 68
+              },
+              {
+                "kind": "del",
+                "text": "  return `${h.header}\\n${body.join(\"\\n\")}`;",
+                "oldLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "function text(ref: BlockRef): string {",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "  const full = blockText(ref.hunk, ref.block);",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "  const lines = full.split(\"\\n\");",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "  if (lines.length <= MAX_LINES_PER_BLOCK) return `${ref.hunk.header}\\n${full}`;",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "  return `${ref.hunk.header}\\n${lines.slice(0, MAX_LINES_PER_BLOCK).join(\"\\n\")}\\n… ${lines.length - MAX_LINES_PER_BLOCK} more lines`;",
+                "newLine": 71
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 70,
+                "newLine": 72
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 71,
+                "newLine": 73
+              },
+              {
+                "kind": "context",
+                "text": "/**",
+                "oldLine": 72,
+                "newLine": 74
+              },
+              {
+                "kind": "del",
+                "text": " * One `decide` call for a batch of hunks of the same change. Shared state is the",
+                "oldLine": 73
+              },
+              {
+                "kind": "del",
+                "text": " * change intent plus the batch; each hunk gets one `review_attention` score question.",
+                "oldLine": 74
+              },
+              {
+                "kind": "del",
+                "text": " * Returns score per hunk id in [0, ATTENTION_LEVELS.length - 1].",
+                "oldLine": 75
+              },
+              {
+                "kind": "add",
+                "text": " * One `decide` call for a batch of edit blocks of the same change. Shared state is the",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": " * change intent plus the batch; each block gets one `review_attention` score question.",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": " * Returns score per block id in [0, ATTENTION_LEVELS.length - 1].",
+                "newLine": 77
+              },
+              {
+                "kind": "context",
+                "text": " */",
+                "oldLine": 76,
+                "newLine": 78
+              },
+              {
+                "kind": "del",
+                "text": "export async function scoreHunkBatch(model: AttentionModel, hunks: Hunk[], intent?: Intent): Promise<Map<string, number>> {",
+                "oldLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "export async function scoreBlockBatch(model: AttentionModel, refs: BlockRef[], intent?: Intent): Promise<Map<string, number>> {",
+                "newLine": 79
+              },
+              {
+                "kind": "context",
+                "text": "  const questions: Record<string, Experimental_DecisionQuestion> = {};",
+                "oldLine": 78,
+                "newLine": 80
+              },
+              {
+                "kind": "del",
+                "text": "  for (const h of hunks) {",
+                "oldLine": 79
+              },
+              {
+                "kind": "del",
+                "text": "    questions[questionId(h.id)] = {",
+                "oldLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "  for (const { block } of refs) {",
+                "newLine": 81
+              },
+              {
+                "kind": "add",
+                "text": "    questions[questionId(block.id)] = {",
+                "newLine": 82
+              },
+              {
+                "kind": "context",
+                "text": "      type: \"score\",",
+                "oldLine": 81,
+                "newLine": 83
+              },
+              {
+                "kind": "del",
+                "text": "      instructions: `How much reviewer attention does hunk ${h.id} (${h.path}) need? Judge only that hunk, using the rest of the state as context.`,",
+                "oldLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "      instructions: `How much reviewer attention does edit ${block.id} (${block.path}) need? Judge only the +/- lines of that edit, using the rest of the state as context.`,",
+                "newLine": 84
+              },
+              {
+                "kind": "context",
+                "text": "      criteria: [...ATTENTION_LEVELS],",
+                "oldLine": 83,
+                "newLine": 85
+              },
+              {
+                "kind": "context",
+                "text": "    };",
+                "oldLine": 84,
+                "newLine": 86
+              },
+              {
+                "kind": "context",
+                "text": "  }",
+                "oldLine": 85,
+                "newLine": 87
+              },
+              {
+                "kind": "context",
+                "text": "  const state = {",
+                "oldLine": 86,
+                "newLine": 88
+              },
+              {
+                "kind": "del",
+                "text": "    task: \"Rank hunks of an agent-written code change by how much human review attention each deserves.\",",
+                "oldLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "    task: \"Rank the edits of an agent-written code change by how much human review attention each deserves.\",",
+                "newLine": 89
+              },
+              {
+                "kind": "context",
+                "text": "    intent: intent ? { title: intent.title, body: intent.body.slice(0, 4000) } : null,",
+                "oldLine": 88,
+                "newLine": 90
+              },
+              {
+                "kind": "del",
+                "text": "    hunks: hunks.map((h) => ({ id: h.id, path: h.path, labels: h.labels, diff: hunkText(h) })),",
+                "oldLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "    edits: refs.map((ref) => ({ id: ref.block.id, path: ref.block.path, labels: ref.block.labels, diff: text(ref) })),",
+                "newLine": 91
+              },
+              {
+                "kind": "context",
+                "text": "  };",
+                "oldLine": 90,
+                "newLine": 92
+              },
+              {
+                "kind": "context",
+                "text": "  const result = await experimental_decide({",
+                "oldLine": 91,
+                "newLine": 93
+              },
+              {
+                "kind": "context",
+                "text": "    model,",
+                "oldLine": 92,
+                "newLine": 94
+              }
+            ],
+            "blocks": [
+              {
+                "id": "1615069dde8e",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.258,
+                "oldRange": {
+                  "start": 62,
+                  "end": 62
+                },
+                "newRange": {
+                  "start": 63,
+                  "end": 63
+                },
+                "kind": "rename"
+              },
+              {
+                "id": "a7fc25338ef7",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 6,
+                "to": 8,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.337,
+                "oldRange": {
+                  "start": 64,
+                  "end": 64
+                },
+                "newRange": {
+                  "start": 65,
+                  "end": 65
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "57531f94407c",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 9,
+                "to": 18,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.456,
+                "oldRange": {
+                  "start": 66,
+                  "end": 69
+                },
+                "newRange": {
+                  "start": 67,
+                  "end": 71
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "3dd432d2d44f",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 21,
+                "to": 27,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.444,
+                "oldRange": {
+                  "start": 73,
+                  "end": 75
+                },
+                "newRange": {
+                  "start": 75,
+                  "end": 77
+                },
+                "kind": "typing-refactor"
+              },
+              {
+                "id": "0702e47429d9",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 28,
+                "to": 30,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.311,
+                "oldRange": {
+                  "start": 77,
+                  "end": 77
+                },
+                "newRange": {
+                  "start": 79,
+                  "end": 79
+                },
+                "kind": "typing-refactor"
+              },
+              {
+                "id": "080ad8d92748",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 31,
+                "to": 35,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.365,
+                "oldRange": {
+                  "start": 79,
+                  "end": 80
+                },
+                "newRange": {
+                  "start": 81,
+                  "end": 82
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "c3fc830f99f6",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 36,
+                "to": 38,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.267,
+                "oldRange": {
+                  "start": 82,
+                  "end": 82
+                },
+                "newRange": {
+                  "start": 84,
+                  "end": 84
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "a3d3874b6a4f",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 42,
+                "to": 44,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.316,
+                "oldRange": {
+                  "start": 87,
+                  "end": 87
+                },
+                "newRange": {
+                  "start": 89,
+                  "end": 89
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "5ae904c3bd18",
+                "hunkId": "492ac0725eab",
+                "path": "src/rank/model.ts",
+                "from": 45,
+                "to": 47,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.223,
+                "oldRange": {
+                  "start": 89,
+                  "end": 89
+                },
+                "newRange": {
+                  "start": 91,
+                  "end": 91
+                },
+                "kind": "rename"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.456
+          },
+          {
+            "id": "f16be084b5ea",
+            "path": "src/rank/model.ts",
+            "header": "@@ -95,10 +97,10 @@ export async function scoreHunkBatch(model: AttentionModel, hunks: Hunk[], inten",
+            "oldStart": 95,
+            "oldLines": 10,
+            "newStart": 97,
+            "newLines": 10,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "    abortSignal: AbortSignal.timeout(90_000),",
+                "oldLine": 95,
+                "newLine": 97
+              },
+              {
+                "kind": "context",
+                "text": "  });",
+                "oldLine": 96,
+                "newLine": 98
+              },
+              {
+                "kind": "context",
+                "text": "  const scores = new Map<string, number>();",
+                "oldLine": 97,
+                "newLine": 99
+              },
+              {
+                "kind": "del",
+                "text": "  for (const h of hunks) {",
+                "oldLine": 98
+              },
+              {
+                "kind": "del",
+                "text": "    const answer = (result.answers as Record<string, { type: string; score?: number }>)[questionId(h.id)];",
+                "oldLine": 99
+              },
+              {
+                "kind": "del",
+                "text": "    if (answer?.type !== \"score\" || typeof answer.score !== \"number\") throw new Error(`no score for hunk ${h.id}`);",
+                "oldLine": 100
+              },
+              {
+                "kind": "del",
+                "text": "    scores.set(h.id, answer.score);",
+                "oldLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "  for (const { block } of refs) {",
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "    const answer = (result.answers as Record<string, { type: string; score?: number }>)[questionId(block.id)];",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "    if (answer?.type !== \"score\" || typeof answer.score !== \"number\") throw new Error(`no score for edit ${block.id}`);",
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "    scores.set(block.id, answer.score);",
+                "newLine": 103
+              },
+              {
+                "kind": "context",
+                "text": "  }",
+                "oldLine": 102,
+                "newLine": 104
+              },
+              {
+                "kind": "context",
+                "text": "  return scores;",
+                "oldLine": 103,
+                "newLine": 105
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 104,
+                "newLine": 106
+              }
+            ],
+            "blocks": [
+              {
+                "id": "06a4aa512f28",
+                "hunkId": "f16be084b5ea",
+                "path": "src/rank/model.ts",
+                "from": 3,
+                "to": 11,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.413,
+                "oldRange": {
+                  "start": 98,
+                  "end": 101
+                },
+                "newRange": {
+                  "start": 100,
+                  "end": 103
+                },
+                "kind": "rename"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.413
+          }
+        ]
+      },
+      {
+        "path": "src/rank/rank.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "56b1d9769025",
+            "path": "src/rank/rank.ts",
+            "header": "@@ -1,6 +1,8 @@",
+            "oldStart": 1,
+            "oldLines": 6,
+            "newStart": 1,
+            "newLines": 8,
+            "lines": [
+              {
+                "kind": "del",
+                "text": "import { ATTENTION_ORDER, type Attention, type ChangeSet, type Hunk } from \"../core/types.ts\";",
+                "oldLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { allBlocks, type BlockRef, mapBlocks } from \"../core/blocks.ts\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { ATTENTION_ORDER, type Attention, type ChangeSet, type EditBlock, type Hunk } from \"../core/types.ts\";",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "import { attempt, attemptAsync } from \"../core/result.ts\";",
+                "newLine": 3
+              },
+              {
+                "kind": "context",
+                "text": "import { RankCache } from \"./cache.ts\";",
+                "oldLine": 2,
+                "newLine": 4
+              },
+              {
+                "kind": "del",
+                "text": "import { type AttentionModel, type Env, resolveAttentionModel, type ResolvedModel, scoreHunkBatch, ATTENTION_LEVELS } from \"./model.ts\";",
+                "oldLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import { type AttentionModel, type Env, resolveAttentionModel, type ResolvedModel, scoreBlockBatch, ATTENTION_LEVELS } from \"./model.ts\";",
+                "newLine": 5
+              },
+              {
+                "kind": "context",
+                "text": "import { applyRules } from \"./rules.ts\";",
+                "oldLine": 4,
+                "newLine": 6
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 5,
+                "newLine": 7
+              },
+              {
+                "kind": "context",
+                "text": "export interface RankResult {",
+                "oldLine": 6,
+                "newLine": 8
+              }
+            ],
+            "blocks": [
+              {
+                "id": "70a36e435953",
+                "hunkId": "56b1d9769025",
+                "path": "src/rank/rank.ts",
+                "from": 0,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.313,
+                "oldRange": {
+                  "start": 1,
+                  "end": 1
+                },
+                "newRange": {
+                  "start": 1,
+                  "end": 3
+                },
+                "kind": "rename"
+              },
+              {
+                "id": "42bb310f39b2",
+                "hunkId": "56b1d9769025",
+                "path": "src/rank/rank.ts",
+                "from": 5,
+                "to": 7,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.218,
+                "oldRange": {
+                  "start": 3,
+                  "end": 3
+                },
+                "newRange": {
+                  "start": 5,
+                  "end": 5
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.313
+          },
+          {
+            "id": "2d8245e51bd5",
+            "path": "src/rank/rank.ts",
+            "header": "@@ -28,10 +30,10 @@ export function compareHunks(a: Hunk, b: Hunk): number {",
+            "oldStart": 28,
+            "oldLines": 10,
+            "newStart": 30,
+            "newLines": 10,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);",
+                "oldLine": 28,
+                "newLine": 30
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 29,
+                "newLine": 31
+              },
+              {
+                "kind": "context",
+                "text": "/**",
+                "oldLine": 30,
+                "newLine": 32
+              },
+              {
+                "kind": "del",
+                "text": " * Merge a model score (0..levels-1) into a rules-ranked hunk. Rules bound the model:",
+                "oldLine": 31
+              },
+              {
+                "kind": "del",
+                "text": " * the model can only raise attention, and only rules can make a hunk inert.",
+                "oldLine": 32
+              },
+              {
+                "kind": "add",
+                "text": " * Merge a model score (0..levels-1) into a rules-ranked block. Rules bound the model:",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": " * the model can only raise attention, and only rules can make a block inert.",
+                "newLine": 34
+              },
+              {
+                "kind": "context",
+                "text": " */",
+                "oldLine": 33,
+                "newLine": 35
+              },
+              {
+                "kind": "del",
+                "text": "export function mergeModelScore(h: Hunk, modelScore: number): Hunk {",
+                "oldLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "export function mergeModelScore<T extends Pick<EditBlock, \"attention\" | \"score\">>(h: T, modelScore: number): T {",
+                "newLine": 36
+              },
+              {
+                "kind": "context",
+                "text": "  const top = ATTENTION_LEVELS.length - 1;",
+                "oldLine": 35,
+                "newLine": 37
+              },
+              {
+                "kind": "context",
+                "text": "  const level = Math.max(0, Math.min(top, Math.round(modelScore)));",
+                "oldLine": 36,
+                "newLine": 38
+              },
+              {
+                "kind": "context",
+                "text": "  // level 0 \"trivial\" / 1 \"routine\" never un-hide an inert hunk; 2+ raise anything.",
+                "oldLine": 37,
+                "newLine": 39
+              }
+            ],
+            "blocks": [
+              {
+                "id": "060b3a2df956",
+                "hunkId": "2d8245e51bd5",
+                "path": "src/rank/rank.ts",
+                "from": 3,
+                "to": 7,
+                "labels": [
+                  "comment-only"
+                ],
+                "attention": "inert",
+                "score": 0.175,
+                "oldRange": {
+                  "start": 31,
+                  "end": 32
+                },
+                "newRange": {
+                  "start": 33,
+                  "end": 34
+                },
+                "kind": "typing-refactor"
+              },
+              {
+                "id": "9bdad580fb47",
+                "hunkId": "2d8245e51bd5",
+                "path": "src/rank/rank.ts",
+                "from": 8,
+                "to": 10,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.29,
+                "oldRange": {
+                  "start": 34,
+                  "end": 34
+                },
+                "newRange": {
+                  "start": 36,
+                  "end": 36
+                },
+                "kind": "typing-refactor"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.29
+          },
+          {
+            "id": "bee1cddbff9d",
+            "path": "src/rank/rank.ts",
+            "header": "@@ -63,34 +65,26 @@ export async function rankWithModel(ruled: ChangeSet, opts: ModelRankOptions): P",
+            "oldStart": 63,
+            "oldLines": 34,
+            "newStart": 65,
+            "newLines": 26,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 63,
+                "newLine": 65
+              },
+              {
+                "kind": "context",
+                "text": "  const cache = opts.cache ?? new RankCache();",
+                "oldLine": 64,
+                "newLine": 66
+              },
+              {
+                "kind": "context",
+                "text": "  const model: AttentionModel = resolved.model;",
+                "oldLine": 65,
+                "newLine": 67
+              },
+              {
+                "kind": "del",
+                "text": "  const hunks = ruled.files.flatMap((f) => f.hunks);",
+                "oldLine": 66
+              },
+              {
+                "kind": "del",
+                "text": "  const missing = hunks.filter((h) => cache.get(opts.modelSpec, h.id) === undefined);",
+                "oldLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "  const refs = allBlocks(ruled);",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "  const missing = refs.filter((r) => cache.get(opts.modelSpec, r.block.id) === undefined);",
+                "newLine": 69
+              },
+              {
+                "kind": "context",
+                "text": "  const size = opts.batchSize ?? 20;",
+                "oldLine": 68,
+                "newLine": 70
+              },
+              {
+                "kind": "del",
+                "text": "  const batches: Hunk[][] = [];",
+                "oldLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "  const batches: BlockRef[][] = [];",
+                "newLine": 71
+              },
+              {
+                "kind": "context",
+                "text": "  for (let i = 0; i < missing.length; i += size) batches.push(missing.slice(i, i + size));",
+                "oldLine": 70,
+                "newLine": 72
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 71,
+                "newLine": 73
+              },
+              {
+                "kind": "context",
+                "text": "  let failure: string | undefined;",
+                "oldLine": 72,
+                "newLine": 74
+              },
+              {
+                "kind": "context",
+                "text": "  await mapLimit(batches, opts.concurrency ?? 4, async (batch) => {",
+                "oldLine": 73,
+                "newLine": 75
+              },
+              {
+                "kind": "del",
+                "text": "    try {",
+                "oldLine": 74
+              },
+              {
+                "kind": "del",
+                "text": "      const scores = await scoreHunkBatch(model, batch, ruled.intent);",
+                "oldLine": 75
+              },
+              {
+                "kind": "del",
+                "text": "      for (const [id, s] of scores) cache.set(opts.modelSpec, id, s);",
+                "oldLine": 76
+              },
+              {
+                "kind": "del",
+                "text": "    } catch (err) {",
+                "oldLine": 77
+              },
+              {
+                "kind": "del",
+                "text": "      failure ??= err instanceof Error ? err.message.split(\"\\n\")[0]! : String(err);",
+                "oldLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "    const scores = await attemptAsync(() => scoreBlockBatch(model, batch, ruled.intent));",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "    if (!scores.ok) {",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "      failure ??= scores.error;",
+                "newLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "      return;",
+                "newLine": 79
+              },
+              {
+                "kind": "context",
+                "text": "    }",
+                "oldLine": 79,
+                "newLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "    for (const [id, s] of scores.value) cache.set(opts.modelSpec, id, s);",
+                "newLine": 81
+              },
+              {
+                "kind": "context",
+                "text": "  });",
+                "oldLine": 80,
+                "newLine": 82
+              },
+              {
+                "kind": "del",
+                "text": "  if (batches.length > 0) {",
+                "oldLine": 81
+              },
+              {
+                "kind": "del",
+                "text": "    try {",
+                "oldLine": 82
+              },
+              {
+                "kind": "del",
+                "text": "      cache.save();",
+                "oldLine": 83
+              },
+              {
+                "kind": "del",
+                "text": "    } catch {",
+                "oldLine": 84
+              },
+              {
+                "kind": "del",
+                "text": "      // A read-only cache dir only costs a re-rank next time.",
+                "oldLine": 85
+              },
+              {
+                "kind": "del",
+                "text": "    }",
+                "oldLine": 86
+              },
+              {
+                "kind": "del",
+                "text": "  }",
+                "oldLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "  // A read-only cache dir only costs a re-rank next time.",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "  if (batches.length > 0) attempt(() => cache.save());",
+                "newLine": 84
+              },
+              {
+                "kind": "context",
+                "text": "  if (failure) return { changeSet: ruled, rankedBy: \"rules\", warning: `Rules-only ranking: ${opts.modelSpec} failed (${failure}).` };",
+                "oldLine": 88,
+                "newLine": 85
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 89,
+                "newLine": 86
+              },
+              {
+                "kind": "del",
+                "text": "  const changeSet: ChangeSet = {",
+                "oldLine": 90
+              },
+              {
+                "kind": "del",
+                "text": "    ...ruled,",
+                "oldLine": 91
+              },
+              {
+                "kind": "del",
+                "text": "    files: ruled.files.map((f) => ({ ...f, hunks: f.hunks.map((h) => mergeModelScore(h, cache.get(opts.modelSpec, h.id)!)) })),",
+                "oldLine": 92
+              },
+              {
+                "kind": "del",
+                "text": "  };",
+                "oldLine": 93
+              },
+              {
+                "kind": "add",
+                "text": "  const changeSet = mapBlocks(ruled, ({ block }) => mergeModelScore(block, cache.get(opts.modelSpec, block.id)!));",
+                "newLine": 87
+              },
+              {
+                "kind": "context",
+                "text": "  return { changeSet, rankedBy: `rules+${opts.modelSpec}` };",
+                "oldLine": 94,
+                "newLine": 88
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 95,
+                "newLine": 89
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 96,
+                "newLine": 90
+              }
+            ],
+            "blocks": [
+              {
+                "id": "a794b969f2c9",
+                "hunkId": "bee1cddbff9d",
+                "path": "src/rank/rank.ts",
+                "from": 3,
+                "to": 7,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.404,
+                "oldRange": {
+                  "start": 66,
+                  "end": 67
+                },
+                "newRange": {
+                  "start": 68,
+                  "end": 69
+                },
+                "kind": "rename"
+              },
+              {
+                "id": "18aea5f77965",
+                "hunkId": "bee1cddbff9d",
+                "path": "src/rank/rank.ts",
+                "from": 8,
+                "to": 10,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.265,
+                "oldRange": {
+                  "start": 69,
+                  "end": 69
+                },
+                "newRange": {
+                  "start": 71,
+                  "end": 71
+                },
+                "kind": "rename"
+              },
+              {
+                "id": "d75f81ccb191",
+                "hunkId": "bee1cddbff9d",
+                "path": "src/rank/rank.ts",
+                "from": 14,
+                "to": 23,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.533,
+                "oldRange": {
+                  "start": 74,
+                  "end": 78
+                },
+                "newRange": {
+                  "start": 76,
+                  "end": 79
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "18a99e26f3ec",
+                "hunkId": "bee1cddbff9d",
+                "path": "src/rank/rank.ts",
+                "from": 24,
+                "to": 25,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.273,
+                "newRange": {
+                  "start": 81,
+                  "end": 81
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "33fbd393df23",
+                "hunkId": "bee1cddbff9d",
+                "path": "src/rank/rank.ts",
+                "from": 26,
+                "to": 35,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.307,
+                "oldRange": {
+                  "start": 81,
+                  "end": 87
+                },
+                "newRange": {
+                  "start": 83,
+                  "end": 84
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "7324f11cad0b",
+                "hunkId": "bee1cddbff9d",
+                "path": "src/rank/rank.ts",
+                "from": 37,
+                "to": 42,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.386,
+                "oldRange": {
+                  "start": 90,
+                  "end": 93
+                },
+                "newRange": {
+                  "start": 87,
+                  "end": 87
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.533
+          }
+        ]
+      },
+      {
+        "path": "src/rank/rules.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "be16d38a94b4",
+            "path": "src/rank/rules.ts",
+            "header": "@@ -1,4 +1,5 @@",
+            "oldStart": 1,
+            "oldLines": 4,
+            "newStart": 1,
+            "newLines": 5,
+            "lines": [
+              {
+                "kind": "del",
+                "text": "import type { Attention, ChangeSet, FileChange, Hunk } from \"../core/types.ts\";",
+                "oldLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import type { Attention, ChangeSet, EditBlock, FileChange, Hunk } from \"../core/types.ts\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { isolateBlock, mapBlocks } from \"../core/blocks.ts\";",
+                "newLine": 2
+              },
+              {
+                "kind": "context",
+                "text": "import { type CodeLang, LANGS, lex, type LexResult, type StartState } from \"./lexer.ts\";",
+                "oldLine": 2,
+                "newLine": 3
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 3,
+                "newLine": 4
+              },
+              {
+                "kind": "context",
+                "text": "// ---------------------------------------------------------------- path globs",
+                "oldLine": 4,
+                "newLine": 5
+              }
+            ],
+            "blocks": [
+              {
+                "id": "1f42ba9a1b72",
+                "hunkId": "be16d38a94b4",
+                "path": "src/rank/rules.ts",
+                "from": 0,
+                "to": 3,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.252,
+                "oldRange": {
+                  "start": 1,
+                  "end": 1
+                },
+                "newRange": {
+                  "start": 1,
+                  "end": 2
+                },
+                "kind": "typing-refactor"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.252
+          },
+          {
+            "id": "b838a6e5a412",
+            "path": "src/rank/rules.ts",
+            "header": "@@ -104,13 +105,6 @@ export type ContentClass = \"whitespace-only\" | \"comment-only\";",
+            "oldStart": 104,
+            "oldLines": 13,
+            "newStart": 105,
+            "newLines": 6,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "const DIRECTIVE_RE =",
+                "oldLine": 104,
+                "newLine": 105
+              },
+              {
+                "kind": "context",
+                "text": "  /^(?:\\/\\/|#|\\/\\*+)\\s*(?:@[\\w-]+|eslint|prettier-ignore|biome-ignore|istanbul|c8\\b|v8\\b|jshint|tslint|global\\s|noqa|type:|pylint:|mypy:|pyright:|nolint|go:|\\+build|export\\s|#cgo|#include|webpack|[#@]__PURE__|[#@]__NO_SIDE_EFFECTS__|fmt:|isort:|ktlint|noinspection|NOSONAR|language=|sourceMappingURL|-\\*-|!)/i;",
+                "oldLine": 105,
+                "newLine": 106
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 106,
+                "newLine": 107
+              },
+              {
+                "kind": "del",
+                "text": "function sides(hunk: Hunk): { oldText: string; newText: string } {",
+                "oldLine": 107
+              },
+              {
+                "kind": "del",
+                "text": "  return {",
+                "oldLine": 108
+              },
+              {
+                "kind": "del",
+                "text": "    oldText: hunk.lines.filter((l) => l.kind !== \"add\").map((l) => l.text).join(\"\\n\"),",
+                "oldLine": 109
+              },
+              {
+                "kind": "del",
+                "text": "    newText: hunk.lines.filter((l) => l.kind !== \"del\").map((l) => l.text).join(\"\\n\"),",
+                "oldLine": 110
+              },
+              {
+                "kind": "del",
+                "text": "  };",
+                "oldLine": 111
+              },
+              {
+                "kind": "del",
+                "text": "}",
+                "oldLine": 112
+              },
+              {
+                "kind": "del",
+                "text": "",
+                "oldLine": 113
+              },
+              {
+                "kind": "context",
+                "text": "/** Normalise a token stream: optional comment removal, collapsed/trimmed newlines. */",
+                "oldLine": 114,
+                "newLine": 108
+              },
+              {
+                "kind": "context",
+                "text": "function normalise(lex: LexResult, keepComments: boolean, commentsAreCode: boolean): string[] {",
+                "oldLine": 115,
+                "newLine": 109
+              },
+              {
+                "kind": "context",
+                "text": "  const out: string[] = [];",
+                "oldLine": 116,
+                "newLine": 110
+              }
+            ],
+            "blocks": [
+              {
+                "id": "4eeca9b5df01",
+                "hunkId": "b838a6e5a412",
+                "path": "src/rank/rules.ts",
+                "from": 3,
+                "to": 10,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.157,
+                "oldRange": {
+                  "start": 107,
+                  "end": 113
+                },
+                "kind": "rename"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.157
+          },
+          {
+            "id": "007ea49b670a",
+            "path": "src/rank/rules.ts",
+            "header": "@@ -195,15 +189,15 @@ function classifyMarkdown(oldText: string, newText: string): ContentClass | unde",
+            "oldStart": 195,
+            "oldLines": 15,
+            "newStart": 189,
+            "newLines": 15,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  return strip(oldText) === strip(newText) ? \"comment-only\" : undefined;",
+                "oldLine": 195,
+                "newLine": 189
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 196,
+                "newLine": 190
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 197,
+                "newLine": 191
+              },
+              {
+                "kind": "del",
+                "text": "export function classifyContent(path: string, hunk: Hunk): ContentClass | undefined {",
+                "oldLine": 198
+              },
+              {
+                "kind": "add",
+                "text": "export function classifyContent(path: string, sidesOf: { oldText: string; newText: string }): ContentClass | undefined {",
+                "newLine": 192
+              },
+              {
+                "kind": "context",
+                "text": "  const lang = languageOf(path);",
+                "oldLine": 199,
+                "newLine": 193
+              },
+              {
+                "kind": "context",
+                "text": "  if (!lang) return undefined; // unknown language → never inert",
+                "oldLine": 200,
+                "newLine": 194
+              },
+              {
+                "kind": "del",
+                "text": "  const { oldText, newText } = sides(hunk);",
+                "oldLine": 201
+              },
+              {
+                "kind": "add",
+                "text": "  const { oldText, newText } = sidesOf;",
+                "newLine": 195
+              },
+              {
+                "kind": "context",
+                "text": "  if (oldText === newText) return undefined;",
+                "oldLine": 202,
+                "newLine": 196
+              },
+              {
+                "kind": "context",
+                "text": "  return lang === \"markdown\" ? classifyMarkdown(oldText, newText) : classifyCode(lang, oldText, newText);",
+                "oldLine": 203,
+                "newLine": 197
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 204,
+                "newLine": 198
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 205,
+                "newLine": 199
+              },
+              {
+                "kind": "del",
+                "text": "// ---------------------------------------------------------------- hunk ranking",
+                "oldLine": 206
+              },
+              {
+                "kind": "add",
+                "text": "// ---------------------------------------------------------------- block ranking",
+                "newLine": 200
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 207,
+                "newLine": 201
+              },
+              {
+                "kind": "context",
+                "text": "export interface RuleResult {",
+                "oldLine": 208,
+                "newLine": 202
+              },
+              {
+                "kind": "context",
+                "text": "  labels: string[];",
+                "oldLine": 209,
+                "newLine": 203
+              }
+            ],
+            "blocks": [
+              {
+                "id": "a7aa5908d380",
+                "hunkId": "007ea49b670a",
+                "path": "src/rank/rules.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.197,
+                "oldRange": {
+                  "start": 198,
+                  "end": 198
+                },
+                "newRange": {
+                  "start": 192,
+                  "end": 192
+                },
+                "kind": "typing-refactor"
+              },
+              {
+                "id": "1b0def1a370a",
+                "hunkId": "007ea49b670a",
+                "path": "src/rank/rules.ts",
+                "from": 7,
+                "to": 9,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.157,
+                "oldRange": {
+                  "start": 201,
+                  "end": 201
+                },
+                "newRange": {
+                  "start": 195,
+                  "end": 195
+                },
+                "kind": "typing-refactor"
+              },
+              {
+                "id": "d80a7be97fdf",
+                "hunkId": "007ea49b670a",
+                "path": "src/rank/rules.ts",
+                "from": 13,
+                "to": 15,
+                "labels": [
+                  "comment-only"
+                ],
+                "attention": "inert",
+                "score": 0.026,
+                "oldRange": {
+                  "start": 206,
+                  "end": 206
+                },
+                "newRange": {
+                  "start": 200,
+                  "end": 200
+                },
+                "kind": "docs"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.197
+          },
+          {
+            "id": "c9f403d3ac45",
+            "path": "src/rank/rules.ts",
+            "header": "@@ -215,14 +209,15 @@ const LABEL_WEIGHTS: Record<string, number> = {",
+            "oldStart": 215,
+            "oldLines": 14,
+            "newStart": 209,
+            "newLines": 15,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  sensitive: 0.3, ci: 0.2, test: -0.2, docs: -0.3, lockfile: -0.5, generated: -0.5,",
+                "oldLine": 215,
+                "newLine": 209
+              },
+              {
+                "kind": "context",
+                "text": "};",
+                "oldLine": 216,
+                "newLine": 210
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 217,
+                "newLine": 211
+              },
+              {
+                "kind": "del",
+                "text": "export function rankHunkByRules(file: FileChange, hunk: Hunk): RuleResult {",
+                "oldLine": 218
+              },
+              {
+                "kind": "add",
+                "text": "/** Rank one edit block. Content classification sees the whole hunk for lexer context but only this block's change. */",
+                "newLine": 212
+              },
+              {
+                "kind": "add",
+                "text": "export function rankBlockByRules(file: FileChange, hunk: Hunk, block: EditBlock): RuleResult {",
+                "newLine": 213
+              },
+              {
+                "kind": "context",
+                "text": "  const labels = pathLabels(file.path);",
+                "oldLine": 219,
+                "newLine": 214
+              },
+              {
+                "kind": "del",
+                "text": "  // Creating or deleting a file is itself a change, whatever the hunk contains.",
+                "oldLine": 220
+              },
+              {
+                "kind": "del",
+                "text": "  const content = file.status === \"added\" || file.status === \"deleted\" ? undefined : classifyContent(file.path, hunk);",
+                "oldLine": 221
+              },
+              {
+                "kind": "add",
+                "text": "  // Creating or deleting a file is itself a change, whatever the block contains.",
+                "newLine": 215
+              },
+              {
+                "kind": "add",
+                "text": "  const content = file.status === \"added\" || file.status === \"deleted\" ? undefined : classifyContent(file.path, isolateBlock(hunk, block));",
+                "newLine": 216
+              },
+              {
+                "kind": "context",
+                "text": "  if (content) labels.push(content);",
+                "oldLine": 222,
+                "newLine": 217
+              },
+              {
+                "kind": "context",
+                "text": "  if (file.status !== \"modified\") labels.push(file.status);",
+                "oldLine": 223,
+                "newLine": 218
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 224,
+                "newLine": 219
+              },
+              {
+                "kind": "del",
+                "text": "  const changed = hunk.lines.filter((l) => l.kind !== \"context\").length;",
+                "oldLine": 225
+              },
+              {
+                "kind": "add",
+                "text": "  const changed = block.to - block.from;",
+                "newLine": 220
+              },
+              {
+                "kind": "context",
+                "text": "  let score = Math.min(1, Math.log2(1 + changed) / 8);",
+                "oldLine": 226,
+                "newLine": 221
+              },
+              {
+                "kind": "context",
+                "text": "  for (const l of labels) score += LABEL_WEIGHTS[l] ?? 0;",
+                "oldLine": 227,
+                "newLine": 222
+              },
+              {
+                "kind": "context",
+                "text": "  score = Math.round(Math.max(0, Math.min(1, score)) * 1000) / 1000;",
+                "oldLine": 228,
+                "newLine": 223
+              }
+            ],
+            "blocks": [
+              {
+                "id": "1bd4838c3f8f",
+                "hunkId": "c9f403d3ac45",
+                "path": "src/rank/rules.ts",
+                "from": 3,
+                "to": 6,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.514,
+                "oldRange": {
+                  "start": 218,
+                  "end": 218
+                },
+                "newRange": {
+                  "start": 212,
+                  "end": 213
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "7f0cfd53b5d1",
+                "hunkId": "c9f403d3ac45",
+                "path": "src/rank/rules.ts",
+                "from": 7,
+                "to": 11,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.477,
+                "oldRange": {
+                  "start": 220,
+                  "end": 221
+                },
+                "newRange": {
+                  "start": 215,
+                  "end": 216
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "a40599d9c777",
+                "hunkId": "c9f403d3ac45",
+                "path": "src/rank/rules.ts",
+                "from": 14,
+                "to": 16,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.433,
+                "oldRange": {
+                  "start": 225,
+                  "end": 225
+                },
+                "newRange": {
+                  "start": 220,
+                  "end": 220
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.514
+          },
+          {
+            "id": "fddfcbe86613",
+            "path": "src/rank/rules.ts",
+            "header": "@@ -235,12 +230,12 @@ export function rankHunkByRules(file: FileChange, hunk: Hunk): RuleResult {",
+            "oldStart": 235,
+            "oldLines": 12,
+            "newStart": 230,
+            "newLines": 12,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "  return { labels, attention, score };",
+                "oldLine": 235,
+                "newLine": 230
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 236,
+                "newLine": 231
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 237,
+                "newLine": 232
+              },
+              {
+                "kind": "add",
+                "text": "/** Rank a whole hunk as one unit (used when a hunk has no blocks, e.g. tests of legacy fixtures). */",
+                "newLine": 233
+              },
+              {
+                "kind": "add",
+                "text": "export function rankHunkByRules(file: FileChange, hunk: Hunk): RuleResult {",
+                "newLine": 234
+              },
+              {
+                "kind": "add",
+                "text": "  const whole: EditBlock = { id: hunk.id, hunkId: hunk.id, path: hunk.path, from: 0, to: hunk.lines.length, labels: [], attention: \"routine\", score: 0 };",
+                "newLine": 235
+              },
+              {
+                "kind": "add",
+                "text": "  return rankBlockByRules(file, hunk, whole);",
+                "newLine": 236
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 237
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 238
+              },
+              {
+                "kind": "context",
+                "text": "export function applyRules(changeSet: ChangeSet): ChangeSet {",
+                "oldLine": 238,
+                "newLine": 239
+              },
+              {
+                "kind": "del",
+                "text": "  return {",
+                "oldLine": 239
+              },
+              {
+                "kind": "del",
+                "text": "    ...changeSet,",
+                "oldLine": 240
+              },
+              {
+                "kind": "del",
+                "text": "    files: changeSet.files.map((f) => ({",
+                "oldLine": 241
+              },
+              {
+                "kind": "del",
+                "text": "      ...f,",
+                "oldLine": 242
+              },
+              {
+                "kind": "del",
+                "text": "      hunks: f.hunks.map((h) => ({ ...h, ...rankHunkByRules(f, h) })),",
+                "oldLine": 243
+              },
+              {
+                "kind": "del",
+                "text": "    })),",
+                "oldLine": 244
+              },
+              {
+                "kind": "del",
+                "text": "  };",
+                "oldLine": 245
+              },
+              {
+                "kind": "add",
+                "text": "  return mapBlocks(changeSet, ({ file, hunk, block }) => ({ ...block, ...rankBlockByRules(file, hunk, block) }));",
+                "newLine": 240
+              },
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 246,
+                "newLine": 241
+              }
+            ],
+            "blocks": [
+              {
+                "id": "03415796b2ee",
+                "hunkId": "fddfcbe86613",
+                "path": "src/rank/rules.ts",
+                "from": 3,
+                "to": 9,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.339,
+                "newRange": {
+                  "start": 233,
+                  "end": 238
+                },
+                "kind": "behavior"
+              },
+              {
+                "id": "de57b34e440c",
+                "hunkId": "fddfcbe86613",
+                "path": "src/rank/rules.ts",
+                "from": 10,
+                "to": 18,
+                "labels": [],
+                "attention": "needs-eyes",
+                "score": 0.571,
+                "oldRange": {
+                  "start": 239,
+                  "end": 245
+                },
+                "newRange": {
+                  "start": 240,
+                  "end": 240
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "needs-eyes",
+            "score": 0.571
+          }
+        ]
+      },
+      {
+        "path": "test/blocks.test.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "fa33e628fc88",
+            "path": "test/blocks.test.ts",
+            "header": "@@ -0,0 +1,114 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 114,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import { describe, expect, test } from \"bun:test\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { allBlocks, blockText, deriveHunk, isolateBlock, splitHunk } from \"../src/core/blocks.ts\";",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "import { parseDiff } from \"../src/core/diff.ts\";",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import type { EditBlock, Hunk } from \"../src/core/types.ts\";",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "import { applyRules } from \"../src/rank/rules.ts\";",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "const diff = (path: string, header: string, body: string[]) =>",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "  [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join(\"\\n\") + \"\\n\";",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"edit blocks\", () => {",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a hunk fusing two edits splits into two blocks with correct line ranges\", () => {",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "    const files = parseDiff(",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "      diff(\"src/a.ts\", \"@@ -1,6 +1,6 @@\", [\" const a = 1;\", \"-const b = 2;\", \"+const b = 3;\", \" const c = 4;\", \" const d = 5;\", \"-const e = 6;\", \"+const e = 7;\", \" const f = 8;\"]),",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "    );",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "    const hunk = files[0]!.hunks[0]!;",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.blocks).toHaveLength(2);",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "    const [first, second] = hunk.blocks as [EditBlock, EditBlock];",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "    expect(first.oldRange).toEqual({ start: 2, end: 2 });",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "    expect(first.newRange).toEqual({ start: 2, end: 2 });",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "    expect(second.oldRange).toEqual({ start: 5, end: 5 });",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "    expect(second.newRange).toEqual({ start: 5, end: 5 });",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "    expect(first.id).not.toBe(second.id);",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.blocks.every((b) => b.hunkId === hunk.id && b.path === \"src/a.ts\")).toBe(true);",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"pure additions have no old range; pure deletions have no new range\", () => {",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "    const files = parseDiff(diff(\"a.ts\", \"@@ -1,2 +1,3 @@\", [\" x\", \"+y\", \" z\"]));",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "    const b = files[0]!.hunks[0]!.blocks[0]!;",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "    expect(b.oldRange).toBeUndefined();",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "    expect(b.newRange).toEqual({ start: 2, end: 2 });",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "    const del = parseDiff(diff(\"a.ts\", \"@@ -1,3 +1,2 @@\", [\" x\", \"-y\", \" z\"]))[0]!.hunks[0]!.blocks[0]!;",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "    expect(del.newRange).toBeUndefined();",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "    expect(del.oldRange).toEqual({ start: 2, end: 2 });",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a mixed del+add run is one block; context-only input yields none\", () => {",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "    const h = { id: \"h\", path: \"p\", lines: [{ kind: \"del\" as const, text: \"a\", oldLine: 1 }, { kind: \"add\" as const, text: \"b\", newLine: 1 }, { kind: \"add\" as const, text: \"c\", newLine: 2 }] };",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": "    expect(splitHunk(h)).toHaveLength(1);",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "    expect(splitHunk({ id: \"h\", path: \"p\", lines: [{ kind: \"context\", text: \"x\", oldLine: 1, newLine: 1 }] })).toEqual([]);",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"block ids are stable for the same content at the same position and differ by position\", () => {",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "    const a = parseDiff(diff(\"a.ts\", \"@@ -1,2 +1,2 @@\", [\" x\", \"-y\", \"+z\"]))[0]!.hunks[0]!.blocks[0]!;",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "    const b = parseDiff(diff(\"a.ts\", \"@@ -1,2 +1,2 @@\", [\" x\", \"-y\", \"+z\"]))[0]!.hunks[0]!.blocks[0]!;",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": "    const c = parseDiff(diff(\"a.ts\", \"@@ -10,2 +10,2 @@\", [\" x\", \"-y\", \"+z\"]))[0]!.hunks[0]!.blocks[0]!;",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "    expect(a.id).toBe(b.id);",
+                "newLine": 46
+              },
+              {
+                "kind": "add",
+                "text": "    expect(a.id).not.toBe(c.id);",
+                "newLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 48
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"isolateBlock shows only this block's change; other blocks appear as their new side on both sides\", () => {",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "    const hunk = parseDiff(diff(\"a.ts\", \"@@ -1,5 +1,5 @@\", [\" k\", \"-a1\", \"+a2\", \" m\", \"-b1\", \"+b2\"]))[0]!.hunks[0]!;",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "    const [first, second] = hunk.blocks as [EditBlock, EditBlock];",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "    expect(isolateBlock(hunk, first)).toEqual({ oldText: \"k\\na1\\nm\\nb2\", newText: \"k\\na2\\nm\\nb2\" });",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": "    expect(isolateBlock(hunk, second)).toEqual({ oldText: \"k\\na2\\nm\\nb1\", newText: \"k\\na2\\nm\\nb2\" });",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"blockText includes limited context on each side\", () => {",
+                "newLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "    const body = [\" c1\", \" c2\", \" c3\", \" c4\", \" c5\", \"-old\", \"+new\", \" d1\", \" d2\", \" d3\", \" d4\"];",
+                "newLine": 58
+              },
+              {
+                "kind": "add",
+                "text": "    const hunk = parseDiff(diff(\"a.ts\", \"@@ -1,10 +1,10 @@\", body))[0]!.hunks[0]!;",
+                "newLine": 59
+              },
+              {
+                "kind": "add",
+                "text": "    expect(blockText(hunk, hunk.blocks[0]!, 2).split(\"\\n\")).toEqual([\" c4\", \" c5\", \"-old\", \"+new\", \" d1\", \" d2\"]);",
+                "newLine": 60
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 61
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 62
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 63
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"hunks derive from their blocks\", () => {",
+                "newLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "  const base = (blocks: Partial<EditBlock>[]): Hunk => ({",
+                "newLine": 65
+              },
+              {
+                "kind": "add",
+                "text": "    id: \"h\", path: \"p\", header: \"@@\", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], labels: [], attention: \"routine\", score: 0,",
+                "newLine": 66
+              },
+              {
+                "kind": "add",
+                "text": "    blocks: blocks.map((b, k) => ({ id: `b${k}`, hunkId: \"h\", path: \"p\", from: 0, to: 0, labels: [], attention: \"routine\", score: 0, ...b })),",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"attention is the highest block; score the highest block\", () => {",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "    const h = deriveHunk(base([{ attention: \"inert\", score: 0 }, { attention: \"suspicious\", score: 0.9 }, { attention: \"routine\", score: 0.3 }]));",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "    expect(h.attention).toBe(\"suspicious\");",
+                "newLine": 71
+              },
+              {
+                "kind": "add",
+                "text": "    expect(h.score).toBe(0.9);",
+                "newLine": 72
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 73
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"content label only when every block has one; comment-only wins over whitespace-only\", () => {",
+                "newLine": 74
+              },
+              {
+                "kind": "add",
+                "text": "    expect(deriveHunk(base([{ labels: [\"whitespace-only\"] }, { labels: [\"comment-only\"] }])).labels).toEqual([\"comment-only\"]);",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": "    expect(deriveHunk(base([{ labels: [\"whitespace-only\"] }, { labels: [] }])).labels).toEqual([]);",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "    expect(deriveHunk(base([{ labels: [\"test\", \"whitespace-only\"] }, { labels: [\"test\", \"whitespace-only\"] }])).labels).toEqual([\"test\", \"whitespace-only\"]);",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 79
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"rules per block\", () => {",
+                "newLine": 81
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a fused hunk with a reindent and a logic change: the reindent block is inert, the hunk is not\", () => {",
+                "newLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "    const body = [",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "      \" export function f(a: number) {\",",
+                "newLine": 84
+              },
+              {
+                "kind": "add",
+                "text": "      \"-    if (a > 1) {\",",
+                "newLine": 85
+              },
+              {
+                "kind": "add",
+                "text": "      \"-        return a;\",",
+                "newLine": 86
+              },
+              {
+                "kind": "add",
+                "text": "      \"-    }\",",
+                "newLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "      \"+  if (a > 1) {\",",
+                "newLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "      \"+    return a;\",",
+                "newLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "      \"+  }\",",
+                "newLine": 90
+              },
+              {
+                "kind": "add",
+                "text": "      \"   const unrelated = 1;\",",
+                "newLine": 91
+              },
+              {
+                "kind": "add",
+                "text": "      \"   const alsoUnrelated = 2;\",",
+                "newLine": 92
+              },
+              {
+                "kind": "add",
+                "text": "      \"   const stillUnrelated = 3;\",",
+                "newLine": 93
+              },
+              {
+                "kind": "add",
+                "text": "      \"-  return 0;\",",
+                "newLine": 94
+              },
+              {
+                "kind": "add",
+                "text": "      \"+  return a * 2;\",",
+                "newLine": 95
+              },
+              {
+                "kind": "add",
+                "text": "      \" }\",",
+                "newLine": 96
+              },
+              {
+                "kind": "add",
+                "text": "    ];",
+                "newLine": 97
+              },
+              {
+                "kind": "add",
+                "text": "    const cs = applyRules({ target: \"t\", base: \"\", head: \"\", files: parseDiff(diff(\"src/f.ts\", \"@@ -1,9 +1,9 @@\", body)) });",
+                "newLine": 98
+              },
+              {
+                "kind": "add",
+                "text": "    const hunk = cs.files[0]!.hunks[0]!;",
+                "newLine": 99
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.blocks).toHaveLength(2);",
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.blocks[0]!.attention).toBe(\"inert\");",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.blocks[0]!.labels).toContain(\"whitespace-only\");",
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.blocks[1]!.attention).toBe(\"routine\");",
+                "newLine": 103
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.attention).toBe(\"routine\");",
+                "newLine": 104
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunk.labels).not.toContain(\"whitespace-only\");",
+                "newLine": 105
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 106
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 107
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"allBlocks walks every block with its file and hunk\", async () => {",
+                "newLine": 108
+              },
+              {
+                "kind": "add",
+                "text": "    const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/sample-a.diff`).text());",
+                "newLine": 109
+              },
+              {
+                "kind": "add",
+                "text": "    const refs = allBlocks({ target: \"t\", base: \"\", head: \"\", files });",
+                "newLine": 110
+              },
+              {
+                "kind": "add",
+                "text": "    expect(refs).toHaveLength(27);",
+                "newLine": 111
+              },
+              {
+                "kind": "add",
+                "text": "    expect(refs.every((r) => r.hunk.blocks.includes(r.block) && r.file.hunks.includes(r.hunk))).toBe(true);",
+                "newLine": 112
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 113
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 114
+              }
+            ],
+            "blocks": [
+              {
+                "id": "008f1854031d",
+                "hunkId": "fa33e628fc88",
+                "path": "test/blocks.test.ts",
+                "from": 0,
+                "to": 114,
+                "labels": [
+                  "test",
+                  "added"
+                ],
+                "attention": "routine",
+                "score": 0.425,
+                "newRange": {
+                  "start": 1,
+                  "end": 114
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test",
+              "added"
+            ],
+            "attention": "routine",
+            "score": 0.425
+          }
+        ]
+      },
+      {
+        "path": "test/model.test.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "70c7977f1fa0",
+            "path": "test/model.test.ts",
+            "header": "@@ -43,7 +43,7 @@ function mockModel(scoreFor: (hunkId: string) => number) {",
+            "oldStart": 43,
+            "oldLines": 7,
+            "newStart": 43,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "}",
+                "oldLine": 43,
+                "newLine": 43
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 44,
+                "newLine": 44
+              },
+              {
+                "kind": "context",
+                "text": "describe(\"model ranking with the mock decision model\", () => {",
+                "oldLine": 45,
+                "newLine": 45
+              },
+              {
+                "kind": "del",
+                "text": "  test(\"batches questions, one review_attention score question per hunk\", async () => {",
+                "oldLine": 46
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"batches questions, one review_attention score question per edit block\", async () => {",
+                "newLine": 46
+              },
+              {
+                "kind": "context",
+                "text": "    const cs = await sample();",
+                "oldLine": 47,
+                "newLine": 47
+              },
+              {
+                "kind": "context",
+                "text": "    const { model, calls } = mockModel(() => 1);",
+                "oldLine": 48,
+                "newLine": 48
+              },
+              {
+                "kind": "context",
+                "text": "    const res = await rankChangeSet(cs, {",
+                "oldLine": 49,
+                "newLine": 49
+              }
+            ],
+            "blocks": [
+              {
+                "id": "ae7dbd84136d",
+                "hunkId": "70c7977f1fa0",
+                "path": "test/model.test.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.114,
+                "oldRange": {
+                  "start": 46,
+                  "end": 46
+                },
+                "newRange": {
+                  "start": 46,
+                  "end": 46
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.114
+          },
+          {
+            "id": "e40aa6c22035",
+            "path": "test/model.test.ts",
+            "header": "@@ -54,7 +54,7 @@ describe(\"model ranking with the mock decision model\", () => {",
+            "oldStart": 54,
+            "oldLines": 7,
+            "newStart": 54,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "    });",
+                "oldLine": 54,
+                "newLine": 54
+              },
+              {
+                "kind": "context",
+                "text": "    expect(res.rankedBy).toBe(\"rules+mock:attention\");",
+                "oldLine": 55,
+                "newLine": 55
+              },
+              {
+                "kind": "context",
+                "text": "    expect(res.warning).toBeUndefined();",
+                "oldLine": 56,
+                "newLine": 56
+              },
+              {
+                "kind": "del",
+                "text": "    expect(calls).toEqual([8, 8, 4]); // 20 hunks",
+                "oldLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "    expect(calls).toEqual([8, 8, 8, 3]); // 27 edit blocks in 20 hunks",
+                "newLine": 57
+              },
+              {
+                "kind": "context",
+                "text": "  });",
+                "oldLine": 58,
+                "newLine": 58
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 59,
+                "newLine": 59
+              },
+              {
+                "kind": "context",
+                "text": "  test(\"second run makes 0 requests (cache by hunk hash)\", async () => {",
+                "oldLine": 60,
+                "newLine": 60
+              }
+            ],
+            "blocks": [
+              {
+                "id": "a982b65c4911",
+                "hunkId": "e40aa6c22035",
+                "path": "test/model.test.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.049,
+                "oldRange": {
+                  "start": 57,
+                  "end": 57
+                },
+                "newRange": {
+                  "start": 57,
+                  "end": 57
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.049
+          },
+          {
+            "id": "c7eda15bda4e",
+            "path": "test/model.test.ts",
+            "header": "@@ -74,12 +74,16 @@ describe(\"model ranking with the mock decision model\", () => {",
+            "oldStart": 74,
+            "oldLines": 12,
+            "newStart": 74,
+            "newLines": 16,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 74,
+                "newLine": 74
+              },
+              {
+                "kind": "context",
+                "text": "  test(\"model raises attention per hunk and sorts within a level\", async () => {",
+                "oldLine": 75,
+                "newLine": 75
+              },
+              {
+                "kind": "context",
+                "text": "    const cs = await sample();",
+                "oldLine": 76,
+                "newLine": 76
+              },
+              {
+                "kind": "del",
+                "text": "    const target = cs.files[0]!.hunks[0]!.id;",
+                "oldLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "    const hunk = cs.files[0]!.hunks[0]!;",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "    const target = hunk.blocks[0]!.id;",
+                "newLine": 78
+              },
+              {
+                "kind": "context",
+                "text": "    const { model } = mockModel((id) => (id === target ? 3 : 0.4));",
+                "oldLine": 78,
+                "newLine": 79
+              },
+              {
+                "kind": "context",
+                "text": "    const res = await rankChangeSet(cs, { modelSpec: \"mock:attention\", cache: new RankCache(tmpCache()), resolveModel: () => ({ ok: true, model }) });",
+                "oldLine": 79,
+                "newLine": 80
+              },
+              {
+                "kind": "context",
+                "text": "    const hunks = res.changeSet.files.flatMap((f) => f.hunks);",
+                "oldLine": 80,
+                "newLine": 81
+              },
+              {
+                "kind": "del",
+                "text": "    expect(hunks.find((h) => h.id === target)!.attention).toBe(\"suspicious\");",
+                "oldLine": 81
+              },
+              {
+                "kind": "del",
+                "text": "    expect(hunks.filter((h) => h.attention === \"suspicious\")).toHaveLength(1);",
+                "oldLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "    const blocks = hunks.flatMap((h) => h.blocks);",
+                "newLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "    expect(blocks.find((b) => b.id === target)!.attention).toBe(\"suspicious\");",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "    expect(blocks.filter((b) => b.attention === \"suspicious\")).toHaveLength(1);",
+                "newLine": 84
+              },
+              {
+                "kind": "add",
+                "text": "    // The hunk inherits its highest block.",
+                "newLine": 85
+              },
+              {
+                "kind": "add",
+                "text": "    expect(hunks.find((h) => h.id === hunk.id)!.attention).toBe(\"suspicious\");",
+                "newLine": 86
+              },
+              {
+                "kind": "context",
+                "text": "  });",
+                "oldLine": 83,
+                "newLine": 87
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 84,
+                "newLine": 88
+              },
+              {
+                "kind": "context",
+                "text": "  test(\"missing key → rankedBy rules with a warning\", async () => {",
+                "oldLine": 85,
+                "newLine": 89
+              }
+            ],
+            "blocks": [
+              {
+                "id": "6b13229b80a7",
+                "hunkId": "c7eda15bda4e",
+                "path": "test/model.test.ts",
+                "from": 3,
+                "to": 6,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.087,
+                "oldRange": {
+                  "start": 77,
+                  "end": 77
+                },
+                "newRange": {
+                  "start": 77,
+                  "end": 78
+                },
+                "kind": "test"
+              },
+              {
+                "id": "4c0ca3f3d98e",
+                "hunkId": "c7eda15bda4e",
+                "path": "test/model.test.ts",
+                "from": 9,
+                "to": 16,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.123,
+                "oldRange": {
+                  "start": 81,
+                  "end": 82
+                },
+                "newRange": {
+                  "start": 82,
+                  "end": 86
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.123
+          },
+          {
+            "id": "945fe34edf55",
+            "path": "test/model.test.ts",
+            "header": "@@ -113,7 +117,7 @@ describe(\"model ranking with the mock decision model\", () => {",
+            "oldStart": 113,
+            "oldLines": 7,
+            "newStart": 117,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "});",
+                "oldLine": 113,
+                "newLine": 117
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 114,
+                "newLine": 118
+              },
+              {
+                "kind": "context",
+                "text": "describe(\"mergeModelScore: rules bound the model\", () => {",
+                "oldLine": 115,
+                "newLine": 119
+              },
+              {
+                "kind": "del",
+                "text": "  const base: Hunk = { id: \"x\", path: \"a.ts\", header: \"@@\", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], labels: [], attention: \"inert\", score: 0 };",
+                "oldLine": 116
+              },
+              {
+                "kind": "add",
+                "text": "  const base: Hunk = { id: \"x\", path: \"a.ts\", header: \"@@\", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], blocks: [], labels: [], attention: \"inert\", score: 0 };",
+                "newLine": 120
+              },
+              {
+                "kind": "context",
+                "text": "  test(\"model cannot make a hunk inert\", () => {",
+                "oldLine": 117,
+                "newLine": 121
+              },
+              {
+                "kind": "context",
+                "text": "    expect(mergeModelScore({ ...base, attention: \"routine\" }, 0).attention).toBe(\"routine\");",
+                "oldLine": 118,
+                "newLine": 122
+              },
+              {
+                "kind": "context",
+                "text": "    expect(mergeModelScore({ ...base, attention: \"needs-eyes\" }, 0).attention).toBe(\"needs-eyes\");",
+                "oldLine": 119,
+                "newLine": 123
+              }
+            ],
+            "blocks": [
+              {
+                "id": "51f8301ea145",
+                "hunkId": "945fe34edf55",
+                "path": "test/model.test.ts",
+                "from": 3,
+                "to": 5,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.028,
+                "oldRange": {
+                  "start": 116,
+                  "end": 116
+                },
+                "newRange": {
+                  "start": 120,
+                  "end": 120
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.028
+          }
+        ]
+      }
+    ]
+  },
+  "classification": {
+    "kind": "logic",
+    "areas": [],
+    "maxAttention": "needs-eyes",
+    "sensitivePaths": [],
+    "counts": {
+      "files": 11,
+      "blocks": 50,
+      "inert": 3
+    }
+  },
+  "verdict": {
+    "tier": "medium",
+    "requiredHumans": 1,
+    "reasons": [
+      "logic change → medium"
+    ]
+  },
+  "cards": [
+    {
+      "id": "eec352001524",
+      "title": "Rank Changes by Edit Block",
+      "color": "amber",
+      "kind": "logic",
+      "areas": [],
+      "labels": [
+        "added"
+      ],
+      "blockIds": [
+        "405f36860b83",
+        "29a3b9333661",
+        "af7fa5d91547",
+        "433165ba29f7",
+        "7102fde3e8a1",
+        "ef774989deb5",
+        "a7fc25338ef7",
+        "57531f94407c",
+        "080ad8d92748",
+        "c3fc830f99f6",
+        "a3d3874b6a4f",
+        "42bb310f39b2",
+        "d75f81ccb191",
+        "18a99e26f3ec",
+        "33fbd393df23",
+        "7324f11cad0b",
+        "1bd4838c3f8f",
+        "7f0cfd53b5d1",
+        "a40599d9c777",
+        "03415796b2ee",
+        "de57b34e440c"
+      ],
+      "attention": "needs-eyes",
+      "score": 0.738,
+      "blockKind": "behavior",
+      "paragraph": "`parseDiff` now splits each hunk into contiguous changed-line blocks, and `applyRules` and model scoring rank blocks individually before `deriveHunk` aggregates their labels, attention, and score. `inert-audit.ts` reports inert edit blocks instead of hunks, while `rankWithModel` uses `Result` helpers to capture scoring failures and cache-save errors."
+    },
+    {
+      "id": "a4430321ec76",
+      "title": "Type Hunk Edit Blocks and Summaries",
+      "color": "amber",
+      "kind": "additive",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "286d059a0db5"
+      ],
+      "attention": "needs-eyes",
+      "score": 0.611,
+      "blockKind": "types",
+      "paragraph": "`Hunk` now includes derived `blocks`, `labels`, `attention`, and `score` fields. The new `EditBlock` type records each contiguous run of changed lines by ID, hunk ID, path, line-index bounds, optional old/new line ranges, labels, attention, and score."
+    },
+    {
+      "id": "ebaa2960cd7e",
+      "title": "Typing refactor across 4 files",
+      "color": "green",
+      "kind": "logic",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "83a889007bb8",
+        "90afb76d678c",
+        "df3ff9e8a12f",
+        "3dd432d2d44f",
+        "0702e47429d9",
+        "9bdad580fb47",
+        "1f42ba9a1b72",
+        "a7aa5908d380",
+        "1b0def1a370a"
+      ],
+      "attention": "routine",
+      "score": 0.444,
+      "blockKind": "typing-refactor",
+      "paragraph": "9 edits change types, annotations or function form only (Hunk, blocks, hunk); runtime behaviour is unchanged.",
+      "mechanical": true
+    },
+    {
+      "id": "5644666f2732",
+      "title": "Test edit-block splitting and ranking",
+      "color": "green",
+      "kind": "test",
+      "areas": [],
+      "labels": [
+        "added",
+        "test"
+      ],
+      "blockIds": [
+        "008f1854031d",
+        "ae7dbd84136d",
+        "a982b65c4911",
+        "6b13229b80a7",
+        "4c0ca3f3d98e",
+        "51f8301ea145"
+      ],
+      "attention": "routine",
+      "score": 0.425,
+      "blockKind": "test",
+      "paragraph": "Tests verify that hunks split into edit blocks with correct ranges and stable IDs, and that `isolateBlock`, `blockText`, and `deriveHunk` handle block content and aggregate rankings. Model-ranking tests now expect questions and attention scores per edit block, while checking that each hunk inherits its highest-ranked block."
+    },
+    {
+      "id": "96af4f057c13",
+      "title": "Rename across 3 files",
+      "color": "green",
+      "kind": "logic",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "1615069dde8e",
+        "5ae904c3bd18",
+        "06a4aa512f28",
+        "70a36e435953",
+        "a794b969f2c9",
+        "18aea5f77965",
+        "4eeca9b5df01"
+      ],
+      "attention": "routine",
+      "score": 0.413,
+      "blockKind": "rename",
+      "paragraph": "7 edits rename identifiers (block, hunks, refs); behaviour is unchanged.",
+      "mechanical": true
+    },
+    {
+      "id": "c8af32f3d31b",
+      "title": "Document Error Handling Rules",
+      "color": "green",
+      "kind": "docs",
+      "areas": [],
+      "labels": [
+        "docs"
+      ],
+      "blockIds": [
+        "79aae49d3106"
+      ],
+      "attention": "routine",
+      "score": 0.254,
+      "blockKind": "docs",
+      "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes."
+    },
+    {
+      "id": "7bc35c9c049f",
+      "title": "Document Hunk-Based Edit Blocks",
+      "color": "green",
+      "kind": "docs",
+      "areas": [],
+      "labels": [
+        "docs"
+      ],
+      "blockIds": [
+        "e9c548142d67",
+        "52c525e842ad"
+      ],
+      "attention": "routine",
+      "score": 0.14,
+      "blockKind": "docs",
+      "paragraph": "The data model now places `EditBlock`s on `Hunk.blocks`, with `from` and `to` indexing `hunk.lines` and optional `oldRange` and `newRange`; hunk labels, attention, and score derive from its blocks. `Review` no longer includes a separate `blocks` field."
+    },
+    {
+      "id": "clean",
+      "title": "verified clean · 3 edits",
+      "color": "grey",
+      "kind": "logic",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "6eae5619f49e",
+        "060b3a2df956",
+        "d80a7be97fdf"
+      ],
+      "attention": "inert",
+      "score": 0.175,
+      "fixed": "clean"
+    }
+  ],
+  "untouched": [
+    "auth",
+    "billing",
+    "data",
+    "infra",
+    "prompts"
+  ],
+  "dispatches": [],
+  "rankedBy": "rules+openai:gpt-6-luna"
+}

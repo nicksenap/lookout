@@ -1,0 +1,628 @@
+diff --git a/src/core/blocks.ts b/src/core/blocks.ts
+new file mode 100644
+index 0000000..1c02d1b
+--- /dev/null
++++ b/src/core/blocks.ts
+@@ -0,0 +1,115 @@
++import { ATTENTION_ORDER, type Attention, type ChangeSet, type DiffLine, type EditBlock, type FileChange, type Hunk } from "./types.ts";
++
++export function blockId(path: string, lines: DiffLine[], position: string): string {
++  const h = new Bun.CryptoHasher("sha1");
++  h.update(path);
++  h.update("\0");
++  h.update(position);
++  for (const l of lines) h.update(`\0${l.kind[0]}${l.text}`);
++  return h.digest("hex").slice(0, 12);
++}
++
++/** Split a hunk's lines into contiguous runs of changed lines. Pure structure: labels and attention are unset. */
++export function splitHunk(hunk: Pick<Hunk, "id" | "path" | "lines">): EditBlock[] {
++  const blocks: EditBlock[] = [];
++  const lines = hunk.lines;
++  let i = 0;
++  while (i < lines.length) {
++    if (lines[i]!.kind === "context") {
++      i++;
++      continue;
++    }
++    const from = i;
++    while (i < lines.length && lines[i]!.kind !== "context") i++;
++    const run = lines.slice(from, i);
++    const olds = run.filter((l) => l.oldLine !== undefined).map((l) => l.oldLine!);
++    const news = run.filter((l) => l.newLine !== undefined).map((l) => l.newLine!);
++    const block: EditBlock = {
++      id: blockId(hunk.path, run, `${olds[0] ?? "-"}:${news[0] ?? "-"}`),
++      hunkId: hunk.id,
++      path: hunk.path,
++      from,
++      to: i,
++      labels: [],
++      attention: "routine",
++      score: 0,
++    };
++    if (olds.length) block.oldRange = { start: olds[0]!, end: olds[olds.length - 1]! };
++    if (news.length) block.newRange = { start: news[0]!, end: news[news.length - 1]! };
++    blocks.push(block);
++  }
++  return blocks;
++}
++
++export const blockLines = (hunk: Hunk, block: EditBlock): DiffLine[] => hunk.lines.slice(block.from, block.to);
++
++/**
++ * The hunk's text on each side with every *other* block neutralised (shown as its new
++ * side on both sides), so a comparison of old vs new reflects only this block while the
++ * lexer still sees the whole hunk's context (open strings, block comments).
++ */
++export function isolateBlock(hunk: Hunk, block: EditBlock): { oldText: string; newText: string } {
++  const oldSide: string[] = [];
++  const newSide: string[] = [];
++  hunk.lines.forEach((l, k) => {
++    const inside = k >= block.from && k < block.to;
++    if (l.kind === "context" || (!inside && l.kind === "add")) {
++      oldSide.push(l.text);
++      newSide.push(l.text);
++    } else if (inside && l.kind === "del") oldSide.push(l.text);
++    else if (inside && l.kind === "add") newSide.push(l.text);
++    // a `del` outside the block is dropped from both sides
++  });
++  return { oldText: oldSide.join("\n"), newText: newSide.join("\n") };
++}
++
++/** The block's lines with up to `context` unchanged lines on each side, rendered as a diff. */
++export function blockText(hunk: Hunk, block: EditBlock, context = 3): string {
++  const from = Math.max(0, block.from - context);
++  const to = Math.min(hunk.lines.length, block.to + context);
++  return hunk.lines
++    .slice(from, to)
++    .map((l) => (l.kind === "add" ? "+" : l.kind === "del" ? "-" : " ") + l.text)
++    .join("\n");
++}
++
++const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
++
++const CONTENT_LABELS = ["whitespace-only", "comment-only"];
++
++/** Recompute a hunk's labels, attention and score from its blocks. */
++export function deriveHunk(hunk: Hunk): Hunk {
++  if (hunk.blocks.length === 0) return hunk;
++  const labels: string[] = [];
++  for (const b of hunk.blocks) for (const l of b.labels) if (!CONTENT_LABELS.includes(l) && !labels.includes(l)) labels.push(l);
++  const contents = hunk.blocks.map((b) => b.labels.find((l) => CONTENT_LABELS.includes(l)));
++  if (contents.every((c) => c !== undefined)) labels.push(contents.includes("comment-only") ? "comment-only" : "whitespace-only");
++  let attention: Attention = "inert";
++  let score = 0;
++  for (const b of hunk.blocks) {
++    if (rank(b.attention) > rank(attention)) attention = b.attention;
++    score = Math.max(score, b.score);
++  }
++  return { ...hunk, labels, attention, score };
++}
++
++export interface BlockRef {
++  file: FileChange;
++  hunk: Hunk;
++  block: EditBlock;
++}
++
++export function allBlocks(changeSet: ChangeSet): BlockRef[] {
++  return changeSet.files.flatMap((file) => file.hunks.flatMap((hunk) => hunk.blocks.map((block) => ({ file, hunk, block }))));
++}
++
++/** Return the change set with `fn` applied to every block and hunks re-derived. */
++export function mapBlocks(changeSet: ChangeSet, fn: (ref: BlockRef) => EditBlock): ChangeSet {
++  return {
++    ...changeSet,
++    files: changeSet.files.map((file) => ({
++      ...file,
++      hunks: file.hunks.map((hunk) => deriveHunk({ ...hunk, blocks: hunk.blocks.map((block) => fn({ file, hunk, block })) })),
++    })),
++  };
++}
+diff --git a/src/core/diff.ts b/src/core/diff.ts
+index c4c55f6..b86c1ab 100644
+--- a/src/core/diff.ts
++++ b/src/core/diff.ts
+@@ -1,3 +1,4 @@
++import { splitHunk } from "./blocks.ts";
+ import type { DiffLine, FileChange, Hunk } from "./types.ts";
+ 
+ /** Unquote a git C-style quoted path ("a/\303\251 x") or return it unchanged. */
+@@ -129,8 +130,9 @@ export function parseDiff(text: string): FileChange[] {
+         }
+         i++;
+       }
++      const id = hunkId(path, header, body);
+       file.hunks.push({
+-        id: hunkId(path, header, body),
++        id,
+         path,
+         header,
+         oldStart,
+@@ -138,6 +140,7 @@ export function parseDiff(text: string): FileChange[] {
+         newStart,
+         newLines,
+         lines: body,
++        blocks: splitHunk({ id, path, lines: body }),
+         labels: [],
+         attention: "routine",
+         score: 0,
+diff --git a/src/core/result.ts b/src/core/result.ts
+new file mode 100644
+index 0000000..f2fe80c
+--- /dev/null
++++ b/src/core/result.ts
+@@ -0,0 +1,29 @@
++/**
++ * Expected, recoverable failures are returned, not thrown. A missing API key, a failed
++ * model call, `gh` not installed, invalid config, an agent's output that does not parse:
++ * all are `Result`s the pipeline degrades past. Programmer errors and impossible states
++ * throw. Modules that call throwing libraries convert once, at the call site.
++ */
++export type Result<T, E = string> = { ok: true; value: T } | { ok: false; error: E };
++
++export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
++export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
++
++/** Run a throwing function and return its outcome as a Result with the error's first line as message. */
++export function attempt<T>(fn: () => T): Result<T> {
++  try {
++    return ok(fn());
++  } catch (e) {
++    return err(message(e));
++  }
++}
++
++export async function attemptAsync<T>(fn: () => Promise<T>): Promise<Result<T>> {
++  try {
++    return ok(await fn());
++  } catch (e) {
++    return err(message(e));
++  }
++}
++
++export const message = (e: unknown): string => (e instanceof Error ? e.message.split("\n")[0]! : String(e));
+diff --git a/src/core/types.ts b/src/core/types.ts
+index 41984fe..bed4523 100644
+--- a/src/core/types.ts
++++ b/src/core/types.ts
+@@ -21,6 +21,29 @@ export interface Hunk {
+   newStart: number;
+   newLines: number;
+   lines: DiffLine[];
++  /** Contiguous runs of changed lines; the unit lookout judges. Derived from `lines`. */
++  blocks: EditBlock[];
++  /** Derived from `blocks`: union of path labels, content label only if every block has one. */
++  labels: string[];
++  /** Derived from `blocks`: the highest attention and score among them. */
++  attention: Attention;
++  score: number;
++}
++
++/**
++ * One contiguous run of added and/or removed lines inside a hunk. A git hunk fuses
++ * edits that are within a few lines of each other; edit blocks undo that.
++ */
++export interface EditBlock {
++  id: string;
++  hunkId: string;
++  path: string;
++  /** Index range into the hunk's `lines`, `from` inclusive, `to` exclusive. */
++  from: number;
++  to: number;
++  /** Line ranges on each side, inclusive; `undefined` when the block has no lines on that side. */
++  oldRange?: { start: number; end: number };
++  newRange?: { start: number; end: number };
+   labels: string[];
+   attention: Attention;
+   score: number;
+diff --git a/src/rank/model.ts b/src/rank/model.ts
+index 38fd6d8..d4ac0d5 100644
+--- a/src/rank/model.ts
++++ b/src/rank/model.ts
+@@ -5,7 +5,8 @@ import { createOpenAI } from "@ai-sdk/openai";
+ import { createPerplexity } from "@ai-sdk/perplexity";
+ import { createTypeSafeAi } from "@ai-sdk/typesafe-ai";
+ import { createProviderRegistry, experimental_decide, type Experimental_DecisionModel, type Experimental_DecisionQuestion } from "ai";
+-import type { Hunk, Intent } from "../core/types.ts";
++import { blockText, type BlockRef } from "../core/blocks.ts";
++import type { Intent } from "../core/types.ts";
+ 
+ export type AttentionModel = Experimental_DecisionModel;
+ export type Env = Record<string, string | undefined>;
+@@ -59,34 +60,35 @@ export const ATTENTION_LEVELS = [
+   "suspicious: likely bug, security risk, contradicts the stated intent, weakens or deletes checks/tests, or does something unexplained",
+ ] as const;
+ 
+-const MAX_LINES_PER_HUNK = 200;
++export const questionId = (blockId: string) => `review_attention_${blockId}`;
+ 
+-export const questionId = (hunkId: string) => `review_attention_${hunkId}`;
++const MAX_LINES_PER_BLOCK = 200;
+ 
+-function hunkText(h: Hunk): string {
+-  const body = h.lines.slice(0, MAX_LINES_PER_HUNK).map((l) => (l.kind === "add" ? "+" : l.kind === "del" ? "-" : " ") + l.text);
+-  if (h.lines.length > MAX_LINES_PER_HUNK) body.push(`… ${h.lines.length - MAX_LINES_PER_HUNK} more lines`);
+-  return `${h.header}\n${body.join("\n")}`;
++function text(ref: BlockRef): string {
++  const full = blockText(ref.hunk, ref.block);
++  const lines = full.split("\n");
++  if (lines.length <= MAX_LINES_PER_BLOCK) return `${ref.hunk.header}\n${full}`;
++  return `${ref.hunk.header}\n${lines.slice(0, MAX_LINES_PER_BLOCK).join("\n")}\n… ${lines.length - MAX_LINES_PER_BLOCK} more lines`;
+ }
+ 
+ /**
+- * One `decide` call for a batch of hunks of the same change. Shared state is the
+- * change intent plus the batch; each hunk gets one `review_attention` score question.
+- * Returns score per hunk id in [0, ATTENTION_LEVELS.length - 1].
++ * One `decide` call for a batch of edit blocks of the same change. Shared state is the
++ * change intent plus the batch; each block gets one `review_attention` score question.
++ * Returns score per block id in [0, ATTENTION_LEVELS.length - 1].
+  */
+-export async function scoreHunkBatch(model: AttentionModel, hunks: Hunk[], intent?: Intent): Promise<Map<string, number>> {
++export async function scoreBlockBatch(model: AttentionModel, refs: BlockRef[], intent?: Intent): Promise<Map<string, number>> {
+   const questions: Record<string, Experimental_DecisionQuestion> = {};
+-  for (const h of hunks) {
+-    questions[questionId(h.id)] = {
++  for (const { block } of refs) {
++    questions[questionId(block.id)] = {
+       type: "score",
+-      instructions: `How much reviewer attention does hunk ${h.id} (${h.path}) need? Judge only that hunk, using the rest of the state as context.`,
++      instructions: `How much reviewer attention does edit ${block.id} (${block.path}) need? Judge only the +/- lines of that edit, using the rest of the state as context.`,
+       criteria: [...ATTENTION_LEVELS],
+     };
+   }
+   const state = {
+-    task: "Rank hunks of an agent-written code change by how much human review attention each deserves.",
++    task: "Rank the edits of an agent-written code change by how much human review attention each deserves.",
+     intent: intent ? { title: intent.title, body: intent.body.slice(0, 4000) } : null,
+-    hunks: hunks.map((h) => ({ id: h.id, path: h.path, labels: h.labels, diff: hunkText(h) })),
++    edits: refs.map((ref) => ({ id: ref.block.id, path: ref.block.path, labels: ref.block.labels, diff: text(ref) })),
+   };
+   const result = await experimental_decide({
+     model,
+@@ -95,10 +97,10 @@ export async function scoreHunkBatch(model: AttentionModel, hunks: Hunk[], inten
+     abortSignal: AbortSignal.timeout(90_000),
+   });
+   const scores = new Map<string, number>();
+-  for (const h of hunks) {
+-    const answer = (result.answers as Record<string, { type: string; score?: number }>)[questionId(h.id)];
+-    if (answer?.type !== "score" || typeof answer.score !== "number") throw new Error(`no score for hunk ${h.id}`);
+-    scores.set(h.id, answer.score);
++  for (const { block } of refs) {
++    const answer = (result.answers as Record<string, { type: string; score?: number }>)[questionId(block.id)];
++    if (answer?.type !== "score" || typeof answer.score !== "number") throw new Error(`no score for edit ${block.id}`);
++    scores.set(block.id, answer.score);
+   }
+   return scores;
+ }
+diff --git a/src/rank/rank.ts b/src/rank/rank.ts
+index 0cf3570..6b4a10f 100644
+--- a/src/rank/rank.ts
++++ b/src/rank/rank.ts
+@@ -1,6 +1,8 @@
+-import { ATTENTION_ORDER, type Attention, type ChangeSet, type Hunk } from "../core/types.ts";
++import { allBlocks, type BlockRef, mapBlocks } from "../core/blocks.ts";
++import { ATTENTION_ORDER, type Attention, type ChangeSet, type EditBlock, type Hunk } from "../core/types.ts";
++import { attempt, attemptAsync } from "../core/result.ts";
+ import { RankCache } from "./cache.ts";
+-import { type AttentionModel, type Env, resolveAttentionModel, type ResolvedModel, scoreHunkBatch, ATTENTION_LEVELS } from "./model.ts";
++import { type AttentionModel, type Env, resolveAttentionModel, type ResolvedModel, scoreBlockBatch, ATTENTION_LEVELS } from "./model.ts";
+ import { applyRules } from "./rules.ts";
+ 
+ export interface RankResult {
+@@ -28,10 +30,10 @@ export function compareHunks(a: Hunk, b: Hunk): number {
+ const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
+ 
+ /**
+- * Merge a model score (0..levels-1) into a rules-ranked hunk. Rules bound the model:
+- * the model can only raise attention, and only rules can make a hunk inert.
++ * Merge a model score (0..levels-1) into a rules-ranked block. Rules bound the model:
++ * the model can only raise attention, and only rules can make a block inert.
+  */
+-export function mergeModelScore(h: Hunk, modelScore: number): Hunk {
++export function mergeModelScore<T extends Pick<EditBlock, "attention" | "score">>(h: T, modelScore: number): T {
+   const top = ATTENTION_LEVELS.length - 1;
+   const level = Math.max(0, Math.min(top, Math.round(modelScore)));
+   // level 0 "trivial" / 1 "routine" never un-hide an inert hunk; 2+ raise anything.
+@@ -63,34 +65,26 @@ export async function rankWithModel(ruled: ChangeSet, opts: ModelRankOptions): P
+ 
+   const cache = opts.cache ?? new RankCache();
+   const model: AttentionModel = resolved.model;
+-  const hunks = ruled.files.flatMap((f) => f.hunks);
+-  const missing = hunks.filter((h) => cache.get(opts.modelSpec, h.id) === undefined);
++  const refs = allBlocks(ruled);
++  const missing = refs.filter((r) => cache.get(opts.modelSpec, r.block.id) === undefined);
+   const size = opts.batchSize ?? 20;
+-  const batches: Hunk[][] = [];
++  const batches: BlockRef[][] = [];
+   for (let i = 0; i < missing.length; i += size) batches.push(missing.slice(i, i + size));
+ 
+   let failure: string | undefined;
+   await mapLimit(batches, opts.concurrency ?? 4, async (batch) => {
+-    try {
+-      const scores = await scoreHunkBatch(model, batch, ruled.intent);
+-      for (const [id, s] of scores) cache.set(opts.modelSpec, id, s);
+-    } catch (err) {
+-      failure ??= err instanceof Error ? err.message.split("\n")[0]! : String(err);
++    const scores = await attemptAsync(() => scoreBlockBatch(model, batch, ruled.intent));
++    if (!scores.ok) {
++      failure ??= scores.error;
++      return;
+     }
++    for (const [id, s] of scores.value) cache.set(opts.modelSpec, id, s);
+   });
+-  if (batches.length > 0) {
+-    try {
+-      cache.save();
+-    } catch {
+-      // A read-only cache dir only costs a re-rank next time.
+-    }
+-  }
++  // A read-only cache dir only costs a re-rank next time.
++  if (batches.length > 0) attempt(() => cache.save());
+   if (failure) return { changeSet: ruled, rankedBy: "rules", warning: `Rules-only ranking: ${opts.modelSpec} failed (${failure}).` };
+ 
+-  const changeSet: ChangeSet = {
+-    ...ruled,
+-    files: ruled.files.map((f) => ({ ...f, hunks: f.hunks.map((h) => mergeModelScore(h, cache.get(opts.modelSpec, h.id)!)) })),
+-  };
++  const changeSet = mapBlocks(ruled, ({ block }) => mergeModelScore(block, cache.get(opts.modelSpec, block.id)!));
+   return { changeSet, rankedBy: `rules+${opts.modelSpec}` };
+ }
+ 
+diff --git a/src/rank/rules.ts b/src/rank/rules.ts
+index 20a2f80..a02fc56 100644
+--- a/src/rank/rules.ts
++++ b/src/rank/rules.ts
+@@ -1,4 +1,5 @@
+-import type { Attention, ChangeSet, FileChange, Hunk } from "../core/types.ts";
++import type { Attention, ChangeSet, EditBlock, FileChange, Hunk } from "../core/types.ts";
++import { isolateBlock, mapBlocks } from "../core/blocks.ts";
+ import { type CodeLang, LANGS, lex, type LexResult, type StartState } from "./lexer.ts";
+ 
+ // ---------------------------------------------------------------- path globs
+@@ -104,13 +105,6 @@ export type ContentClass = "whitespace-only" | "comment-only";
+ const DIRECTIVE_RE =
+   /^(?:\/\/|#|\/\*+)\s*(?:@[\w-]+|eslint|prettier-ignore|biome-ignore|istanbul|c8\b|v8\b|jshint|tslint|global\s|noqa|type:|pylint:|mypy:|pyright:|nolint|go:|\+build|export\s|#cgo|#include|webpack|[#@]__PURE__|[#@]__NO_SIDE_EFFECTS__|fmt:|isort:|ktlint|noinspection|NOSONAR|language=|sourceMappingURL|-\*-|!)/i;
+ 
+-function sides(hunk: Hunk): { oldText: string; newText: string } {
+-  return {
+-    oldText: hunk.lines.filter((l) => l.kind !== "add").map((l) => l.text).join("\n"),
+-    newText: hunk.lines.filter((l) => l.kind !== "del").map((l) => l.text).join("\n"),
+-  };
+-}
+-
+ /** Normalise a token stream: optional comment removal, collapsed/trimmed newlines. */
+ function normalise(lex: LexResult, keepComments: boolean, commentsAreCode: boolean): string[] {
+   const out: string[] = [];
+@@ -195,15 +189,15 @@ function classifyMarkdown(oldText: string, newText: string): ContentClass | unde
+   return strip(oldText) === strip(newText) ? "comment-only" : undefined;
+ }
+ 
+-export function classifyContent(path: string, hunk: Hunk): ContentClass | undefined {
++export function classifyContent(path: string, sidesOf: { oldText: string; newText: string }): ContentClass | undefined {
+   const lang = languageOf(path);
+   if (!lang) return undefined; // unknown language → never inert
+-  const { oldText, newText } = sides(hunk);
++  const { oldText, newText } = sidesOf;
+   if (oldText === newText) return undefined;
+   return lang === "markdown" ? classifyMarkdown(oldText, newText) : classifyCode(lang, oldText, newText);
+ }
+ 
+-// ---------------------------------------------------------------- hunk ranking
++// ---------------------------------------------------------------- block ranking
+ 
+ export interface RuleResult {
+   labels: string[];
+@@ -215,14 +209,15 @@ const LABEL_WEIGHTS: Record<string, number> = {
+   sensitive: 0.3, ci: 0.2, test: -0.2, docs: -0.3, lockfile: -0.5, generated: -0.5,
+ };
+ 
+-export function rankHunkByRules(file: FileChange, hunk: Hunk): RuleResult {
++/** Rank one edit block. Content classification sees the whole hunk for lexer context but only this block's change. */
++export function rankBlockByRules(file: FileChange, hunk: Hunk, block: EditBlock): RuleResult {
+   const labels = pathLabels(file.path);
+-  // Creating or deleting a file is itself a change, whatever the hunk contains.
+-  const content = file.status === "added" || file.status === "deleted" ? undefined : classifyContent(file.path, hunk);
++  // Creating or deleting a file is itself a change, whatever the block contains.
++  const content = file.status === "added" || file.status === "deleted" ? undefined : classifyContent(file.path, isolateBlock(hunk, block));
+   if (content) labels.push(content);
+   if (file.status !== "modified") labels.push(file.status);
+ 
+-  const changed = hunk.lines.filter((l) => l.kind !== "context").length;
++  const changed = block.to - block.from;
+   let score = Math.min(1, Math.log2(1 + changed) / 8);
+   for (const l of labels) score += LABEL_WEIGHTS[l] ?? 0;
+   score = Math.round(Math.max(0, Math.min(1, score)) * 1000) / 1000;
+@@ -235,12 +230,12 @@ export function rankHunkByRules(file: FileChange, hunk: Hunk): RuleResult {
+   return { labels, attention, score };
+ }
+ 
++/** Rank a whole hunk as one unit (used when a hunk has no blocks, e.g. tests of legacy fixtures). */
++export function rankHunkByRules(file: FileChange, hunk: Hunk): RuleResult {
++  const whole: EditBlock = { id: hunk.id, hunkId: hunk.id, path: hunk.path, from: 0, to: hunk.lines.length, labels: [], attention: "routine", score: 0 };
++  return rankBlockByRules(file, hunk, whole);
++}
++
+ export function applyRules(changeSet: ChangeSet): ChangeSet {
+-  return {
+-    ...changeSet,
+-    files: changeSet.files.map((f) => ({
+-      ...f,
+-      hunks: f.hunks.map((h) => ({ ...h, ...rankHunkByRules(f, h) })),
+-    })),
+-  };
++  return mapBlocks(changeSet, ({ file, hunk, block }) => ({ ...block, ...rankBlockByRules(file, hunk, block) }));
+ }
+diff --git a/test/blocks.test.ts b/test/blocks.test.ts
+new file mode 100644
+index 0000000..b5fc004
+--- /dev/null
++++ b/test/blocks.test.ts
+@@ -0,0 +1,114 @@
++import { describe, expect, test } from "bun:test";
++import { allBlocks, blockText, deriveHunk, isolateBlock, splitHunk } from "../src/core/blocks.ts";
++import { parseDiff } from "../src/core/diff.ts";
++import type { EditBlock, Hunk } from "../src/core/types.ts";
++import { applyRules } from "../src/rank/rules.ts";
++
++const diff = (path: string, header: string, body: string[]) =>
++  [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n") + "\n";
++
++describe("edit blocks", () => {
++  test("a hunk fusing two edits splits into two blocks with correct line ranges", () => {
++    const files = parseDiff(
++      diff("src/a.ts", "@@ -1,6 +1,6 @@", [" const a = 1;", "-const b = 2;", "+const b = 3;", " const c = 4;", " const d = 5;", "-const e = 6;", "+const e = 7;", " const f = 8;"]),
++    );
++    const hunk = files[0]!.hunks[0]!;
++    expect(hunk.blocks).toHaveLength(2);
++    const [first, second] = hunk.blocks as [EditBlock, EditBlock];
++    expect(first.oldRange).toEqual({ start: 2, end: 2 });
++    expect(first.newRange).toEqual({ start: 2, end: 2 });
++    expect(second.oldRange).toEqual({ start: 5, end: 5 });
++    expect(second.newRange).toEqual({ start: 5, end: 5 });
++    expect(first.id).not.toBe(second.id);
++    expect(hunk.blocks.every((b) => b.hunkId === hunk.id && b.path === "src/a.ts")).toBe(true);
++  });
++
++  test("pure additions have no old range; pure deletions have no new range", () => {
++    const files = parseDiff(diff("a.ts", "@@ -1,2 +1,3 @@", [" x", "+y", " z"]));
++    const b = files[0]!.hunks[0]!.blocks[0]!;
++    expect(b.oldRange).toBeUndefined();
++    expect(b.newRange).toEqual({ start: 2, end: 2 });
++    const del = parseDiff(diff("a.ts", "@@ -1,3 +1,2 @@", [" x", "-y", " z"]))[0]!.hunks[0]!.blocks[0]!;
++    expect(del.newRange).toBeUndefined();
++    expect(del.oldRange).toEqual({ start: 2, end: 2 });
++  });
++
++  test("a mixed del+add run is one block; context-only input yields none", () => {
++    const h = { id: "h", path: "p", lines: [{ kind: "del" as const, text: "a", oldLine: 1 }, { kind: "add" as const, text: "b", newLine: 1 }, { kind: "add" as const, text: "c", newLine: 2 }] };
++    expect(splitHunk(h)).toHaveLength(1);
++    expect(splitHunk({ id: "h", path: "p", lines: [{ kind: "context", text: "x", oldLine: 1, newLine: 1 }] })).toEqual([]);
++  });
++
++  test("block ids are stable for the same content at the same position and differ by position", () => {
++    const a = parseDiff(diff("a.ts", "@@ -1,2 +1,2 @@", [" x", "-y", "+z"]))[0]!.hunks[0]!.blocks[0]!;
++    const b = parseDiff(diff("a.ts", "@@ -1,2 +1,2 @@", [" x", "-y", "+z"]))[0]!.hunks[0]!.blocks[0]!;
++    const c = parseDiff(diff("a.ts", "@@ -10,2 +10,2 @@", [" x", "-y", "+z"]))[0]!.hunks[0]!.blocks[0]!;
++    expect(a.id).toBe(b.id);
++    expect(a.id).not.toBe(c.id);
++  });
++
++  test("isolateBlock shows only this block's change; other blocks appear as their new side on both sides", () => {
++    const hunk = parseDiff(diff("a.ts", "@@ -1,5 +1,5 @@", [" k", "-a1", "+a2", " m", "-b1", "+b2"]))[0]!.hunks[0]!;
++    const [first, second] = hunk.blocks as [EditBlock, EditBlock];
++    expect(isolateBlock(hunk, first)).toEqual({ oldText: "k\na1\nm\nb2", newText: "k\na2\nm\nb2" });
++    expect(isolateBlock(hunk, second)).toEqual({ oldText: "k\na2\nm\nb1", newText: "k\na2\nm\nb2" });
++  });
++
++  test("blockText includes limited context on each side", () => {
++    const body = [" c1", " c2", " c3", " c4", " c5", "-old", "+new", " d1", " d2", " d3", " d4"];
++    const hunk = parseDiff(diff("a.ts", "@@ -1,10 +1,10 @@", body))[0]!.hunks[0]!;
++    expect(blockText(hunk, hunk.blocks[0]!, 2).split("\n")).toEqual([" c4", " c5", "-old", "+new", " d1", " d2"]);
++  });
++});
++
++describe("hunks derive from their blocks", () => {
++  const base = (blocks: Partial<EditBlock>[]): Hunk => ({
++    id: "h", path: "p", header: "@@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], labels: [], attention: "routine", score: 0,
++    blocks: blocks.map((b, k) => ({ id: `b${k}`, hunkId: "h", path: "p", from: 0, to: 0, labels: [], attention: "routine", score: 0, ...b })),
++  });
++  test("attention is the highest block; score the highest block", () => {
++    const h = deriveHunk(base([{ attention: "inert", score: 0 }, { attention: "suspicious", score: 0.9 }, { attention: "routine", score: 0.3 }]));
++    expect(h.attention).toBe("suspicious");
++    expect(h.score).toBe(0.9);
++  });
++  test("content label only when every block has one; comment-only wins over whitespace-only", () => {
++    expect(deriveHunk(base([{ labels: ["whitespace-only"] }, { labels: ["comment-only"] }])).labels).toEqual(["comment-only"]);
++    expect(deriveHunk(base([{ labels: ["whitespace-only"] }, { labels: [] }])).labels).toEqual([]);
++    expect(deriveHunk(base([{ labels: ["test", "whitespace-only"] }, { labels: ["test", "whitespace-only"] }])).labels).toEqual(["test", "whitespace-only"]);
++  });
++});
++
++describe("rules per block", () => {
++  test("a fused hunk with a reindent and a logic change: the reindent block is inert, the hunk is not", () => {
++    const body = [
++      " export function f(a: number) {",
++      "-    if (a > 1) {",
++      "-        return a;",
++      "-    }",
++      "+  if (a > 1) {",
++      "+    return a;",
++      "+  }",
++      "   const unrelated = 1;",
++      "   const alsoUnrelated = 2;",
++      "   const stillUnrelated = 3;",
++      "-  return 0;",
++      "+  return a * 2;",
++      " }",
++    ];
++    const cs = applyRules({ target: "t", base: "", head: "", files: parseDiff(diff("src/f.ts", "@@ -1,9 +1,9 @@", body)) });
++    const hunk = cs.files[0]!.hunks[0]!;
++    expect(hunk.blocks).toHaveLength(2);
++    expect(hunk.blocks[0]!.attention).toBe("inert");
++    expect(hunk.blocks[0]!.labels).toContain("whitespace-only");
++    expect(hunk.blocks[1]!.attention).toBe("routine");
++    expect(hunk.attention).toBe("routine");
++    expect(hunk.labels).not.toContain("whitespace-only");
++  });
++
++  test("allBlocks walks every block with its file and hunk", async () => {
++    const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/sample-a.diff`).text());
++    const refs = allBlocks({ target: "t", base: "", head: "", files });
++    expect(refs).toHaveLength(27);
++    expect(refs.every((r) => r.hunk.blocks.includes(r.block) && r.file.hunks.includes(r.hunk))).toBe(true);
++  });
++});
+diff --git a/test/model.test.ts b/test/model.test.ts
+index 4fd8add..43d63f9 100644
+--- a/test/model.test.ts
++++ b/test/model.test.ts
+@@ -43,7 +43,7 @@ function mockModel(scoreFor: (hunkId: string) => number) {
+ }
+ 
+ describe("model ranking with the mock decision model", () => {
+-  test("batches questions, one review_attention score question per hunk", async () => {
++  test("batches questions, one review_attention score question per edit block", async () => {
+     const cs = await sample();
+     const { model, calls } = mockModel(() => 1);
+     const res = await rankChangeSet(cs, {
+@@ -54,7 +54,7 @@ describe("model ranking with the mock decision model", () => {
+     });
+     expect(res.rankedBy).toBe("rules+mock:attention");
+     expect(res.warning).toBeUndefined();
+-    expect(calls).toEqual([8, 8, 4]); // 20 hunks
++    expect(calls).toEqual([8, 8, 8, 3]); // 27 edit blocks in 20 hunks
+   });
+ 
+   test("second run makes 0 requests (cache by hunk hash)", async () => {
+@@ -74,12 +74,16 @@ describe("model ranking with the mock decision model", () => {
+ 
+   test("model raises attention per hunk and sorts within a level", async () => {
+     const cs = await sample();
+-    const target = cs.files[0]!.hunks[0]!.id;
++    const hunk = cs.files[0]!.hunks[0]!;
++    const target = hunk.blocks[0]!.id;
+     const { model } = mockModel((id) => (id === target ? 3 : 0.4));
+     const res = await rankChangeSet(cs, { modelSpec: "mock:attention", cache: new RankCache(tmpCache()), resolveModel: () => ({ ok: true, model }) });
+     const hunks = res.changeSet.files.flatMap((f) => f.hunks);
+-    expect(hunks.find((h) => h.id === target)!.attention).toBe("suspicious");
+-    expect(hunks.filter((h) => h.attention === "suspicious")).toHaveLength(1);
++    const blocks = hunks.flatMap((h) => h.blocks);
++    expect(blocks.find((b) => b.id === target)!.attention).toBe("suspicious");
++    expect(blocks.filter((b) => b.attention === "suspicious")).toHaveLength(1);
++    // The hunk inherits its highest block.
++    expect(hunks.find((h) => h.id === hunk.id)!.attention).toBe("suspicious");
+   });
+ 
+   test("missing key → rankedBy rules with a warning", async () => {
+@@ -113,7 +117,7 @@ describe("model ranking with the mock decision model", () => {
+ });
+ 
+ describe("mergeModelScore: rules bound the model", () => {
+-  const base: Hunk = { id: "x", path: "a.ts", header: "@@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], labels: [], attention: "inert", score: 0 };
++  const base: Hunk = { id: "x", path: "a.ts", header: "@@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], blocks: [], labels: [], attention: "inert", score: 0 };
+   test("model cannot make a hunk inert", () => {
+     expect(mergeModelScore({ ...base, attention: "routine" }, 0).attention).toBe("routine");
+     expect(mergeModelScore({ ...base, attention: "needs-eyes" }, 0).attention).toBe("needs-eyes");
