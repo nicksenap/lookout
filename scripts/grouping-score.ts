@@ -1,5 +1,7 @@
 // Step 15: score lookout's cards against a hand-judged grouping target.
-// Usage: bun scripts/grouping-score.ts <review.json> <target.json> [--saved]
+// Usage: bun scripts/grouping-score.ts <review.json> <target.json> [--saved] [--split]
+// --split asks the configured writer to split oversized cards first (network; cached by card id). [--split]
+// --split asks the configured writer to split oversized cards first (network; cached by card id).
 // Cards are recomputed from the saved change set (block kinds included) with the current code, so
 // a saved Review doubles as an offline benchmark; `--saved` scores the cards as saved instead.
 // Target: { concerns: [{ concern: string, blockIds: string[] }], mechanical: string[] }
@@ -10,6 +12,9 @@ import { buildCards } from "../src/cards/build.ts";
 import { isFragment } from "../src/cards/group.ts";
 import { allBlocks } from "../src/core/blocks.ts";
 import type { Review } from "../src/core/types.ts";
+import { proposeSplits } from "../src/cards/split.ts";
+import { loadUserEnv } from "../src/cli/env.ts";
+import { loadConfig } from "../src/dispatch/config.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { guardKinds } from "../src/rank/mechanical.ts";
 
@@ -23,9 +28,21 @@ if (!reviewPath || !targetPath) throw new Error("usage: bun scripts/grouping-sco
 const review = (await Bun.file(reviewPath).json()) as Review;
 const target = (await Bun.file(targetPath).json()) as Target;
 const saved = process.argv.includes("--saved");
-// Policy only affects colour, not membership, so defaults are fine here.
-const result = score(saved ? review : { ...review, cards: buildCards(guardKinds(review.changeSet), DEFAULT_POLICY) }, target);
+const result = score(saved ? review : { ...review, cards: await rebuild(review) }, target);
 console.log(JSON.stringify(result, null, 2));
+
+// Policy only affects colour, not membership, so defaults are fine here.
+async function rebuild(review: Review) {
+  const changeSet = guardKinds(review.changeSet);
+  const whole = buildCards(changeSet, DEFAULT_POLICY);
+  if (!process.argv.includes("--split")) return whole;
+  loadUserEnv();
+  const config = loadConfig();
+  if (!config.ok) throw new Error(config.error);
+  const split = await proposeSplits(changeSet, whole, { modelSpec: config.value.model.write });
+  if (split.warning) console.error(split.warning);
+  return buildCards(changeSet, DEFAULT_POLICY, split.splits);
+}
 
 export function score(review: Review, target: Target) {
   const live = allBlocks(review.changeSet)
@@ -41,6 +58,13 @@ export function score(review: Review, target: Target) {
   const byCard = new Map<string, number>();
   cards.forEach((c, k) => c.blockIds.forEach((id) => byCard.set(id, k)));
 
+  // Purity: share of blocks sitting in a card whose majority belongs to the same judge concern.
+  // ARI punishes a finer split than the judge's; purity only punishes wrong merges.
+  const pure = cards.reduce((sum, c) => {
+    const counts = new Map<number, number>();
+    for (const id of c.blockIds) counts.set(judged.get(id)!, (counts.get(judged.get(id)!) ?? 0) + 1);
+    return sum + Math.max(0, ...counts.values());
+  }, 0);
   const ari = adjustedRand(live.map((id) => judged.get(id)!), live.map((id) => byCard.get(id) ?? -1));
   const judgedMechanical = new Set(target.mechanical);
   const leaks = cards.filter((c) => c.mechanical).flatMap((c) => c.blockIds.filter((id) => !judgedMechanical.has(id)).map((id) => ({ card: c.title, blockId: id })));
@@ -57,6 +81,7 @@ export function score(review: Review, target: Target) {
     cards: cards.length,
     concerns: target.concerns.length,
     ari: Number(ari.toFixed(3)),
+    purity: live.length ? Number((pure / live.length).toFixed(2)) : null,
     largestCard: Math.max(0, ...cards.map((c) => c.blockIds.length)),
     largestConcern: Math.max(0, ...target.concerns.map((c) => c.blockIds.length)),
     mechanicalLeaks: leaks,

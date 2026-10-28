@@ -158,4 +158,37 @@ describe("LocalSession prose", () => {
     expect(events.at(-1)!.type).toBe("done");
     expect(session.snapshot().cards[0]!.title).toBe("Retry three times");
   });
+
+  test("an oversized card is split before prose: cards.replaced lands, then each concern gets its own paragraph", async () => {
+    const hunks = (path: string, n: number) => [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, ...Array.from({ length: n }, (_, k) => [`@@ -${1 + k * 10},2 +${1 + k * 10},3 @@`, " a", `+  shared.step${k}(${path.length});`, " b"]).flat()].join("\n") + "\n";
+    const base: ChangeSet = { target: "t", base: "", head: "", files: parseDiff(hunks("src/a.ts", 6) + hunks("src/b.ts", 6)) };
+    const ids = allBlocks(base).map((r) => r.block.id);
+    const dir = mkdtempSync(join(tmpdir(), "lookout-session-split-"));
+    const splitPrompts: string[] = [];
+    const session = new LocalSession({
+      config: DEFAULT_CONFIG,
+      cache: new RankCache(dir),
+      changeSet: base,
+      rank: async (ruled) => ({ changeSet: mapBlocks(ruled, ({ block }) => ({ ...block, kind: "behavior" as const })), rankedBy: "rules+mock" }),
+      write: async (prompt) => {
+        if (prompt.includes("JSON only")) {
+          splitPrompts.push(prompt);
+          return JSON.stringify({ concerns: [{ title: "a", blockIds: ids.slice(0, 6) }, { title: "b", blockIds: ids.slice(6) }] });
+        }
+        return `TITLE: ${prompt.includes("src/a.ts") ? "Change a" : "Change b"}\nPARAGRAPH: One concern.`;
+      },
+    });
+    const events: ReviewEvent[] = [];
+    session.subscribe((e) => events.push(e));
+    await session.ready();
+    expect(splitPrompts.length).toBe(1);
+    const replaced = events.findIndex((e) => e.type === "cards.replaced");
+    const firstProse = events.findIndex((e) => e.type === "card.updated" && "paragraph" in (e as { patch: object }).patch);
+    expect(replaced).toBeGreaterThan(-1);
+    expect(firstProse).toBeGreaterThan(replaced);
+    const cards = session.snapshot().cards.filter((c) => !c.fixed);
+    expect(cards.map((c) => c.title).sort()).toEqual(["Change a", "Change b"]);
+    expect(cards.flatMap((c) => c.blockIds).sort()).toEqual(ids.slice().sort());
+    rmSync(dir, { recursive: true, force: true });
+  });
 });

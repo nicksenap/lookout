@@ -1,4 +1,5 @@
 import { buildCards, untouchedAreas } from "../cards/build.ts";
+import { proposeSplits, type Splits } from "../cards/split.ts";
 import { writeCards } from "../cards/write.ts";
 import type { Config } from "../dispatch/config.ts";
 import type { DispatchRunner } from "../dispatch/runner.ts";
@@ -8,6 +9,7 @@ import { findImporters, initialRadius } from "../evidence/radius.ts";
 import { markTests } from "../evidence/tests.ts";
 import { classify, evaluate } from "../policy/evaluate.ts";
 import { answer, pickQuestions } from "../questions/pick.ts";
+import type { RankCache } from "../rank/cache.ts";
 import { rankWithModel } from "../rank/rank.ts";
 import { applyRules } from "../rank/rules.ts";
 import { buildVerifyPrompt } from "../verify/prompt.ts";
@@ -55,6 +57,8 @@ export interface LocalSessionOptions {
   pick?: typeof pickQuestions;
   judge?: typeof judgeVerdicts;
   write?: (prompt: string) => Promise<string>;
+  /** Model cache for prose and splits; tests pass a temp dir so fakes never land in the user's cache. */
+  cache?: RankCache;
   env?: Record<string, string | undefined>;
 }
 
@@ -166,13 +170,15 @@ export class LocalSession implements ReviewSession {
     for (const [id, patch] of res.patches) this.store.patchFinding(owner(id), id, patch);
   }
 
+  private splits: Splits = new Map();
+
   private assemble(changeSet: ChangeSet, rankedBy: string, warning?: string): Review {
     const policy = this.opts.config.policy;
     const classification = classify(changeSet, policy);
     const previous = this.store?.getSnapshot();
     const claims = previous?.claims ?? extractClaims(changeSet.intent);
     const door = detectDoor(changeSet, authorDoor(changeSet.intent, claims));
-    const cards = attachDoorSignals(changeSet, markTests(changeSet, buildCards(changeSet, policy)), door.signals);
+    const cards = attachDoorSignals(changeSet, markTests(changeSet, buildCards(changeSet, policy, this.splits)), door.signals);
     const radius = initialRadius(classification.areas, claims.find((c) => c.section === "radius")?.text);
     if (previous?.radius.importers) radius.importers = previous.radius.importers;
     const review: Review = {
@@ -222,12 +228,22 @@ export class LocalSession implements ReviewSession {
       return this.askQuestions();
     }
     const write = this.opts.write ? { write: this.opts.write } : {};
-    const modelOpts = { env: this.opts.env, ...write };
+    const modelOpts = { env: this.opts.env, ...write, ...(this.opts.cache ? { cache: this.opts.cache } : {}) };
+    // Oversized cards are split before any prose is written, so paragraphs describe the concerns a reviewer reads.
+    const split = await proposeSplits(after.changeSet, after.cards, { modelSpec: this.opts.config.model.write, ...modelOpts });
+    if (split.warning) this.warn(split.warning);
+    if (split.splits.size > 0) {
+      this.splits = split.splits;
+      const resplit = this.assemble(res.changeSet, res.rankedBy, this.snapshot().warning);
+      this.store.update(() => resplit);
+      for (const event of cardPatches(after.cards, resplit.cards, resplit.untouched)) this.store.emit(event);
+    }
+    const current = this.snapshot();
     const [wrote, extracted] = await Promise.all([
-      writeCards(after.changeSet, after.cards, { modelSpec: this.opts.config.model.write, ...modelOpts }, (id, prose) => {
+      writeCards(current.changeSet, current.cards, { modelSpec: this.opts.config.model.write, ...modelOpts }, (id, prose) => {
         this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, title: prose.title, paragraph: prose.paragraph } : c)) }), { type: "card.updated", id, patch: { title: prose.title, paragraph: prose.paragraph } });
       }),
-      needsModelExtraction(after.changeSet.intent, after.claims) ? extractClaimsWithModel(after.changeSet.intent!, { modelSpec: this.opts.config.model.write, ...modelOpts }) : undefined,
+      needsModelExtraction(current.changeSet.intent, current.claims) ? extractClaimsWithModel(current.changeSet.intent!, { modelSpec: this.opts.config.model.write, ...modelOpts }) : undefined,
     ]);
     if (wrote.warning) this.warn(wrote.warning);
     if (extracted?.warning) this.warn(extracted.warning);

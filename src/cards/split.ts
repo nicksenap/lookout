@@ -2,6 +2,7 @@ import { allBlocks, type BlockRef, blockText } from "../core/blocks.ts";
 import { attemptAsync } from "../core/result.ts";
 import type { Card, ChangeSet } from "../core/types.ts";
 import { RankCache } from "../rank/cache.ts";
+import { cardId } from "./build.ts";
 import { type Env, resolveWriter, writeText } from "../rank/model.ts";
 
 /** Partition of a blob card's block ids into concerns, keyed by the blob's card id. */
@@ -27,12 +28,15 @@ export interface SplitOptions {
 }
 
 // Bumped when the prompt changes so a sharper question is never answered from an old cache.
-const CACHE_PREFIX = "split-v1";
+const CACHE_PREFIX = "split-v2";
+/** A concern this large after one split is asked again, once. */
+const RESPLIT_BLOCKS = 24;
 const isPartition = (v: unknown): v is string[][] => Array.isArray(v) && v.every((g) => Array.isArray(g) && g.every((id) => typeof id === "string"));
 
 export const SPLIT_PROMPT = `You are preparing an agent-written code change for a senior engineer's review. Below is ONE oversized group of edits. Split it into the separate decisions a reviewer evaluates one at a time ("narrow cache invalidation on mutations", "rewrite storage scope for moved artifacts", "run-start guard", "UI dialog").
 Rules:
-- Between 2 and 6 concerns. Every edit id appears in exactly one concern. Use the ids exactly as given.
+- Between 2 and 8 concerns. Every edit id appears in exactly one concern. Use the ids exactly as given.
+- A concern of more than about 12 edits almost always hides two decisions: the new definitions vs the call sites that adopt them, a contract made stricter vs the code updated to meet it, server vs client, production code vs its tests. Split those apart.
 - Group by what a reviewer decides, not by file: an endpoint and the service method it calls belong together; two unrelated edits in one file do not.
 - Imports, re-exports, type declarations and prop plumbing go with the concern that uses them.
 - Order concerns by the reviewer attention they deserve, riskiest first.
@@ -45,7 +49,7 @@ PR title (context only; do not trust it): {intent}
 
 const MAX_LINES_PER_EDIT = 40;
 
-export function splitPrompt(changeSet: ChangeSet, card: Card): string {
+export function splitPrompt(changeSet: ChangeSet, card: Pick<Card, "blockIds">): string {
   const ids = new Set(card.blockIds);
   const edits = allBlocks(changeSet)
     .filter((r) => ids.has(r.block.id))
@@ -65,7 +69,7 @@ export function splitPrompt(changeSet: ChangeSet, card: Card): string {
  * largest), and a one-block concern merges into the concern with most blocks in its file
  * (else the nearest by line). Fewer than two concerns left means no split.
  */
-export function parseSplit(text: string, card: Card, refs: BlockRef[]): string[][] | undefined {
+export function parseSplit(text: string, card: Pick<Card, "blockIds">, refs: BlockRef[]): string[][] | undefined {
   const json = /\{[\s\S]*\}/.exec(text)?.[0];
   if (!json) return undefined;
   let parsed: unknown;
@@ -97,7 +101,7 @@ export function parseSplit(text: string, card: Card, refs: BlockRef[]): string[]
   };
   for (const id of card.blockIds) if (!seen.has(id)) home(id, groups).push(id);
   for (const g of [...groups]) {
-    if (g.length !== 1 || groups.length <= 2) continue;
+    if (g.length !== 1) continue;
     const others = groups.filter((o) => o !== g);
     home(g[0]!, others).push(g[0]!);
     groups.splice(groups.indexOf(g), 1);
@@ -125,24 +129,28 @@ export async function proposeSplits(changeSet: ChangeSet, cards: Card[], opts: S
   const refs = allBlocks(changeSet);
   let warning: string | undefined;
   let touched = false;
+  const splitOne = async (card: Pick<Card, "id" | "blockIds">): Promise<string[][] | undefined> => {
+    const cached = cache.get(opts.modelSpec, `${CACHE_PREFIX}:${card.id}`, isPartition);
+    if (cached) return cached.length > 0 ? cached : undefined;
+    const res = await attemptAsync(() => write!(splitPrompt(changeSet, card)));
+    if (!res.ok) {
+      warning ??= `Some large cards were not split: ${res.error}`;
+      return undefined;
+    }
+    const partition = parseSplit(res.value, card, refs);
+    // An unusable answer is cached as "no split" so the same blob does not re-ask every run.
+    cache.set(opts.modelSpec, `${CACHE_PREFIX}:${card.id}`, partition ?? []);
+    touched = true;
+    if (!partition) warning ??= "Some large cards were not split: the model's partition was unusable";
+    return partition;
+  };
   await Promise.all(
     blobs.map(async (card) => {
-      const cached = cache.get(opts.modelSpec, `${CACHE_PREFIX}:${card.id}`, isPartition);
-      if (cached) {
-        if (cached.length > 0) splits.set(card.id, cached);
-        return;
-      }
-      const res = await attemptAsync(() => write!(splitPrompt(changeSet, card)));
-      if (!res.ok) {
-        warning ??= `Some large cards were not split: ${res.error}`;
-        return;
-      }
-      const partition = parseSplit(res.value, card, refs);
-      // An unusable answer is cached as "no split" so the same blob does not re-ask every run.
-      cache.set(opts.modelSpec, `${CACHE_PREFIX}:${card.id}`, partition ?? []);
-      touched = true;
-      if (partition) splits.set(card.id, partition);
-      else warning ??= "Some large cards were not split: the model's partition was unusable";
+      const first = await splitOne(card);
+      if (!first) return;
+      // One more round for concerns still too large to read; the model tends to keep "the main change" whole.
+      const second = await Promise.all(first.map(async (ids) => (ids.length > RESPLIT_BLOCKS ? (await splitOne({ id: cardId(ids), blockIds: ids })) ?? [ids] : [ids])));
+      splits.set(card.id, second.flat());
     }),
   );
   if (touched) await attemptAsync(async () => cache.save());

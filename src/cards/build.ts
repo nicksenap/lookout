@@ -2,7 +2,8 @@ import { allBlocks, type BlockRef } from "../core/blocks.ts";
 import { ATTENTION_ORDER, type Attention, type Card, type CardColor, type ChangeSet, COLOR_ORDER } from "../core/types.ts";
 import { areasOf, kindOf } from "../policy/evaluate.ts";
 import type { Policy } from "../policy/schema.ts";
-import { groupBlocks, isMechanical, mechanicalText } from "./group.ts";
+import { changedIdentifiers, type Group, groupBlocks, isMechanical, mechanicalText } from "./group.ts";
+import type { Splits } from "./split.ts";
 
 const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
 const CONTENT_LABELS = ["whitespace-only", "comment-only"];
@@ -12,15 +13,19 @@ const CONTENT_LABELS = ["whitespace-only", "comment-only"];
  * into logical changes (cards/group.ts) and mechanical groups get deterministic prose; under
  * rules-only ranking (no kinds) the stand-in is one card per file. Inert blocks all go to the
  * fixed "clean" card. Every block lands in exactly one card.
+ *
+ * `splits` are model-proposed, rule-checked partitions of oversized groups (cards/split.ts),
+ * keyed by the card id the whole group would have had; a group with a split becomes one card
+ * per concern. Building stays deterministic given the same splits.
  */
-export function buildCards(changeSet: ChangeSet, policy: Policy): Card[] {
+export function buildCards(changeSet: ChangeSet, policy: Policy, splits: Splits = new Map()): Card[] {
   const refs = allBlocks(changeSet);
   const live = refs.filter((r) => r.block.attention !== "inert");
   const inert = refs.filter((r) => r.block.attention === "inert");
 
   const haveKinds = live.length > 0 && live.every((r) => r.block.kind !== undefined);
   const cards = haveKinds
-    ? groupBlocks(live).map((g) => {
+    ? groupBlocks(live).flatMap((g) => applySplit(g, splits)).map((g) => {
         const card = makeCard(cardId(g.refs.map((r) => r.block.id)), titleFor(g.refs, g.topIdentifiers), g.refs, policy);
         if (g.kind) card.blockKind = g.kind;
         if (isMechanical(g.kind)) {
@@ -38,6 +43,20 @@ export function buildCards(changeSet: ChangeSet, policy: Policy): Card[] {
 
   if (inert.length > 0) cards.push({ ...makeCard("clean", `verified clean · ${inert.length} edit${inert.length === 1 ? "" : "s"}`, inert, policy), color: "grey", fixed: "clean" });
   return cards;
+}
+
+/** Replace a group by its concerns when a split exists for it; every block keeps exactly one home. */
+function applySplit(group: Group, splits: Splits): Group[] {
+  const partition = splits.get(cardId(group.refs.map((r) => r.block.id)));
+  if (!partition) return [group];
+  const byId = new Map(group.refs.map((r) => [r.block.id, r]));
+  return partition.map((ids) => {
+    const refs = ids.map((id) => byId.get(id)).filter((r): r is BlockRef => r !== undefined);
+    const counts = new Map<string, number>();
+    for (const r of refs) for (const w of changedIdentifiers(r)) counts.set(w, (counts.get(w) ?? 0) + 1);
+    const topIdentifiers = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(([w]) => w);
+    return group.kind ? { refs, kind: group.kind, topIdentifiers } : { refs, topIdentifiers };
+  });
 }
 
 /** Placeholder title until the writer names the card: the file, or the files, it touches. */
