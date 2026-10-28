@@ -64,6 +64,7 @@ const MODEL_SPEC = /^[\w.-]+:.+$/;
  * the base's when present; areas and policy layer (see validatePolicy). Hand-written
  * checks so messages name the exact key.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: hand-written validation that names the exact key in every error (AGENTS.md: no zod); one check per line is the readable shape
 export function validateConfig(raw: unknown, source: string, base: Config = DEFAULT_CONFIG): Result<Config> {
   if (!isTable(raw)) return err(`${source}: expected a TOML table at top level`);
   const known = new Set(["model", "rank", "dispatch", "prompt", "verify", "areas", "policy"]);

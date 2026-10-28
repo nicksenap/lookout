@@ -51,7 +51,7 @@ Guidance for agents working in this repository. `docs/plan.md` is the current pl
 
 ## Checks
 
-- `bun run check` (typecheck with unused-import errors, biome lint, complexity gate, knip, tests, fixture drift) must pass before a commit; CI runs each script as its own parallel job. Add a new check as a script in `package.json`, in `check`, and as a job in `ci.yml`. Biome formats at 140 columns; run `bun run lint:fix` before committing. Rules turned off on purpose: `noNonNullAssertion` (`x!` after a bounds check is the idiom here), `noAssignInExpressions` (union-find), `useIterableCallbackReturn`, `noControlCharactersInRegex` (ANSI), `noArrayIndexKey` and `useExhaustiveDependencies` (TUI rows are positional and memo deps are deliberate). `bun run hooks` installs the pre-commit fast subset.
+- `bun run check` (typecheck with unused-import errors, biome (format, lint, import order, cognitive complexity ≤ 60), knip, tests, fixture drift) must pass before a commit; CI runs each script as its own parallel job. Add a new check as a script in `package.json`, in `check`, and as a job in `ci.yml`. Biome formats at 140 columns; run `bun run lint:fix` before committing. Rules turned off on purpose: `noNonNullAssertion` (`x!` after a bounds check is the idiom here), `noAssignInExpressions` (union-find), `useIterableCallbackReturn`, `noControlCharactersInRegex` (ANSI), `noArrayIndexKey` and `useExhaustiveDependencies` (TUI rows are positional and memo deps are deliberate). `bun run hooks` installs the pre-commit fast subset.
 - Max 3 attempts on the same failing command or approach, then stop and report what was tried.
 - Each numbered step in `docs/plan.md` ends with a check. Do not start step N+1 until step N's check passes.
 

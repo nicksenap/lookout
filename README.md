@@ -118,7 +118,7 @@ Defaults: areas `auth`, `billing`, `data`, `infra`, `prompts` (broad globs, wort
 ## Development
 
 ```sh
-bun run check       # what CI runs: typecheck · biome · complexity · knip · test · fixture drift
+bun run check       # what CI runs: typecheck · biome · knip · test · fixture drift
 bun run lint:fix    # format and fix
 bun run story review-a --paragraphs   # the real App over a saved review, no models
 ```

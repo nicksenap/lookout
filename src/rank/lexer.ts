@@ -153,6 +153,7 @@ const WORD_RE = /[A-Za-z0-9_$\u0080-\uffff]/;
 
 type Frame = { kind: "code"; depth: number; interp: boolean } | { kind: "template"; delim: string; buf: string };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one state machine over every token class; a split per state would hide the transitions
 export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
   const spec = LANGS[lang];
   const tokens: Token[] = [];

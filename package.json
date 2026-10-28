@@ -15,11 +15,10 @@
     "lookout": "bin/lookout"
   },
   "scripts": {
-    "check": "bun run typecheck && bun run lint && bun run complexity && bun run knip && bun test && bun run fixtures:check",
+    "check": "bun run typecheck && bun run lint && bun run knip && bun test && bun run fixtures:check",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
-    "complexity": "bun scripts/complexity.ts",
     "knip": "knip --include files,dependencies,unlisted,unresolved",
     "knip:exports": "knip --include exports,types",
     "test": "bun test",
@@ -46,7 +45,6 @@
     "@types/react": "19.3.0",
     "ink-testing-library": "4.0.0",
     "knip": "^6.43.0",
-    "oxc-parser": "^0.156.0",
     "typescript": "^7.0.2"
   }
 }

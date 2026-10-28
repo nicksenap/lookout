@@ -60,6 +60,7 @@ export function hunkId(path: string, header: string, lines: DiffLine[]): string 
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
 /** Parse `git diff` / `gh pr diff` unified output (git extended format). */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one pass over git's line grammar; splitting it would spread the state machine over helpers
 export function parseDiff(text: string): FileChange[] {
   const lines = text.split("\n");
   if (lines.length && lines[lines.length - 1] === "") lines.pop();

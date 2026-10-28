@@ -89,6 +89,7 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
  * Validate the `areas` and `policy` tables of a parsed TOML document, layered over `base`.
  * `areas` replaces areas by name (an empty list removes one); `policy.rules` replaces the rule list.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: hand-written validation that names the exact key in every error (AGENTS.md: no zod); one check per line is the readable shape
 export function validatePolicy(raw: Record<string, unknown>, source: string, base: Policy = DEFAULT_POLICY): Result<Policy> {
   const policy: Policy = {
     ...base,

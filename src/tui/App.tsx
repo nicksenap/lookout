@@ -60,8 +60,11 @@ function useReview(session: ReviewSession, throttleMs: number): { review: Review
 }
 
 function useSize(override?: Size): Size {
+  // Ink's `useStdout()` is typed as NodeJS.WriteStream, which TypeScript 7's native builds resolve differently per
+  // platform (`columns` missing on linux-x64); `process.stdout` carries the tty fields on every build.
   const { stdout } = useStdout();
-  const read = () => override ?? { columns: stdout.columns || 80, rows: stdout.rows || 24 };
+  const tty = process.stdout as typeof process.stdout & { columns?: number; rows?: number };
+  const read = () => override ?? { columns: tty.columns || 80, rows: tty.rows || 24 };
   const [size, setSize] = useState(read);
   useEffect(() => {
     if (override) return;
