@@ -49,6 +49,8 @@ export interface EditBlock {
   score: number;
   /** What the edit does, from the model's kind question; absent under rules-only ranking. */
   kind?: BlockKind;
+  /** The model's mechanical label when rules could not confirm it and `kind` fell back to `behavior`. */
+  suggestedKind?: BlockKind;
 }
 
 export type BlockKind = "typing-refactor" | "rename" | "move" | "behavior" | "test" | "types" | "config" | "docs";

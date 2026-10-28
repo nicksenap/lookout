@@ -3,6 +3,7 @@ import { ATTENTION_ORDER, type Attention, type ChangeSet, type EditBlock, type H
 import { attempt, attemptAsync } from "../core/result.ts";
 import { RankCache } from "./cache.ts";
 import { type AttentionModel, type BlockJudgement, type Env, resolveAttentionModel, type ResolvedModel, scoreBlockBatch, ATTENTION_LEVELS, BLOCK_KINDS } from "./model.ts";
+import { guardKinds } from "./mechanical.ts";
 import { applyRules } from "./rules.ts";
 
 export interface RankResult {
@@ -88,7 +89,7 @@ export async function rankWithModel(ruled: ChangeSet, opts: ModelRankOptions): P
   if (batches.length > 0) attempt(() => cache.save());
   if (failure) return { changeSet: ruled, rankedBy: "rules", warning: `Rules-only ranking: ${opts.modelSpec} failed (${failure}).` };
 
-  const changeSet = mapBlocks(ruled, ({ block }) => mergeModelScore(block, cache.get(opts.modelSpec, block.id, isJudgement)!));
+  const changeSet = guardKinds(mapBlocks(ruled, ({ block }) => mergeModelScore(block, cache.get(opts.modelSpec, block.id, isJudgement)!)));
   return { changeSet, rankedBy: `rules+${opts.modelSpec}` };
 }
 
