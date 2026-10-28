@@ -181,6 +181,34 @@ export async function checkParagraphWithModel(model: AttentionModel, edits: stri
   return a.probability;
 }
 
+/**
+ * One `boolean` for a reviewer's question: is the answer consistent with the edits? Unlike a card
+ * paragraph, an answer may infer ("so the list is no longer refreshed"); what fails it is a name
+ * the edits do not contain or a statement they contradict.
+ */
+export async function checkAnswerWithModel(model: AttentionModel, edits: string, question: string, answer: string): Promise<number> {
+  const result = await experimental_decide({
+    model,
+    state: {
+      task: "Check an answer to a reviewer's question about a code change against the edits the answer was given.",
+      edits: edits.length > 48_000 ? `${edits.slice(0, 48_000)}\n…` : edits,
+      question,
+      answer,
+    },
+    questions: {
+      consistent: {
+        type: "boolean",
+        instructions:
+          "Is the answer consistent with the edits? Fail it only if it names a function, file or value the edits do not contain, or states something the edits contradict (added vs removed, kept vs replaced). Inference from what the edits show is fine; saying the edits do not show something is fine.",
+      },
+    },
+    abortSignal: AbortSignal.timeout(60_000),
+  });
+  const a = (result.answers as Record<string, { type: string; probability?: number }>).consistent;
+  if (a?.type !== "boolean" || typeof a.probability !== "number") throw new Error("no answer from the answer check");
+  return a.probability;
+}
+
 // ---------------------------------------------------------------- claims (plan step 7)
 
 export const CLAIM_STATUSES = {

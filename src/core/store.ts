@@ -1,4 +1,4 @@
-import type { Card, Claim, Classification, Dispatch, Door, Finding, Radius, Review, Verdict } from "./types.ts";
+import type { Card, Claim, Classification, Dispatch, Door, Exchange, Finding, Progress, Radius, Review, Verdict } from "./types.ts";
 
 /** Patches, not snapshots: a 40-card review streaming paragraphs never re-sends the whole Review. */
 export type ReviewEvent =
@@ -15,6 +15,11 @@ export type ReviewEvent =
   | { type: "claims.replaced"; claims: Claim[] }
   | { type: "claim.updated"; id: string; patch: Partial<Claim> }
   | { type: "evidence.updated"; door?: Door; radius?: Radius }
+  /** A reviewer asked; then the answer (or failure) landed. */
+  | { type: "exchange.added"; exchange: Exchange }
+  | { type: "exchange.updated"; id: string; patch: Partial<Exchange> }
+  /** Pipeline progress for a bar; `undefined` clears it. */
+  | { type: "progress"; progress?: Progress }
   /** The ranking pipeline has finished (with or without the model). */
   | { type: "done" };
 

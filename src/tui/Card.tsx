@@ -1,5 +1,5 @@
 import { Text } from "ink";
-import type { Card, Hunk, Review } from "../core/types.ts";
+import type { Card, Exchange, Hunk, Progress, Review } from "../core/types.ts";
 import { COLOR_LABEL, theme } from "./theme.ts";
 
 export interface Segment {
@@ -69,6 +69,29 @@ export interface CardContext {
   frame: number;
 }
 
+export const cardExchanges = (review: Review, card: Card): Exchange[] => review.exchanges.filter((e) => e.cardId === card.id);
+export const changeExchanges = (review: Review): Exchange[] => review.exchanges.filter((e) => e.cardId === undefined);
+
+/** A question and its answer (or its state), wrapped; the question is bold so a stripped frame still separates the two. */
+export function exchangeLines(e: Exchange, w: number, frame: number, indent = "  "): Segment[][] {
+  const inner = Math.max(1, w - indent.length - 2);
+  const out: Segment[][] = [[{ text: `${indent}› ` }, { text: fit(e.question, inner), bold: true }]];
+  if (e.status === "pending") return [...out, [{ text: `${indent}  ${theme.spinner[frame % theme.spinner.length]} thinking…`, dim: true }]];
+  if (e.status === "failed") return [...out, [{ text: `${indent}  ${fit(e.error ?? "no answer", inner)}`, color: theme.card.red }]];
+  if (e.unverified) out.push([{ text: `${indent}  answer unverified · check the diff`, color: theme.card.amber }]);
+  for (const l of wrap(e.answer ?? "", inner)) out.push([{ text: `${indent}  ${l}`, dim: e.unverified }]);
+  return out;
+}
+
+/** `▰▰▰▱▱▱▱▱▱▱ writing 3/11 · 4s`: ten cells, the phase, and how long the pipeline has run. */
+export function progressLine(p: Progress, elapsedMs: number, w: number): Segment[] {
+  const cells = 10;
+  const filled = p.total > 0 ? Math.round((p.done / p.total) * cells) : 0;
+  const bar = "▰".repeat(filled) + "▱".repeat(cells - filled);
+  const label = p.total > 0 ? `${p.phase} ${p.done}/${p.total}` : p.phase;
+  return [{ text: " " }, { text: bar, color: theme.accent }, { text: fit(` ${label} · ${Math.round(elapsedMs / 1000)}s`, Math.max(0, w - cells - 2)), dim: true }];
+}
+
 export function filesOf(review: Review, card: Card): string[] {
   const ids = new Set(card.blockIds);
   return review.changeSet.files.filter((f) => f.hunks.some((h) => h.blocks.some((b) => ids.has(b.id)))).map((f) => f.path);
@@ -115,6 +138,9 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
     const summary = files.length === 1 ? `${card.attention}, score ${card.score.toFixed(2)}` : `${card.attention} · ${files.join(", ")}`;
     lines.push(row([{ text: fit(`${spin}${summary}`, inner), dim: true }]));
   }
+  // The stack shows only the latest exchange on a card; the expanded view lists them all.
+  const last = cardExchanges(ctx.review, card).at(-1);
+  if (last) for (const segs of exchangeLines(last, inner, ctx.frame)) lines.push(row(segs));
   return lines;
 }
 
@@ -124,6 +150,13 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
   const ids = new Set(card.blockIds);
   const lines: Line[] = [];
   const push = (segs: Segment[]) => lines.push({ segments: segs });
+
+  const asked = cardExchanges(ctx.review, card);
+  if (asked.length > 1) {
+    push([{ text: `asked (${asked.length})`, color, bold: true }]);
+    for (const e of asked.slice(0, -1)) for (const segs of exchangeLines(e, w, ctx.frame)) push(segs);
+    push([{ text: "" }]);
+  }
 
   for (const l of evidenceLines(card, w, ctx.review)) push(l);
 

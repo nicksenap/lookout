@@ -240,6 +240,27 @@ export interface Radius {
   warning?: string;
 }
 
+/** A free question from the reviewer about one card or the whole change, and the model's grounded answer. */
+export interface Exchange {
+  id: string;
+  /** Absent: the question is about the whole change. */
+  cardId?: string;
+  question: string;
+  answer?: string;
+  status: "pending" | "answered" | "failed";
+  /** Decisions' probability that the answer follows from the edits it was given; below the gate it is shown unverified. */
+  check?: number;
+  unverified?: boolean;
+  error?: string;
+}
+
+/** Where the pipeline is, for a progress bar: items done of total in the current phase. */
+export interface Progress {
+  phase: "ranking" | "splitting" | "writing";
+  done: number;
+  total: number;
+}
+
 export interface Review {
   changeSet: ChangeSet;
   classification: Classification;
@@ -255,6 +276,10 @@ export interface Review {
   rankedBy: string; // "rules" | `rules+${model}`
   /** `--evidence`: claims, grounding, unmentioned, questions and agent dispatch were run. Off by default. */
   evidence: boolean;
+  /** Reviewer questions answered from the diff, newest last. */
+  exchanges: Exchange[];
+  /** Present while the pipeline runs; removed on done. */
+  progress?: Progress;
   warning?: string;
 }
 

@@ -21,6 +21,8 @@ export interface ModelRankOptions {
   resolveModel?: (spec: string, env: Env) => ResolvedModel;
   batchSize?: number;
   concurrency?: number;
+  /** Called after each batch lands: batches done of total. */
+  onProgress?: (done: number, total: number) => void;
 }
 
 /** Highest attention first, then highest score; stable for equal keys. */
@@ -77,8 +79,11 @@ export async function rankWithModel(ruled: ChangeSet, opts: ModelRankOptions): P
   for (let i = 0; i < missing.length; i += size) batches.push(missing.slice(i, i + size));
 
   let failure: string | undefined;
+  let done = 0;
+  if (batches.length > 0) opts.onProgress?.(0, batches.length);
   await mapLimit(batches, opts.concurrency ?? 4, async (batch) => {
     const scores = await attemptAsync(() => scoreBlockBatch(model, batch, ruled.intent));
+    opts.onProgress?.(++done, batches.length);
     if (!scores.ok) {
       failure ??= scores.error;
       return;

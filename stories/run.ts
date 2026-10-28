@@ -1,6 +1,7 @@
 // Story runner: render the real App against a saved Review, no git, models or agents.
-// Usage: bun stories/run.ts [review-a|review-b|review-c] [--size 100x30] [--paragraphs] [--slow]  (a/claims keys are gone from the TUI; fixtures still carry them for --json)
-//   a on a card streams a fake review and lands a finding; --paragraphs fills in sample paragraphs after 1.5s.
+// Usage: bun stories/run.ts [review-a|review-b|review-c] [--size 100x30] [--paragraphs] [--slow]
+//   / asks a question (answered by a canned sentence after 1.2s); --paragraphs fills in sample paragraphs after 1.5s;
+//   while pending, a fake progress bar walks ranking → writing.
 import { runTui } from "../src/tui/App.tsx";
 import { FixtureSession, loadReview } from "./fixture-session.ts";
 
@@ -14,7 +15,14 @@ if (args.includes("--size") && sizeArg) {
 }
 const slow = args.includes("--slow");
 const review = await loadReview(name);
-const session = new FixtureSession(review, { pendingMs: slow ? 4000 : 800, dispatchMs: slow ? 8000 : 2500 });
+const pendingMs = slow ? 4000 : 800;
+const session = new FixtureSession(review, { pendingMs, dispatchMs: slow ? 8000 : 2500, answerMs: 1200 });
+// A fake pipeline for the eye: the bar walks ranking then writing and clears when `done` fires.
+const steps = [{ phase: "ranking" as const, total: 3 }, { phase: "writing" as const, total: review.cards.length }];
+const ticks = steps.reduce((n, s) => n + s.total + 1, 0);
+let k = 0;
+for (const step of steps) for (let d = 0; d <= step.total; d++) setTimeout(() => session.setProgress({ phase: step.phase, done: d, total: step.total }), (pendingMs * k++) / ticks);
+setTimeout(() => session.setProgress(undefined), pendingMs);
 
 if (args.includes("--paragraphs")) {
   const samples = [

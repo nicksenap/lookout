@@ -50,6 +50,8 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged"
 6. One-way labels on cache keys over-state ("one-way" for renamed members); the true one-way rule (a task that has run can never leave a project) is semantic and unlabelled.
 7. Cold timing: 11–47 s on 10–26-file PRs (split round ~10 s per blob, sequential re-split, then prose + gate); warm 1–2 s. Plan said < 10 s. Concurrency is 12; the split prompt (≤ 120k chars) and two rounds dominate.
 
+**Added after the gate**: `/` ask (`src/ask/ask.ts`, session command `ask`, `Review.exchanges`): a card question is grounded in that card's edits, a change question in every card's title + paragraph plus the diff (≤ 60k chars); the answer is gated by `checkAnswerWithModel` (consistency, inference allowed) at 0.7. On PR A it named the narrowed `useUpdateField` invalidation in 3 s with check 1.0, the risk the gate said the cards buried. Progress (`Review.progress`, event `progress`) comes from `rankWithModel`/`proposeSplits` `onProgress` and the writer's per-card callback; the TUI draws a ten-cell bar under the header. The TUI itself was pruned to stack/expanded/ask: no claims view, questions, findings or dispatch keys (`--evidence` is JSON-only).
+
 **Decisions this session**
 - Keep deterministic grouping as the spine; the LLM only partitions blobs, rules repair/reject. Full LLM grouping was 65 s and worse in v1.
 - The guard only demotes. Promoting model-called-behaviour to mechanical would let rules lower attention; left out on purpose.

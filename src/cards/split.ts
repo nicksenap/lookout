@@ -29,6 +29,8 @@ export interface SplitOptions {
   cache?: RankCache;
   /** Injection point for tests. */
   write?: (prompt: string) => Promise<string>;
+  /** Called as each blob is settled: blobs done of total. */
+  onProgress?: (done: number, total: number) => void;
 }
 
 // Bumped when the prompt changes so a sharper question is never answered from an old cache.
@@ -151,9 +153,11 @@ export async function proposeSplits(changeSet: ChangeSet, cards: Card[], opts: S
     if (!partition) warning ??= "Some large cards were not split: the model's partition was unusable";
     return partition;
   };
+  let settled = 0;
+  opts.onProgress?.(0, blobs.length);
   await Promise.all(
     blobs.map(async (card) => {
-      const first = await splitOne(card);
+      const first = await splitOne(card).finally(() => opts.onProgress?.(++settled, blobs.length));
       if (!first) return;
       // One more round for concerns still too large to read; the model tends to keep "the main change" whole.
       const second = await Promise.all(first.map(async (c) => (c.blockIds.length > RESPLIT_BLOCKS ? (await splitOne({ id: cardId(c.blockIds), blockIds: c.blockIds })) ?? [c] : [c])));

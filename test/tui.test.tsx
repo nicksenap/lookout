@@ -125,6 +125,77 @@ describe("stack contents", () => {
   });
 });
 
+describe("ask and progress", () => {
+  test("/ opens an ask line about the selected card; typing, backspace and enter send it; the answer lands under the card", async () => {
+    const { app, session, screen } = await mount("review-c", 100, 30);
+    app.stdin.write("/");
+    await tick();
+    expect(screen().at(-1)).toContain("ask about card 1 ›");
+    app.stdin.write("why 3x?");
+    app.stdin.write("\x7f");
+    app.stdin.write("?");
+    await tick();
+    expect(screen().at(-1)).toContain("why 3x?");
+    const landed = until(session, "exchange.updated");
+    app.stdin.write("\r");
+    await tick();
+    expect(screen().at(-1)).toContain("j/k card");
+    expect(screen().some((l) => l.includes("› why 3x?"))).toBe(true);
+    await landed;
+    await tick();
+    const s = screen();
+    const q = s.findIndex((l) => l.includes("› why 3x?"));
+    expect(q).toBeGreaterThan(0);
+    expect(s[q + 1]).toContain("Fixture answer");
+    expect(session.snapshot().exchanges[0]!.cardId).toBe(session.snapshot().cards[0]!.id);
+  });
+
+  test("a second / on an empty line asks about the whole change; the lane sits above the cards; an unverified answer says so; esc cancels", async () => {
+    const review = await loadReview("review-c");
+    const session = new FixtureSession(review, { dispatchMs: 0, unverified: true });
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns: 100, rows: 30 }} frame={0} throttleMs={0} />);
+    await tick();
+    app.stdin.write("/");
+    app.stdin.write("/");
+    await tick();
+    expect(lines(app.lastFrame()).at(-1)).toContain("ask about the change ›");
+    app.stdin.write("\x1b");
+    await tick();
+    expect(lines(app.lastFrame()).at(-1)).toContain("j/k card");
+    expect(session.snapshot().exchanges).toHaveLength(0);
+    app.stdin.write("/");
+    app.stdin.write("/");
+    app.stdin.write("safe?");
+    const landed = until(session, "exchange.updated");
+    app.stdin.write("\r");
+    await landed;
+    await tick();
+    const s = lines(app.lastFrame());
+    const q = s.findIndex((l) => l.includes("› safe?"));
+    const firstCard = s.findIndex((l) => /^┃ (RED|AMBER|GREEN)/.test(l) || /^█ (RED|AMBER|GREEN)/.test(l));
+    expect(q).toBeGreaterThan(0);
+    expect(q).toBeLessThan(firstCard);
+    expect(s[q + 1]).toContain("answer unverified");
+    expect(session.snapshot().exchanges[0]!.cardId).toBeUndefined();
+  });
+
+  test("progress shows as a bar under the header while the pipeline runs and takes one row from the body; it disappears on clear", async () => {
+    const { app, session, screen } = await mount("review-c", 100, 30);
+    const before = screen();
+    session.setProgress({ phase: "writing", done: 3, total: 10 });
+    await tick();
+    const s = screen();
+    expect(s.length).toBe(before.length);
+    expect(s[1]).toContain("▰▰▰▱▱▱▱▱▱▱");
+    expect(s[1]).toContain("writing 3/10");
+    session.setProgress(undefined);
+    await tick();
+    expect(screen()[1]).not.toContain("▰");
+    void app;
+  });
+});
+
 describe("text helpers", () => {
   test("fit never exceeds the width, including wide characters", () => {
     for (const w of [0, 1, 5, 12]) {

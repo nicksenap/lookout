@@ -2,7 +2,7 @@ import { Box, render, Text, useApp, useInput, useStdout } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewSession } from "../core/session.ts";
 import type { Card, Review } from "../core/types.ts";
-import { type CardContext, cardLines, expandedLines, fit, type Line, plural, Row, sides } from "./Card.tsx";
+import { type CardContext, cardLines, changeExchanges, exchangeLines, expandedLines, fit, type Line, plural, progressLine, Row, sides } from "./Card.tsx";
 import { HELP_LINES, keyAction, keyHelp, type Mode } from "./keys.ts";
 import { theme } from "./theme.ts";
 
@@ -88,18 +88,32 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const [help, setHelp] = useState(false);
   const [scroll, setScroll] = useState(0);
   const [top, setTop] = useState(0);
+  /** The ask line, while open: what the question is about and what has been typed. A ref mirrors it because several keys can arrive in one tick. */
+  const [asking, setAskingState] = useState<{ scope: "card" | "change"; text: string }>();
+  const askingRef = useRef(asking);
+  const setAsking = (next: typeof asking) => {
+    askingRef.current = next;
+    setAskingState(next);
+  };
   const openedAt = useRef(Date.now());
 
   const cards = review.cards;
   const sel = Math.max(0, Math.min(selected, cards.length - 1));
   const card: Card | undefined = cards[sel];
   const w = size.columns;
-  const bodyH = Math.max(3, size.rows - 1 - 2); // header, footer; one row spare for Ink
+  // Header, footer, one row spare for Ink, and the progress row while the pipeline runs.
+  const bodyH = Math.max(3, size.rows - 1 - 2 - (review.progress ? 1 : 0));
 
   const ctx: CardContext = { review, pending, frame };
 
   const stackLines = useMemo(() => {
     const out: Line[] = [];
+    // Questions about the whole change sit above the cards, in the accent colour, like a conversation lane.
+    const about = changeExchanges(review);
+    if (about.length > 0) {
+      for (const e of about) for (const segs of exchangeLines(e, w - 2, frame, "")) out.push({ segments: [{ text: "┃ ", color: theme.accent }, ...segs] });
+      out.push({ segments: [{ text: "" }] });
+    }
     cards.forEach((c, k) => {
       out.push(...cardLines(c, k, k === sel, w, ctx));
       out.push({ segments: [{ text: "" }], card: k });
@@ -119,9 +133,27 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   }, [windowTop, mode, top]);
   const visible = bodyLines.slice(windowTop, windowTop + bodyH);
 
+  const send = (scope: "card" | "change", text: string) => {
+    const cardId = scope === "card" && card && card.fixed !== "clean" ? card.id : undefined;
+    void session.command({ type: "ask", text, ...(cardId ? { cardId } : {}) });
+  };
+
   useInput((input, key) => {
     if (help) {
       if (key.escape || input === "?" || input === "q" || key.return) setHelp(false);
+      return;
+    }
+    const line = askingRef.current;
+    if (line) {
+      if (key.escape) return setAsking(undefined);
+      if (key.return) {
+        if (line.text.trim() !== "") send(line.scope, line.text.trim());
+        return setAsking(undefined);
+      }
+      if (key.backspace || key.delete) return setAsking({ ...line, text: line.text.slice(0, -1) });
+      // A second `/` on an empty line widens the question to the whole change.
+      if (input === "/" && line.text === "") return setAsking({ scope: line.scope === "card" ? "change" : "card", text: "" });
+      if (input && !key.ctrl && !key.meta) return setAsking({ ...line, text: line.text + input });
       return;
     }
     const action = keyAction(input, key);
@@ -131,6 +163,8 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
         return exit();
       case "help":
         return setHelp(true);
+      case "ask":
+        return setAsking({ scope: card && card.fixed !== "clean" ? "card" : "change", text: "" });
       case "expand":
         if (card && card.fixed !== "clean") {
           setScroll(0);
@@ -169,12 +203,21 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     .filter(Boolean)
     .join(" · ");
   const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
-  const footerText = review.warning ?? keyHelp(mode).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
-  const footer: Line = { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning }] };
+  const footer: Line = asking
+    ? (() => {
+        const about = asking.scope === "card" && card ? `card ${sel + 1}` : "the change";
+        const prompt = ` ask about ${about} › `;
+        return { segments: [{ text: prompt, color: theme.accent, bold: true }, { text: fit(asking.text, Math.max(0, w - prompt.length - 2)) }, { text: "▏", color: theme.accent }] };
+      })()
+    : (() => {
+        const text = review.warning ?? keyHelp(mode).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
+        return { segments: [{ text: " " }, { text: fit(text, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning }] };
+      })();
 
   return (
     <Box flexDirection="column" width={w} height={size.rows - 1}>
       <Row line={header} w={w} />
+      {review.progress ? <Row line={{ segments: progressLine(review.progress, Date.now() - openedAt.current, w) }} w={w} /> : null}
       <Box flexDirection="column" height={bodyH}>
         {help
           ? HELP_LINES.slice(0, bodyH).map((l, k) => <Row key={k} line={{ segments: [{ text: ` ${fit(l, w - 1)}` }] }} w={w} />)

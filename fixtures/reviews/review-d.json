@@ -4948,5 +4948,6 @@
   },
   "dispatches": [],
   "rankedBy": "rules+openai:gpt-6-luna",
-  "evidence": true
+  "evidence": true,
+  "exchanges": []
 }

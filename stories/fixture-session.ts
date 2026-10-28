@@ -1,6 +1,6 @@
 import type { ReviewCommand, ReviewEvent, ReviewSession } from "../src/core/session.ts";
 import { err, ok, type Result } from "../src/core/result.ts";
-import type { Card, Dispatch, Finding, Review } from "../src/core/types.ts";
+import type { Card, Dispatch, Exchange, Finding, Review } from "../src/core/types.ts";
 
 export interface FixtureOptions {
   /** Simulate the pipeline: emit `done` after this many ms (0 = synchronously on first subscribe). */
@@ -8,6 +8,9 @@ export interface FixtureOptions {
   /** When set, `dispatchCard` streams this fake output over `dispatchMs` and lands one finding. */
   dispatchMs?: number;
   dispatchable?: boolean;
+  /** `ask` answers after this many ms (0 = next tick) with a canned sentence; `unverified` marks every answer so. */
+  answerMs?: number;
+  unverified?: boolean;
 }
 
 /**
@@ -43,6 +46,19 @@ export class FixtureSession implements ReviewSession {
 
   async command(c: ReviewCommand): Promise<Result<void>> {
     switch (c.type) {
+      case "ask": {
+        if (c.text.trim() === "") return err("ask something");
+        const exchange: Exchange = { id: `q${++this.seq}`, question: c.text.trim(), status: "pending", ...(c.cardId ? { cardId: c.cardId } : {}) };
+        this.review = { ...this.review, exchanges: [...this.review.exchanges, exchange] };
+        this.emit({ type: "exchange.added", exchange });
+        const land = () => {
+          const patch: Partial<Exchange> = { status: "answered", answer: `Fixture answer to "${exchange.question}": the diff changes retry(1) to retry(3).`, check: this.opts.unverified ? 0.4 : 0.95, ...(this.opts.unverified ? { unverified: true } : {}) };
+          this.review = { ...this.review, exchanges: this.review.exchanges.map((e) => (e.id === exchange.id ? { ...e, ...patch } : e)) };
+          this.emit({ type: "exchange.updated", id: exchange.id, patch });
+        };
+        this.timers.push(setTimeout(land, this.opts.answerMs ?? 0));
+        return ok(undefined);
+      }
       case "dispatchCard": {
         if (this.opts.dispatchable === false) return err("no dispatchers configured");
         const card = this.review.cards.find((x) => x.id === c.cardId);
@@ -70,6 +86,13 @@ export class FixtureSession implements ReviewSession {
       default:
         return err(`${c.type} not in the fixture`);
     }
+  }
+
+  /** Show or clear pipeline progress, as the session does between phases. */
+  setProgress(progress: Review["progress"]): void {
+    const { progress: _, ...rest } = this.review;
+    this.review = progress ? { ...rest, progress } : rest;
+    this.emit({ type: "progress", ...(progress ? { progress } : {}) });
   }
 
   /** Write a paragraph onto a card, as the LLM step will. */
