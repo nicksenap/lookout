@@ -51,7 +51,7 @@ Guidance for agents working in this repository. `PLAN.md` is the spec; `GLOSSARY
 
 ## Checks
 
-- `just check` (typecheck, tests, fixture drift) must pass before a commit; it is exactly what CI runs. Add new checks to the `Justfile`, never to `ci.yml`. `just install-hooks` installs the pre-commit fast subset.
+- `bun run check` (typecheck, tests, fixture drift) must pass before a commit; it is exactly what CI runs. Add new checks to the `check` script in `package.json`, never to `ci.yml`. `bun run hooks` installs the pre-commit fast subset.
 - Max 3 attempts on the same failing command or approach, then stop and report what was tried.
 - Each numbered step in `PLAN.md` ends with a check. Do not start step N+1 until step N's check passes.
 

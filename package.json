@@ -9,9 +9,14 @@
     "lookout": "bin/lookout"
   },
   "scripts": {
+    "check": "bun run typecheck && bun test && bun run fixtures:check",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "story": "bun stories/run.ts"
+    "fixtures": "bun scripts/refresh-fixtures.ts",
+    "fixtures:check": "bun scripts/refresh-fixtures.ts > /dev/null && git diff --quiet -- fixtures/reviews || (echo 'fixtures/reviews drifted from the pipeline; run bun run fixtures and commit' && git --no-pager diff --stat -- fixtures/reviews && exit 1)",
+    "story": "bun stories/run.ts",
+    "bench": "scripts/grouping-bench.sh",
+    "hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.89",

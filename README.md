@@ -172,10 +172,10 @@ Everything is cached by content hash under `~/.cache/lookout`, so re-running a P
 ## Development
 
 ```sh
-just check          # what CI runs: typecheck, tests, fixture drift
-just install-hooks  # pre-commit runs the fast subset
-just story review-a --paragraphs   # the real App against a saved review, no models
-just bench          # grouping benchmark against hand-judged targets
+bun run check       # what CI runs: typecheck, tests, fixture drift
+bun run hooks       # pre-commit runs the fast subset
+bun run story review-a --paragraphs   # the real App against a saved review, no models
+bun run bench       # grouping benchmark against hand-judged targets
 ```
 
 `AGENTS.md` has the working rules, `GLOSSARY.md` the vocabulary, `PLAN-v2.md` the current plan (the v1 design is `PLAN.md`), `HANDOFF.md` where things stand.
