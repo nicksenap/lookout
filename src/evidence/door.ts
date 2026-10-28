@@ -64,17 +64,19 @@ export function doorSignals(changeSet: ChangeSet): DoorSignal[] {
       if (l.kind === "add") {
         // Test code deletes fixtures and writes rows on purpose; only production edits are door signals.
         if (r.block.labels.includes("test")) continue;
-        if (DESTRUCTIVE_SQL.test(text)) push({ kind: "destructive-sql", path, line: l.newLine, text });
-        else if (SQL_WRITE.test(text) || ORM_WRITE.test(text) || KV_WRITE.test(text) || FS_DELETE.test(text)) push({ kind: "data-write", path, line: l.newLine, text });
+        if (DESTRUCTIVE_SQL.test(text)) push({ kind: "destructive-sql", path, line: l.newLine, side: "new", text: `destructive SQL: ${text.slice(0, 60)}` });
+        else if (KV_WRITE.test(text)) push({ kind: "data-write", path, line: l.newLine, side: "new", text: "updates stored items in place" });
+        else if (SQL_WRITE.test(text) || ORM_WRITE.test(text)) push({ kind: "data-write", path, line: l.newLine, side: "new", text: "writes rows" });
+        else if (FS_DELETE.test(text)) push({ kind: "data-write", path, line: l.newLine, side: "new", text: "deletes files" });
         continue;
       }
       const exp = PUBLIC_PATH.test(path) ? EXPORT_DECL.exec(l.text) : null;
-      if (exp && !stillExported(exp[1]!)) push({ kind: "removed-export", path, line: l.oldLine, text: `export ${exp[1]} removed` });
+      if (exp && !stillExported(exp[1]!)) push({ kind: "removed-export", path, line: l.oldLine, side: "old", text: `export ${exp[1]} removed` });
       const object = PUBLIC_PATH.test(path) ? enclosingObject(r.block.from + offset) : undefined;
       const member = object ? MEMBER_FN.exec(l.text)?.[1] : undefined;
-      if (object && member && !stillMember(member)) push({ kind: "removed-export", path, line: l.oldLine, text: `${object}.${member} removed` });
+      if (object && member && !stillMember(member)) push({ kind: "removed-export", path, line: l.oldLine, side: "old", text: `${object}.${member} removed` });
       const route = ROUTE.exec(l.text) ?? ROUTE_DECORATOR.exec(l.text);
-      if (route && !stillRouted(route[1]!)) push({ kind: "removed-route", path, line: l.oldLine, text: `route ${route[1]} removed` });
+      if (route && !stillRouted(route[1]!)) push({ kind: "removed-route", path, line: l.oldLine, side: "old", text: `route ${route[1]} removed` });
     }
   }
   return out;
@@ -96,8 +98,11 @@ export function detectDoor(changeSet: ChangeSet, author: DoorKind | undefined): 
 export function attachDoorSignals(changeSet: ChangeSet, cards: Card[], signals: DoorSignal[]): Card[] {
   if (signals.length === 0) return cards.map(({ doorSignals: _, ...c }) => c);
   const refs = allBlocks(changeSet);
+  // A removed line is numbered on the old side, an added one on the new; matching both sides put a
+  // removed export on whichever block happened to add lines at the same numbers.
   const owner = (s: DoorSignal): BlockRef | undefined =>
-    refs.find((r) => r.block.path === s.path && s.line !== undefined && (inRange(r.block.newRange, s.line) || inRange(r.block.oldRange, s.line))) ?? refs.find((r) => r.block.path === s.path);
+    refs.find((r) => r.block.path === s.path && s.line !== undefined && (s.side === "old" ? inRange(r.block.oldRange, s.line) : s.side === "new" ? inRange(r.block.newRange, s.line) : inRange(r.block.newRange, s.line) || inRange(r.block.oldRange, s.line))) ??
+    refs.find((r) => r.block.path === s.path);
   return cards.map((card) => {
     const ids = new Set(card.blockIds);
     const own = signals.filter((s) => {

@@ -27,6 +27,7 @@ for await (const f of new Glob("*.json").scan(dir)) {
   });
   const claims = review.claims.map((cl) => (cl.cardId && previous.has(cl.cardId) ? { ...cl, cardId: successor(cl.cardId) } : cl));
   const kept = cards.filter((c) => previous.has(c.id)).length;
-  await Bun.write(`${dir}/${f}`, JSON.stringify({ ...review, changeSet, cards, claims }, null, 2) + "\n");
+  // Saved fixtures carry claims and questions, so they are evidence runs.
+  await Bun.write(`${dir}/${f}`, JSON.stringify({ ...review, changeSet, cards, claims, evidence: true }, null, 2) + "\n");
   console.log(`${f}: ${review.cards.length} → ${cards.length} cards, ${kept} kept their prose`);
 }

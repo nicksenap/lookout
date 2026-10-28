@@ -149,6 +149,8 @@ export interface Card {
   /** Union of block labels (test, docs, sensitive, …), without the content labels. */
   labels: string[];
   blockIds: string[];
+  /** Paths of the card's blocks, in diff order; derived, for readers of the JSON. */
+  files: string[];
   /** Highest attention and score among the card's blocks. */
   attention: Attention;
   score: number;
@@ -215,6 +217,9 @@ export interface DoorSignal {
   kind: "migration" | "destructive-sql" | "data-write" | "removed-export" | "removed-route" | "contract";
   path: string;
   line?: number;
+  /** Which side `line` numbers: removed-* signals point at old lines, writes at new ones. */
+  side?: "old" | "new";
+  /** A one-line reason a reviewer can read, not the code. */
   text: string;
 }
 export interface Door {
@@ -230,9 +235,8 @@ export interface Radius {
   author?: string;
   /** Policy areas touched by non-inert blocks (same as the classification). */
   areas: string[];
-  /** Files in the repo that import a changed file and are not themselves changed. Absent until computed; empty when none. */
+  /** Kept for saved reviews written before importers were removed; never set now. */
   importers?: string[];
-  /** Why importers could not be computed. */
   warning?: string;
 }
 
@@ -249,6 +253,8 @@ export interface Review {
   radius: Radius;
   dispatches: Dispatch[];
   rankedBy: string; // "rules" | `rules+${model}`
+  /** `--evidence`: claims, grounding, unmentioned, questions and agent dispatch were run. Off by default. */
+  evidence: boolean;
   warning?: string;
 }
 

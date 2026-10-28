@@ -33,7 +33,7 @@ async function changeSet(): Promise<ChangeSet> {
 }
 function review(cs: ChangeSet): Review {
   const classification = classify(cs, DEFAULT_POLICY);
-  return { changeSet: cs, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(cs, DEFAULT_POLICY), untouched: untouchedAreas(cs, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules" };
+  return { changeSet: cs, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(cs, DEFAULT_POLICY), untouched: untouchedAreas(cs, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules", evidence: true };
 }
 const finding = (id: string, title: string, extra: Partial<Finding> = {}): Finding => ({ id, severity: "p1", title, body: "", dispatcher: "fake", status: "proposed", preExisting: false, ...extra });
 const fence = (json: string) => `chatter\n\`\`\`json\n${json}\n\`\`\`\n`;
@@ -227,7 +227,7 @@ describe("LocalSession propose → verify", () => {
     const cs = await changeSet();
     const cfg = config(verifierMode);
     const repo = tmp();
-    const session = new LocalSession({ config: cfg, changeSet: cs, env: {}, runner: (store) => new DispatchRunner(store, { repo, config: cfg }) });
+    const session = new LocalSession({ config: cfg, changeSet: cs, env: {}, evidence: true, runner: (store) => new DispatchRunner(store, { repo, config: cfg }) });
     await session.ready();
     const events: ReviewEvent[] = [];
     session.subscribe((e) => events.push(e));
@@ -274,7 +274,7 @@ describe("LocalSession propose → verify", () => {
 
   test("answerQuestion records the answer and patches the card; unknown ids fail softly", async () => {
     const cs = await changeSet();
-    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: cs, env: {} });
+    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: cs, env: {}, evidence: true });
     await session.ready();
     const card = session.snapshot().cards.find((c) => c.questions.length > 0)!;
     expect(card).toBeDefined();

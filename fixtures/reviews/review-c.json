@@ -526,6 +526,10 @@
         "44f669c88415",
         "4ea110a6b496"
       ],
+      "files": [
+        "src/cli/env.ts",
+        "src/cli/main.ts"
+      ],
       "attention": "needs-eyes",
       "score": 0.739,
       "claimIds": [
@@ -550,6 +554,9 @@
       "blockIds": [
         "d3ed11406a2d",
         "a3dd63791f18"
+      ],
+      "files": [
+        "test/sources.test.ts"
       ],
       "attention": "routine",
       "score": 0.294,
@@ -634,5 +641,6 @@
     ]
   },
   "dispatches": [],
-  "rankedBy": "rules+openai:gpt-6-luna"
+  "rankedBy": "rules+openai:gpt-6-luna",
+  "evidence": true
 }

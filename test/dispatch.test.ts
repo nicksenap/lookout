@@ -21,7 +21,7 @@ async function review(): Promise<Review> {
   const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/result-errors.diff`).text());
   const changeSet = { target: "HEAD~1..HEAD", base: "a", head: "b", files, intent: { title: "Return Result everywhere", body: "Expected failures are returned, not thrown." } };
   const classification = classify(changeSet, DEFAULT_POLICY);
-  return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(changeSet, DEFAULT_POLICY), untouched: untouchedAreas(changeSet, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules" };
+  return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(changeSet, DEFAULT_POLICY), untouched: untouchedAreas(changeSet, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules", evidence: true };
 }
 
 /** Unwrap a Result in tests; a failure is a test failure with the message. */

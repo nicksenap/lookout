@@ -4804,6 +4804,16 @@
         "03415796b2ee",
         "de57b34e440c"
       ],
+      "files": [
+        "scripts/inert-audit.ts",
+        "src/core/blocks.ts",
+        "src/core/diff.ts",
+        "src/core/result.ts",
+        "src/core/types.ts",
+        "src/rank/model.ts",
+        "src/rank/rank.ts",
+        "src/rank/rules.ts"
+      ],
       "attention": "needs-eyes",
       "score": 0.738,
       "claimIds": [],
@@ -4830,6 +4840,10 @@
         "4c0ca3f3d98e",
         "51f8301ea145"
       ],
+      "files": [
+        "test/blocks.test.ts",
+        "test/model.test.ts"
+      ],
       "attention": "routine",
       "score": 0.425,
       "claimIds": [],
@@ -4855,6 +4869,9 @@
         "e9c548142d67",
         "52c525e842ad"
       ],
+      "files": [
+        "PLAN.md"
+      ],
       "attention": "routine",
       "score": 0.14,
       "claimIds": [],
@@ -4876,6 +4893,9 @@
       "blockIds": [
         "79aae49d3106"
       ],
+      "files": [
+        "PLAN.md"
+      ],
       "attention": "routine",
       "score": 0.254,
       "claimIds": [],
@@ -4896,6 +4916,11 @@
         "6eae5619f49e",
         "060b3a2df956",
         "d80a7be97fdf"
+      ],
+      "files": [
+        "scripts/inert-audit.ts",
+        "src/rank/rank.ts",
+        "src/rank/rules.ts"
       ],
       "attention": "inert",
       "score": 0.175,
@@ -4922,5 +4947,6 @@
     "areas": []
   },
   "dispatches": [],
-  "rankedBy": "rules+openai:gpt-6-luna"
+  "rankedBy": "rules+openai:gpt-6-luna",
+  "evidence": true
 }

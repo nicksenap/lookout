@@ -11,7 +11,6 @@ import type { Card, ChangeSet, Claim } from "../src/core/types.ts";
 import { DEFAULT_CONFIG } from "../src/dispatch/config.ts";
 import { ANSWER_MIN, applyClaims, authorDoor, CONTRADICTED_MIN, extractClaims, extractClaimsWithModel, gateStatus, groundClaims, judgeDoorClaim, needsModelExtraction, parseClaimList } from "../src/evidence/claims.ts";
 import { attachDoorSignals, detectDoor, doorSignals } from "../src/evidence/door.ts";
-import { findImporters } from "../src/evidence/radius.ts";
 import { markTests, stemOf } from "../src/evidence/tests.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { RankCache } from "../src/rank/cache.ts";
@@ -243,7 +242,7 @@ describe("groundClaims", () => {
   });
 
   test("applyClaims: cards get their claim ids; an uncovered card at needs-eyes or above is unmentioned, a routine or mechanical one is not", () => {
-    const card = (id: string, attention: Card["attention"], extra: Partial<Card> = {}): Card => ({ id, title: id, color: "green", kind: "logic", areas: [], labels: [], blockIds: [id], attention, score: 0, claimIds: [], unmentioned: false, testsTouched: false, questions: [], ...extra });
+    const card = (id: string, attention: Card["attention"], extra: Partial<Card> = {}): Card => ({ id, title: id, color: "green", kind: "logic", areas: [], labels: [], blockIds: [id], files: [id], attention, score: 0, claimIds: [], unmentioned: false, testsTouched: false, questions: [], ...extra });
     const cards = [card("a", "needs-eyes"), card("b", "needs-eyes"), card("c", "routine"), card("d", "suspicious", { mechanical: true }), card("clean", "inert", { fixed: "clean" })];
     const claims: Claim[] = [
       { id: "1", text: "x", section: "summary", status: "supported", cardId: "a" },
@@ -318,31 +317,6 @@ describe("door", () => {
   });
 });
 
-describe("findImporters", () => {
-  const git = async (dir: string, ...args: string[]) => {
-    const p = Bun.spawn(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe" });
-    await p.exited;
-  };
-  test("lists tracked files that import a changed file, excluding the change itself; no match is an empty list", async () => {
-    const repo = tmp("lookout-radius-");
-    await Bun.write(join(repo, "src/core/result.ts"), "export const ok = 1;\n");
-    await Bun.write(join(repo, "src/core/session.ts"), 'import { ok } from "./result.ts";\n');
-    await Bun.write(join(repo, "lib/other.py"), "from core.result import ok\n");
-    await Bun.write(join(repo, "README.md"), "see result.ts\n");
-    await Bun.write(join(repo, "src/lonely.ts"), "export const x = 1;\n");
-    await git(repo, "init", "-q");
-    await git(repo, "add", ".");
-    const changed = (path: string): ChangeSet => ({ target: "t", base: "", head: "", files: parseDiff(diff(path, "@@ -1,1 +1,1 @@", ["-a", "+b"])) });
-    expect(await findImporters(changed("src/core/result.ts"), repo)).toEqual({ ok: true, value: { importers: ["lib/other.py", "src/core/session.ts"] } });
-    expect(await findImporters(changed("src/lonely.ts"), repo)).toEqual({ ok: true, value: { importers: [] } });
-    expect(await findImporters(changed("README.md"), repo)).toEqual({ ok: true, value: { importers: [] } });
-    // A changed file the checkout does not have (stale clone): importers come with a warning.
-    const stale = await findImporters(changed("src/core/elsewhere.ts"), repo);
-    expect(stale).toMatchObject({ ok: true, value: { importers: [], warning: expect.stringContaining("1 changed file is not in this checkout") } });
-    const notRepo = await findImporters(changed("src/core/result.ts"), tmp("lookout-notrepo-"));
-    expect(notRepo.ok).toBe(false);
-  });
-});
 
 describe("LocalSession evidence", () => {
   const rankMock = () =>
@@ -354,13 +328,14 @@ describe("LocalSession evidence", () => {
       }),
     });
 
-  test("claims are extracted from the intent at once, grounded after prose, and cards point at them; importers land as a radius patch", async () => {
+  test("with --evidence, claims are extracted from the intent at once, grounded after prose, and cards point at them", async () => {
     const cs = await fixture("user-env", { title: "t", body: BODY });
     const model = rankMock();
     const events: ReviewEvent[] = [];
     const session = new LocalSession({
       config: DEFAULT_CONFIG,
       changeSet: cs,
+      evidence: true,
       repo: `${import.meta.dir}/..`,
       rank: (c, opts) => rankWithModel(c, { ...opts, cache: new RankCache(tmp("lookout-ev-")), resolveModel: () => ({ ok: true, model }) }),
       write: async () => "TITLE: Load user env\nPARAGRAPH: Reads the env file.",
@@ -377,20 +352,27 @@ describe("LocalSession evidence", () => {
     const after = session.snapshot();
     expect(after.claims.filter((c) => c.section === "summary").every((c) => c.status === "supported")).toBe(true);
     expect(after.cards[0]!.claimIds.length).toBeGreaterThan(0);
-    expect(after.radius.importers).toBeDefined();
     const types = events.map((e) => e.type);
     expect(types.filter((t) => t === "claim.updated").length).toBe(7);
-    expect(types).toContain("evidence.updated");
     expect(types.at(-1)).toBe("done");
     expect(events.some((e) => "changeSet" in e)).toBe(false);
   });
 
   test("without a key nothing is grounded, the door claim is still judged, and done fires", async () => {
-    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: await fixture("user-env", { title: "t", body: BODY }), env: {} });
+    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: await fixture("user-env", { title: "t", body: BODY }), env: {}, evidence: true });
     await session.ready();
     const r = session.snapshot();
     expect(r.claims.filter((c) => c.section !== "door").every((c) => c.status === undefined)).toBe(true);
     expect(r.claims.find((c) => c.section === "door")!.status).toBe("supported");
-    expect(r.radius.importers).toBeUndefined();
+  });
+
+  test("without --evidence there are no claims, no questions, and dispatch is refused", async () => {
+    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: await fixture("user-env", { title: "t", body: BODY }), env: {} });
+    await session.ready();
+    const r = session.snapshot();
+    expect(r.evidence).toBe(false);
+    expect(r.claims).toEqual([]);
+    expect(r.cards.every((c) => c.questions.length === 0 && !c.unmentioned)).toBe(true);
+    expect(await session.command({ type: "dispatchAll" })).toMatchObject({ ok: false, error: expect.stringContaining("--evidence") });
   });
 });

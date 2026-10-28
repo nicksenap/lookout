@@ -93,6 +93,7 @@ export function App({ session, dispatchable, showAll = false, size: sizeOverride
   const [scroll, setScroll] = useState(0);
   const [top, setTop] = useState(0);
   const [notice, setNotice] = useState<string>();
+  const openedAt = useRef(Date.now());
   const startedAt = useRef(new Map<string, number>());
   for (const d of review.dispatches) if (!startedAt.current.has(d.id)) startedAt.current.set(d.id, Date.now());
   const elapsed = (d: Dispatch) => Date.now() - (startedAt.current.get(d.id) ?? Date.now());
@@ -163,6 +164,7 @@ export function App({ session, dispatchable, showAll = false, size: sizeOverride
       case "back":
         return setMode("stack");
       case "claims":
+        if (!review.evidence) return setNotice("claims need --evidence");
         setScroll(0);
         return setMode(mode === "claims" ? "stack" : "claims");
       case "move":
@@ -192,9 +194,21 @@ export function App({ session, dispatchable, showAll = false, size: sizeOverride
   const v = review.verdict;
   const title = review.changeSet.intent?.title ? `${review.changeSet.target} · ${review.changeSet.intent.title}` : review.changeSet.target;
   const contradicted = review.claims.filter((c) => c.status === "contradicted").length;
-  const headerRight = [v.tier.toUpperCase(), plural(v.requiredHumans, "human"), plural(cards.length, "card"), contradicted ? `${plural(contradicted, "claim")} ✗` : "", review.door.computed === "one-way" ? "one-way" : "", pending ? `${theme.spinner[frame % theme.spinner.length]} ranking` : ""].filter(Boolean).join(" · ");
+  // Model name without its provider, and how long the pipeline has run; the stack is readable while that counter still moves.
+  const model = review.rankedBy.replace(/^rules\+?/, "").split(":").pop();
+  const headerRight = [
+    v.tier.toUpperCase(),
+    plural(v.requiredHumans, "human"),
+    plural(cards.length, "card"),
+    review.evidence && contradicted ? `${plural(contradicted, "claim")} ✗` : "",
+    review.door.computed === "one-way" ? "one-way" : "",
+    model ? model : "rules only",
+    pending ? `${theme.spinner[frame % theme.spinner.length]} ${Math.round((Date.now() - openedAt.current) / 1000)}s` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
-  const footerText = notice ?? review.warning ?? keyHelp(mode, running !== undefined, dispatchable, review.claims.length > 0 || review.door.computed === "one-way", (card?.questions.length ?? 0) > 0).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
+  const footerText = notice ?? review.warning ?? keyHelp(mode, running !== undefined, dispatchable, review.evidence && (review.claims.length > 0 || review.door.computed === "one-way"), (card?.questions.length ?? 0) > 0).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
   const footer: Line = { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: notice ? theme.card.amber : undefined, dim: !notice }] };
 
   return (

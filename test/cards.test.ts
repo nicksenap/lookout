@@ -109,7 +109,7 @@ describe("untouchedAreas", () => {
 });
 
 describe("cardPatches", () => {
-  const card = (id: string, color: Card["color"] = "green"): Card => ({ id, title: id, color, kind: "logic", areas: [], labels: [], blockIds: [id], attention: "routine", score: 0.1, claimIds: [], unmentioned: false, testsTouched: false, questions: [] });
+  const card = (id: string, color: Card["color"] = "green"): Card => ({ id, title: id, color, kind: "logic", areas: [], labels: [], blockIds: [id], files: [id], attention: "routine", score: 0.1, claimIds: [], unmentioned: false, testsTouched: false, questions: [] });
   test("same order → one card.updated per changed card with only the changed fields", () => {
     const before = [card("a"), card("b")];
     const after = [card("a"), { ...card("b", "amber"), attention: "needs-eyes" as const }];
@@ -183,7 +183,7 @@ describe("LocalSession", () => {
     const fake = `${import.meta.dir}/../fixtures/fake-dispatcher.sh`;
     const config = { ...DEFAULT_CONFIG, dispatchers: [{ name: "fake", cmd: `sh ${fake} {prompt_file}` }] };
     const repo = tmp();
-    const session = new LocalSession({ config, changeSet: cs, env: {}, runner: (store) => new DispatchRunner(store, { repo, config }) });
+    const session = new LocalSession({ config, changeSet: cs, env: {}, evidence: true, runner: (store) => new DispatchRunner(store, { repo, config }) });
     await session.ready();
     const card = session.snapshot().cards[0]!;
     expect((await session.command({ type: "dispatchCard", cardId: "nope" })).ok).toBe(false);

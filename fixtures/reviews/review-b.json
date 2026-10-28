@@ -3896,6 +3896,14 @@
         "cf24e823f071",
         "a1f98dfb93fe"
       ],
+      "files": [
+        "scripts/tier-survey.ts",
+        "src/cli/main.ts",
+        "src/core/types.ts",
+        "src/dispatch/config.ts",
+        "src/policy/evaluate.ts",
+        "src/policy/schema.ts"
+      ],
       "attention": "needs-eyes",
       "score": 0.73,
       "claimIds": [],
@@ -3923,6 +3931,9 @@
       "blockIds": [
         "334b24d81b1f"
       ],
+      "files": [
+        "src/core/types.ts"
+      ],
       "attention": "needs-eyes",
       "score": 0.442,
       "claimIds": [],
@@ -3947,6 +3958,10 @@
         "5454929e3ca4",
         "f2b87b37b7fc"
       ],
+      "files": [
+        "test/dispatch.test.ts",
+        "test/policy.test.ts"
+      ],
       "attention": "routine",
       "score": 0.476,
       "claimIds": [],
@@ -3970,6 +3985,9 @@
       "blockIds": [
         "7e271cdad315"
       ],
+      "files": [
+        "src/dispatch/config.ts"
+      ],
       "attention": "routine",
       "score": 0.303,
       "claimIds": [],
@@ -3987,6 +4005,9 @@
       "labels": [],
       "blockIds": [
         "bf129ebeda9f"
+      ],
+      "files": [
+        "src/dispatch/config.ts"
       ],
       "attention": "routine",
       "score": 0.118,
@@ -4014,5 +4035,6 @@
     "areas": []
   },
   "dispatches": [],
-  "rankedBy": "rules+openai:gpt-6-luna"
+  "rankedBy": "rules+openai:gpt-6-luna",
+  "evidence": true
 }

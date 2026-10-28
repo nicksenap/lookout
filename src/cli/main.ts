@@ -16,6 +16,8 @@ Usage:
 
 Options:
   --json        print the Review as JSON instead of opening the card stack
+  --evidence    also run the evidence layer: PR claims grounded against the cards,
+                unmentioned cards, review questions, and agent dispatch (a/A)
   --all         also show rejected and dropped findings, with why
   --version     print version
   --help        this help`;
@@ -23,14 +25,16 @@ Options:
 interface CliArgs {
   json: boolean;
   all: boolean;
+  evidence: boolean;
   target?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { json: false, all: false };
+  const args: CliArgs = { json: false, all: false, evidence: false };
   for (const a of argv) {
     if (a === "--json") args.json = true;
     else if (a === "--all") args.all = true;
+    else if (a === "--evidence") args.evidence = true;
     else if (a === "--version" || a === "-v") {
       console.log(`lookout ${pkg.version}`);
       process.exit(0);
@@ -61,6 +65,7 @@ async function main(): Promise<number> {
     config: config.value,
     changeSet: loaded.value,
     repo,
+    evidence: args.evidence,
     runner: (store) => (runner = new DispatchRunner(store, { repo, config: config.value })),
   });
 
@@ -72,7 +77,7 @@ async function main(): Promise<number> {
     return 0;
   }
   const { runTui } = await import("../tui/App.tsx");
-  await runTui(session, { dispatchable: config.value.dispatchers.length > 0, showAll: args.all }, async () => runner?.shutdown());
+  await runTui(session, { dispatchable: args.evidence && config.value.dispatchers.length > 0, showAll: args.all }, async () => runner?.shutdown());
   return 0;
 }
 

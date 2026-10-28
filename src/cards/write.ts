@@ -105,7 +105,8 @@ export function unsupportedNames(edits: string, paragraph: string): string[] {
 
 /** Parse `TITLE: … PARAGRAPH: …`; tolerate a missing label by using the first line as title. */
 export function parseProse(text: string): Prose | undefined {
-  const title = /TITLE:\s*(.+)/i.exec(text)?.[1]?.trim().replace(/^[*"'`]+|[*"'`.]+$/g, "");
+  // Titles carry no code formatting: a stray backtick around one word reads as a typo in a heading.
+  const title = /TITLE:\s*(.+)/i.exec(text)?.[1]?.trim().replace(/^[*"'`]+|[*"'`.]+$/g, "").replace(/`/g, "");
   const paragraph = /PARAGRAPH:\s*([\s\S]+)/i.exec(text)?.[1]?.trim().replace(/\s+/g, " ");
   if (title && paragraph) return { title, paragraph };
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);

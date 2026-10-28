@@ -6093,6 +6093,11 @@
         "a35de0b33278",
         "385e3e3c7da2"
       ],
+      "files": [
+        "test/dispatch.test.ts",
+        "test/policy.test.ts",
+        "test/sources.test.ts"
+      ],
       "attention": "suspicious",
       "score": 0.728,
       "claimIds": [],
@@ -6175,6 +6180,20 @@
         "e6cffca3ea74",
         "f64ddc7b1466"
       ],
+      "files": [
+        "src/cli/main.ts",
+        "src/dispatch/config.ts",
+        "src/dispatch/parse.ts",
+        "src/dispatch/prompt.ts",
+        "src/dispatch/runner.ts",
+        "src/rank/cache.ts",
+        "src/rank/model.ts",
+        "src/sources/exec.ts",
+        "src/sources/git.ts",
+        "src/sources/github.ts",
+        "src/sources/resolve.ts",
+        "test/dispatch.test.ts"
+      ],
       "attention": "needs-eyes",
       "score": 0.596,
       "claimIds": [],
@@ -6192,6 +6211,9 @@
       "labels": [],
       "blockIds": [
         "83896393c9fe"
+      ],
+      "files": [
+        "src/dispatch/runner.ts"
       ],
       "attention": "routine",
       "score": 0.188,
@@ -6211,6 +6233,9 @@
       "labels": [],
       "blockIds": [
         "056e26e944e1"
+      ],
+      "files": [
+        "src/dispatch/runner.ts"
       ],
       "attention": "inert",
       "score": 0.098,
@@ -6237,5 +6262,6 @@
     "areas": []
   },
   "dispatches": [],
-  "rankedBy": "rules+openai:gpt-6-luna"
+  "rankedBy": "rules+openai:gpt-6-luna",
+  "evidence": true
 }

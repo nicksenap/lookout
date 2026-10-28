@@ -86,7 +86,7 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
   );
   const attention = group.reduce<Attention>((top, r) => (rank(r.block.attention) > rank(top) ? r.block.attention : top), "inert");
   const score = Math.max(0, ...group.map((r) => r.block.score));
-  const card: Card = { id, title, color: "grey", kind, areas, labels, blockIds: group.map((r) => r.block.id), attention, score, claimIds: [], unmentioned: false, testsTouched: false, questions: [] };
+  const card: Card = { id, title, color: "grey", kind, areas, labels, blockIds: group.map((r) => r.block.id), files: [...new Set(group.map((r) => r.block.path))], attention, score, claimIds: [], unmentioned: false, testsTouched: false, questions: [] };
   card.color = colorFloor(card);
   return card;
 }
@@ -122,7 +122,9 @@ export function colorFloor(card: Pick<Card, "attention" | "areas" | "labels" | "
  */
 export function compareCards(a: Card, b: Card): number {
   const skim = (c: Card) => (c.mechanical || c.kind === "docs" || c.blockKind === "docs" ? 1 : 0);
-  return COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) || skim(a) - skim(b) || rank(b.attention) - rank(a.attention) || b.blockIds.length - a.blockIds.length || b.score - a.score;
+  // A configuration switch is one line that decides whether the rest ships; it reads first among its colour.
+  const toggle = (c: Card) => (c.kind === "config" || c.kind === "ci" || c.kind === "deps" ? 0 : 1);
+  return COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) || skim(a) - skim(b) || toggle(a) - toggle(b) || rank(b.attention) - rank(a.attention) || b.blockIds.length - a.blockIds.length || b.score - a.score;
 }
 
 /** Policy areas that no file of the change touches at all. */

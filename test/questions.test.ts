@@ -13,9 +13,9 @@ async function review(): Promise<Review> {
   const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/result-errors.diff`).text());
   const cs: ChangeSet = { target: "t", base: "a", head: "b", files };
   const classification = classify(cs, DEFAULT_POLICY);
-  return { changeSet: cs, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(cs, DEFAULT_POLICY), untouched: untouchedAreas(cs, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules" };
+  return { changeSet: cs, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(cs, DEFAULT_POLICY), untouched: untouchedAreas(cs, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules", evidence: true };
 }
-const card = (extra: Partial<Card>): Card => ({ id: "c", title: "c", color: "amber", kind: "logic", areas: [], labels: [], blockIds: ["b1", "b2", "b3"], attention: "needs-eyes", score: 0.5, claimIds: [], unmentioned: false, testsTouched: false, questions: [], ...extra });
+const card = (extra: Partial<Card>): Card => ({ id: "c", title: "c", color: "amber", kind: "logic", areas: [], labels: [], blockIds: ["b1", "b2", "b3"], files: ["f.ts"], attention: "needs-eyes", score: 0.5, claimIds: [], unmentioned: false, testsTouched: false, questions: [], ...extra });
 
 describe("bank", () => {
   test("12 questions with unique ids; candidates follow tier and card shape; fixed cards get none", async () => {
