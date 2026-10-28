@@ -24,10 +24,10 @@ const until = (session: FixtureSession, type: string) =>
 const sessions: FixtureSession[] = [];
 afterEach(() => sessions.splice(0).forEach((s) => s.dispose()));
 
-async function mount(name: string, columns: number, rows: number, opts: { dispatchable?: boolean } = {}) {
-  const session = new FixtureSession(await loadReview(name), { dispatchMs: 0, dispatchable: opts.dispatchable });
+async function mount(name: string, columns: number, rows: number) {
+  const session = new FixtureSession(await loadReview(name), { dispatchMs: 0 });
   sessions.push(session);
-  const app = render(<App session={session} dispatchable={opts.dispatchable ?? true} size={{ columns, rows }} frame={0} throttleMs={0} />);
+  const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
   await tick();
   return { app, session, screen: () => lines(app.lastFrame()) };
 }
@@ -68,10 +68,10 @@ describe.each([
     const { app, screen } = await mount("review-b", columns, rows);
     app.stdin.write("?");
     await tick();
-    expect(screen().some((l) => l.includes("review this card"))).toBe(true);
+    expect(screen().some((l) => l.includes("expand the card"))).toBe(true);
     app.stdin.write("\x1b");
     await tick();
-    expect(screen().some((l) => l.includes("review this card"))).toBe(false);
+    expect(screen().some((l) => l.includes("expand the card"))).toBe(false);
   });
 });
 
@@ -96,91 +96,26 @@ describe("stack contents", () => {
     void app;
   });
 
-  test("a reviews the selected card: proposer then verifier; the finding lands as ✓✓ with the verifier's note in the expanded view", async () => {
-    const { app, session, screen } = await mount("review-b", 100, 40);
-    const verified = until(session, "finding.updated");
-    app.stdin.write("a");
-    await verified;
-    const s = screen();
-    expect(s.some((l) => l.includes("P1 ✓✓ ") && l.includes("swallowed"))).toBe(true);
-    expect(s.some((l) => l.includes("1 finding"))).toBe(true);
-    app.stdin.write("\r");
-    await tick();
-    const e = screen();
-    expect(e.some((l) => l.startsWith("findings (1)"))).toBe(true);
-    expect(e.some((l) => l.includes("by fixture · verified by fixture 92%"))).toBe(true);
-    expect(e.some((l) => l.includes("retry() returns the last caught error"))).toBe(true);
-    expect(e.some((l) => l.includes("fixture · verifier · done"))).toBe(true);
-  });
 
-  test("questions show as boxes on the card; in the expanded view y answers the first open one and n the next", async () => {
-    const { app, screen } = await mount("review-b", 100, 40);
-    expect(screen().filter((l) => l.includes("☐ ")).length).toBe(2);
-    app.stdin.write("\r");
-    await tick();
-    expect(screen().some((l) => l.startsWith("questions (2)"))).toBe(true);
-    expect(screen().at(-1)).toContain("y/n/u answer");
-    app.stdin.write("y");
-    await tick();
-    app.stdin.write("n");
-    await tick();
-    const e = screen();
-    expect(e.some((l) => l.includes("☑ yes") && l.includes("what the PR says"))).toBe(true);
-    expect(e.some((l) => l.includes("☒ no") && l.includes("failure path"))).toBe(true);
-    app.stdin.write("u");
-    await tick();
-    expect(screen().at(-1)).toContain("no open question on this card");
-  });
 
-  test("without --evidence the header shows the model instead of claims, c is a notice, and no claim glyphs render", async () => {
+  test("the header shows the model; claim glyphs, questions and findings never render; one-way shows on its card", async () => {
     const review = await loadReview("review-c");
-    const session = new FixtureSession({ ...review, evidence: false, rankedBy: "rules+openai:gpt-6-luna" }, { dispatchMs: 0 });
+    const session = new FixtureSession({ ...review, rankedBy: "rules+openai:gpt-6-luna" }, { dispatchMs: 0 });
     sessions.push(session);
-    const app = render(<App session={session} dispatchable={false} size={{ columns: 110, rows: 32 }} frame={0} throttleMs={0} />);
+    const app = render(<App session={session} size={{ columns: 110, rows: 32 }} frame={0} throttleMs={0} />);
     await tick();
     const s = lines(app.lastFrame());
     expect(s[0]).toContain("gpt-6-luna");
     expect(s[0]).not.toContain("claim");
-    expect(s.some((l) => l.includes("✗ contradicted"))).toBe(false);
+    expect(s.some((l) => l.includes("✗ contradicted") || l.includes("☐ ") || l.includes("P1 "))).toBe(false);
     expect(s.at(-1)).not.toContain("c claims");
+    expect(s.at(-1)).not.toContain("review card");
     app.stdin.write("c");
     await tick();
-    expect(lines(app.lastFrame()).at(-1)).toContain("claims need --evidence");
+    expect(lines(app.lastFrame())).toEqual(s);
   });
 
-  test("claims: a contradicted claim shows on its card and in the header; c opens the claims view with door and radius; esc returns", async () => {
-    const { app, screen } = await mount("review-c", 110, 32);
-    const s = screen();
-    expect(s[0]).toContain("1 claim ✗");
-    expect(s.some((l) => l.includes("2 claims ✗"))).toBe(true);
-    expect(s.some((l) => l.includes("✗ contradicted 88%") && l.includes("Shell variables"))).toBe(true);
-    expect(s.some((l) => l.includes("tests touched"))).toBe(true);
-    expect(s.some((l) => l.includes("covers card 1"))).toBe(true);
-    expect(s.at(-1)).toContain("c claims");
-    app.stdin.write("c");
-    await tick();
-    const c = screen();
-    expect(c.some((l) => l.startsWith("claims (4)"))).toBe(true);
-    expect(c.some((l) => l.includes("∅ not in diff") && l.includes("PATH"))).toBe(true);
-    expect(c.some((l) => l.includes("diff says two-way") && l.includes("author says two-way"))).toBe(true);
-    expect(c.some((l) => l.startsWith("radius") && l.includes("2 importers") && l.includes('"minimal"'))).toBe(true);
-    expect(widest(c)).toBeLessThanOrEqual(110);
-    app.stdin.write("\x1b");
-    await tick();
-    expect(screen().some((l) => l.startsWith("claims (4)"))).toBe(false);
-    app.stdin.write("\r");
-    await tick();
-    const e = screen();
-    expect(e.some((l) => l.startsWith("claims (2)"))).toBe(true);
-    expect(e.some((l) => l.startsWith("tests  touched by Test user environment"))).toBe(true);
-  });
 
-  test("a without dispatchers shows a notice in the footer, not a crash", async () => {
-    const { app, screen } = await mount("review-b", 100, 30, { dispatchable: false });
-    app.stdin.write("a");
-    await tick();
-    expect(screen().at(-1)).toContain("no dispatchers configured");
-  });
 
   test("one card in a tiny terminal still renders within bounds", async () => {
     const { screen } = await mount("review-c", 40, 10);

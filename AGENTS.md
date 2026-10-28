@@ -47,7 +47,7 @@ Guidance for agents working in this repository. `PLAN.md` is the spec; `GLOSSARY
 - Wait on the signal, not on time: subscribe to the session event you expect (`dispatch.finished`, `card.updated`) and then paint one frame. A sleep is a bug waiting for a slower machine. If a wait needs a production constant, make the constant injectable instead.
 - Drive keys through `app.stdin.write(...)`; `\r` enter, `\x1b` esc.
 - Selection and status must be visible without color (a different bar glyph, a word), so stripped frames can assert on them and color-blind users can read them.
-- Stories: `bun run story <fixture> [--size 100x30] [--paragraphs] [--slow]` runs the real App against a fixture in your terminal for eyeballing. `a` streams a fake review and lands a finding. Add a fixture by saving `lookout <target> --json` under `fixtures/reviews/`. Fixtures are reviews of this repo's own commits; never commit another organisation's code or PR text.
+- Stories: `bun run story <fixture> [--size 100x30] [--paragraphs] [--slow]` runs the real App against a fixture in your terminal for eyeballing. Add a fixture by saving `lookout <target> --json` under `fixtures/reviews/`. Fixtures are reviews of this repo's own commits; never commit another organisation's code or PR text.
 
 ## Checks
 

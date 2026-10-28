@@ -1,6 +1,6 @@
 import type { Key } from "ink";
 
-export type Mode = "stack" | "expanded" | "claims";
+export type Mode = "stack" | "expanded";
 
 export type Action =
   | { type: "move"; delta: 1 | -1 }
@@ -8,20 +8,10 @@ export type Action =
   | { type: "edge"; to: "top" | "bottom" }
   | { type: "expand" }
   | { type: "back" }
-  | { type: "claims" }
-  | { type: "review" }
-  | { type: "reviewAll" }
-  | { type: "cancel" }
-  | { type: "answer"; answer: "yes" | "no" | "unsure" }
   | { type: "help" }
   | { type: "quit" };
 
-export function keyAction(input: string, key: Key, mode: Mode = "stack"): Action | undefined {
-  if (mode === "expanded") {
-    if (input === "y") return { type: "answer", answer: "yes" };
-    if (input === "n") return { type: "answer", answer: "no" };
-    if (input === "u") return { type: "answer", answer: "unsure" };
-  }
+export function keyAction(input: string, key: Key): Action | undefined {
   if (input === "j" || key.downArrow) return { type: "move", delta: 1 };
   if (input === "k" || key.upArrow) return { type: "move", delta: -1 };
   if (input === "J" || key.pageDown || input === " ") return { type: "page", delta: 1 };
@@ -30,10 +20,6 @@ export function keyAction(input: string, key: Key, mode: Mode = "stack"): Action
   if (input === "G" || key.end) return { type: "edge", to: "bottom" };
   if (key.return || input === "l" || key.rightArrow) return { type: "expand" };
   if (key.escape || input === "h" || key.leftArrow) return { type: "back" };
-  if (input === "a") return { type: "review" };
-  if (input === "c") return { type: "claims" };
-  if (input === "A") return { type: "reviewAll" };
-  if (input === "x") return { type: "cancel" };
   if (input === "?") return { type: "help" };
   if (input === "q") return { type: "quit" };
   return undefined;
@@ -44,34 +30,17 @@ export interface KeyHelp {
   label: string;
 }
 
-export function keyHelp(mode: Mode, running: boolean, dispatchable: boolean, claims = false, questions = false): KeyHelp[] {
-  const out: KeyHelp[] = [];
-  if (mode === "stack") {
-    out.push({ keys: "j/k", label: "card" }, { keys: "enter", label: "expand" });
-    if (dispatchable) out.push({ keys: "a", label: "review card" }, { keys: "A", label: "review all" });
-    if (claims) out.push({ keys: "c", label: "claims" });
-  } else if (mode === "claims") out.push({ keys: "j/k", label: "scroll" }, { keys: "esc", label: "back" });
-  else {
-    out.push({ keys: "j/k", label: "scroll" }, { keys: "J/K", label: "page" }, { keys: "esc", label: "back" });
-    if (questions) out.push({ keys: "y/n/u", label: "answer" });
-    if (dispatchable) out.push({ keys: "a", label: "review card" });
-  }
-  if (running) out.push({ keys: "x", label: "cancel" });
-  out.push({ keys: "?", label: "keys" }, { keys: "q", label: "quit" });
-  return out;
+export function keyHelp(mode: Mode): KeyHelp[] {
+  const nav = mode === "stack" ? [{ keys: "j/k", label: "card" }, { keys: "enter", label: "expand" }] : [{ keys: "j/k", label: "scroll" }, { keys: "J/K", label: "page" }, { keys: "esc", label: "back" }];
+  return [...nav, { keys: "?", label: "keys" }, { keys: "q", label: "quit" }];
 }
 
 export const HELP_LINES: readonly string[] = [
   "j/k ↓/↑      move between cards · scroll when expanded",
   "J/K space    page",
   "g/G          first / last",
-  "enter l →    expand the card: its diff, findings, agent log",
+  "enter l →    expand the card: its door signals and its diff",
   "esc h ←      back to the stack",
-  "c            claims: the PR description against the diff, door and blast radius",
-  "a            review this card: a proposer agent, then a verifier on what it found",
-  "A            review every red and amber card, one after another",
-  "x            cancel the running review",
-  "y/n/u        expanded card: answer its first open question (yes / no / unsure)",
   "?            this list",
   "q            quit",
 ];

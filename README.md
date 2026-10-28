@@ -55,28 +55,30 @@ lookout main..                   # a range (A..B, or A...B from the merge-base)
 lookout owner/repo#123           # a pull request
 lookout https://github.com/owner/repo/pull/123
 lookout <target> --json          # the same Review as JSON
-lookout <target> --all           # also show rejected and dropped findings, with why
+lookout <target> --json --evidence   # plus claims, grounding, unmentioned and questions (JSON only)
 ```
 
-Keys in the stack: `j/k` move, `enter` expands a card (findings, questions, claims, tests, door signals, then its diff with other cards' edits faded), `c` opens the claims view, `a` reviews the card (a proposer agent, then a verifier on what it found), `A` on every red and amber card, `x` cancels, `?` lists everything, `q` quits. In an expanded card `y` / `n` / `u` answer its first open question.
+Keys in the stack: `j/k` move, `enter` expands a card (tests, door signals, then its diff with other cards' edits faded), `?` lists the keys, `q` quits.
 
 ## What you are looking at
 
 **Card**: one logical change, built from edit blocks (contiguous `+`/`-` runs) across any files, titled and described in at most three sentences from its own edits. Two fixed cards: *verified clean* collects every inert edit (lockfiles, whitespace, generated code), *untouched* lists sensitive areas the change does not reach.
 
-**Colour** is a rule, not an opinion. Red: a suspicious edit, or behaviour changed inside a sensitive area. Amber: needs eyes, or dependency/config/CI changes. Green: fine. Grey: verified clean. Tests, renames and docs inside a sensitive area stay green and keep the area badge.
+**Colour** is a rule, not an opinion. Red: a suspicious edit, behaviour changed inside a sensitive area, or a one-way signal on an edit that needs eyes. Amber: needs eyes, dependency/config/CI changes, or a one-way signal. Green: fine. Grey: verified clean. Tests, renames and docs inside a sensitive area stay green and keep the area badge. The stack is red → amber → green; mechanical and docs cards last; a configuration switch first within its colour.
+
+**Mechanical** cards (renames, typing, moves) carry a template sentence only when rules confirm the model's label: a consistent one-to-one identifier substitution, type-only edits with no narrowing and no new return type, code that reappears verbatim. Anything else is behaviour.
+
+**One-way** signals in the diff (migrations, destructive SQL, in-place data writes incl. key-value updates, removed public exports or members, removed routes, contract files) attach to the card that owns the line and raise its colour.
+
+Cards whose paragraph failed the check twice (a name not in the edits, or Decisions puts under 70 % on "every statement follows from the edits") show **paragraph unverified** and dim the text.
 
 **Verdict** (header): risk tier and how many humans must review, from the repo's policy: change kind defaults, area rules, and floors (a touched area is never low; a needs-eyes edit is at least medium).
 
-**Claims**: each `- ` bullet of the PR description, graded against the diff. `✓ supported`, `✗ contradicted` (shown only at ≥ 70 % confidence), `~ unclear`, `∅ not in diff`. A card no claim describes is **unmentioned**. The claims view also shows the **door** (one-way signals found in the diff: migrations, destructive SQL, data writes, removed public exports or routes, versus what the author wrote) and the **blast radius** (sensitive areas touched, files importing the changed files).
-
 **tests touched / covers**: a test card in the same change exercises this card's files (same directory, name stem, or import); the test card lists what it covers.
 
-**Findings** come from `a`: a proposer agent reviews the card's diff, then a verifier gets each finding and must confirm it with evidence, reject it with a reason, or say unsure; Decisions scores whether the evidence holds (below 70 % the finding is shown as unsure). `✓✓` verified, `✓` proposed and not yet verified, `?` unsure (p0/p1 only, dimmed). Rejected, duplicate and unsure p2 findings are hidden unless `--all`. A finding anchored to a line the change did not touch is marked **pre-existing**.
+**Evidence layer** (`--evidence`, JSON only for now): each `- ` bullet of the PR description graded against the diff (`supported`, `contradicted` at ≥ 70 % confidence, `unclear`, `not-in-diff`), cards no claim describes marked `unmentioned`, and 2–4 yes/no questions per card from a tier-specific bank. Agent find + verify (`dispatch/`, `verify/`) is wired to the same flag through the session commands. These were built in v1 and are parked until the cards themselves pass review (`PLAN-v2.md`).
 
-**Questions**: 2–4 yes/no prompts per card, picked by Decisions from a tier-specific bank (intent match, error path tested, rollback, sensitive callers, sets a pattern, …) once the evidence has landed. Your answers are stored in the Review.
-
-Vocabulary is in `GLOSSARY.md`; the design and roadmap in `PLAN.md`.
+Vocabulary is in `GLOSSARY.md`; the current plan in `PLAN-v2.md`, the v1 design in `PLAN.md`.
 
 ## Configure
 
@@ -107,7 +109,7 @@ area = "auth"
 tier = "high"
 reason = "touches auth"
 
-[dispatch.pi]           # agents for `a` / `A`; the first is the default proposer
+[dispatch.pi]           # review agents (--evidence, session commands); the first is the default proposer
 cmd = "pi -p @{prompt_file}"
 
 [verify]                # optional: which dispatcher verifies findings (default: the first)

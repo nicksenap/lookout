@@ -1,5 +1,5 @@
 // Story runner: render the real App against a saved Review, no git, models or agents.
-// Usage: bun stories/run.ts [review-a|review-b|review-c] [--size 100x30] [--paragraphs] [--slow]
+// Usage: bun stories/run.ts [review-a|review-b|review-c] [--size 100x30] [--paragraphs] [--slow]  (a/claims keys are gone from the TUI; fixtures still carry them for --json)
 //   a on a card streams a fake review and lands a finding; --paragraphs fills in sample paragraphs after 1.5s.
 import { runTui } from "../src/tui/App.tsx";
 import { FixtureSession, loadReview } from "./fixture-session.ts";
@@ -25,5 +25,5 @@ if (args.includes("--paragraphs")) {
   setTimeout(() => review.cards.filter((c) => !c.fixed).forEach((c, k) => setTimeout(() => session.setParagraph(c.id, samples[k % samples.length]!), k * 400)), 1500);
 }
 
-await runTui(session, { dispatchable: true, showAll: args.includes("--all") }, async () => session.dispose());
+await runTui(session, async () => session.dispose());
 process.exit(0);

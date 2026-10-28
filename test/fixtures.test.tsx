@@ -98,7 +98,7 @@ describe.each(names)("fixture %s", (name) => {
     [140, 45],
   ])("renders the stack and the first expanded card at %dx%d within bounds", async (columns, rows) => {
     const session = new FixtureSession(await load(name), { dispatchMs: 0 });
-    const app = render(<App session={session} dispatchable size={{ columns, rows }} frame={0} throttleMs={0} />);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
     await new Promise((r) => setTimeout(r, 30));
     const check = () => {
       const lines = (app.lastFrame() ?? "").split("\n").map((l) => l.replace(ANSI, ""));
