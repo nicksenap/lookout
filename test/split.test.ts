@@ -39,9 +39,10 @@ describe("blob splitting", () => {
     const answer = JSON.stringify({ concerns: [{ title: "a", blockIds: [...a.slice(0, 4), "nope"] }, { title: "b", blockIds: [...b.slice(0, 5), a[0]] }, { title: "lonely", blockIds: [a[4]] }] });
     const got = parseSplit(`Sure:\n${answer}`, blob, refs)!;
     expect(got.length).toBe(2);
-    expect(got.flat().sort()).toEqual(ids.slice().sort());
-    expect(got[0]!.sort()).toEqual(a.slice().sort());
-    expect(got[1]!.sort()).toEqual(b.slice().sort());
+    expect(got.flatMap((c) => c.blockIds).sort()).toEqual(ids.slice().sort());
+    expect(got[0]!.blockIds.sort()).toEqual(a.slice().sort());
+    expect(got[1]!.blockIds.sort()).toEqual(b.slice().sort());
+    expect(got.map((c) => c.title)).toEqual(["a", "b"]);
     expect(parseSplit("not json", blob, refs)).toBeUndefined();
     expect(parseSplit(JSON.stringify({ concerns: [{ blockIds: ids }] }), blob, refs)).toBeUndefined();
     expect(parseSplit(JSON.stringify({ concerns: [{ blockIds: [a[0]] }, { blockIds: ids.slice(1) }] }), blob, refs)).toBeUndefined();
@@ -57,13 +58,14 @@ describe("blob splitting", () => {
     };
     const res = await proposeSplits(changeSet, whole, { modelSpec: "fake:m", cache, write });
     expect(res.warning).toBeUndefined();
-    expect(res.splits.get(blob.id)!.map((g) => g.length)).toEqual([6, 6]);
+    expect(res.splits.get(blob.id)!.map((g) => g.blockIds.length)).toEqual([6, 6]);
     expect(prompts.length).toBe(1);
     for (const id of ids) expect(prompts[0]).toContain(`edit ${id}`);
     const cards = buildCards(changeSet, DEFAULT_POLICY, res.splits).filter((c) => !c.fixed);
     expect(cards.length).toBe(2);
     expect(cards.flatMap((c) => c.blockIds).sort()).toEqual(ids.slice().sort());
     expect(cards.map((c) => c.id).sort()).toEqual([cardId(a), cardId(b)].sort());
+    expect(cards.map((c) => c.hint).sort()).toEqual(["a", "b"]);
     // Second run: answered from the cache, no model call.
     const again = await proposeSplits(changeSet, whole, { modelSpec: "fake:m", cache: new RankCache(dir), write });
     expect(prompts.length).toBe(1);

@@ -158,6 +158,12 @@ export interface Card {
   blockKind?: BlockKind;
   /** Types/renames/moves only: titled and described deterministically, no model call. */
   mechanical?: boolean;
+  /** Working title from the split step, when the card is one concern of a larger group; the writer refines it. */
+  hint?: string;
+  /** Decisions' probability that every sentence of the paragraph follows from the card's edits; set after the gate ran. */
+  proseCheck?: number;
+  /** The paragraph failed the gate twice: shown dimmed and labelled, not trusted. */
+  unverified?: boolean;
   /** The fixed card that collects every inert block. */
   fixed?: "clean";
   // ---- evidence (plan step 12)

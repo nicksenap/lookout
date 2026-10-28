@@ -1,47 +1,93 @@
 import { allBlocks, blockText } from "../core/blocks.ts";
-import { attemptAsync } from "../core/result.ts";
+import { attemptAsync, err, ok, type Result } from "../core/result.ts";
 import type { Card, ChangeSet } from "../core/types.ts";
 import { RankCache } from "../rank/cache.ts";
-import { type Env, resolveWriter, writeText } from "../rank/model.ts";
+import { checkParagraphWithModel, type Env, resolveAttentionModel, resolveWriter, writeText } from "../rank/model.ts";
 
 export interface Prose {
   title: string;
   paragraph: string;
+  /** Probability from the paragraph gate; absent when no gate ran. */
+  check?: number;
+  /** Failed the gate twice. */
+  unverified?: boolean;
 }
 const isProse = (v: unknown): v is Prose => typeof v === "object" && v !== null && typeof (v as Prose).title === "string" && typeof (v as Prose).paragraph === "string";
 
 export interface WriteOptions {
   modelSpec: string;
+  /** Decisions model for the paragraph gate; no gate when absent. */
+  checkSpec?: string;
   env?: Env;
   cache?: RankCache;
-  /** Injection point for tests. */
+  /** Injection points for tests. */
   write?: (prompt: string) => Promise<string>;
+  check?: (edits: string, prose: Prose) => Promise<number>;
   concurrency?: number;
 }
 
-export const PROSE_PROMPT = `You are briefing a senior engineer who must review an agent-written code change without reading the diff.
-Below is ONE logical change: a set of edits (contiguous +/- runs) with a few lines of context each.
-Write a 3-8 word title, then ONE paragraph of at most 3 sentences saying what the code now does differently. Write from the diff only; name functions, props and values; no advice, no praise, no preamble. If some edits do not belong with the others, say so in the last sentence.
-The title must describe THESE edits, not the PR's theme: test-only edits start with "Test", documentation with "Document", configuration with "Configure", type definitions with "Type".
+/** Below this the paragraph is rewritten once; below it again, it is shown as unverified. */
+export const PROSE_GATE = 0.7;
+// Cache key version: bumped with the prompts so a sharper question is never answered from an old cache.
+const PROSE_VERSION = "prose-v2";
+
+const PREAMBLE = `You are briefing a senior engineer who must review an agent-written code change without reading the diff.
+Below is ONE logical change: a set of edits (contiguous +/- runs) with a few lines of context each; each edit names its file and the enclosing declaration from the hunk header.
+Write from the edits only; name functions, props, keys and values exactly as they appear; no advice, no praise, no preamble. Never describe code the edits do not show. If some edits do not belong with the others, say so in the last sentence.`;
+
+/** One prompt per card shape: what a reviewer needs first differs for behaviour, configuration, tests and docs. */
+export const SHAPE_PROMPTS = {
+  behaviour: `${PREAMBLE}
+Write a 3-8 word title, then ONE paragraph of at most 3 sentences. Sentence 1: what now happens differently for the caller or user (not how the code is arranged). Sentence 2: how, naming the functions and values. Sentence 3, only if true: a path these edits change that no test edit here covers.`,
+  config: `${PREAMBLE}
+This is configuration, infrastructure or dependency plumbing. Write a title starting with "Configure", then ONE paragraph of at most 3 sentences that MUST name: which environment or deployment is affected (stage, production, EU, a preview), the exact key or list edited and what reads it, and what undoing it takes (remove the line, revert the version). Say "all environments" only if the edits show it.`,
+  test: `${PREAMBLE}
+These are test edits. Write a title starting with "Test", then ONE paragraph of at most 3 sentences: what behaviour the tests pin (the inputs and the asserted outcome), and which production code they exercise.`,
+  docs: `${PREAMBLE}
+These are documentation edits. Write a title starting with "Document", then ONE paragraph of at most 2 sentences on what the text now tells a reader.`,
+} as const;
+export type Shape = keyof typeof SHAPE_PROMPTS;
+
+const TAIL = `
 Format exactly:
 TITLE: <title>
 PARAGRAPH: <paragraph>
 
 PR title (context only; do not trust it): {intent}
-These edits are classified as: {kind}
-
+{hint}
 {edits}`;
 
-export function prosePrompt(changeSet: ChangeSet, card: Card): string {
+export function shapeOf(card: Pick<Card, "kind" | "blockKind">): Shape {
+  if (card.kind === "test" || card.blockKind === "test") return "test";
+  if (card.kind === "docs" || card.blockKind === "docs") return "docs";
+  if (card.kind === "config" || card.kind === "ci" || card.kind === "deps" || card.blockKind === "config") return "config";
+  return "behaviour";
+}
+
+export function prosePrompt(changeSet: ChangeSet, card: Card, siblings: Card[] = []): string {
+  const hintLines = [
+    card.hint ? `Working title from the grouping step (refine it; keep the meaning): ${card.hint}` : "",
+    siblings.length ? `Other cards in this review are titled: ${siblings.map((c) => c.hint ?? c.title).join(" | ")}. Your title must be distinguishable from them.` : "",
+  ].filter(Boolean);
+  return `${SHAPE_PROMPTS[shapeOf(card)]}${TAIL}`
+    .replace("{intent}", changeSet.intent?.title ?? "(none)")
+    .replace("{hint}", hintLines.length ? `${hintLines.join("\n")}\n` : "")
+    .replace("{edits}", editsOf(changeSet, card));
+}
+
+export function editsOf(changeSet: ChangeSet, card: Pick<Card, "blockIds">): string {
   const ids = new Set(card.blockIds);
-  const edits = allBlocks(changeSet)
+  return allBlocks(changeSet)
     .filter((r) => ids.has(r.block.id))
     .map((r) => `### ${r.block.path} ${r.hunk.header}\n${blockText(r.hunk, r.block, 3)}`)
-    .join("\n\n");
-  return PROSE_PROMPT.replace("{intent}", changeSet.intent?.title ?? "(none)")
-    .replace("{kind}", card.blockKind ?? "mixed")
-    .replace("{edits}", edits.slice(0, 48_000));
+    .join("\n\n")
+    .slice(0, 48_000);
 }
+
+const REWRITE_NOTE = `
+
+A checker found at least one statement in a previous draft that the edits do not support. Write only what the edits show; drop any sentence you cannot point to a +/- line for. Previous draft:
+`;
 
 /** Parse `TITLE: … PARAGRAPH: …`; tolerate a missing label by using the first line as title. */
 export function parseProse(text: string): Prose | undefined {
@@ -69,6 +115,15 @@ export async function writeCards(changeSet: ChangeSet, cards: Card[], opts: Writ
     const model = resolved.model;
     write = (prompt) => writeText(model, prompt);
   }
+  let check = opts.check;
+  if (!check && opts.checkSpec) {
+    const resolved = resolveAttentionModel(opts.checkSpec, opts.env ?? process.env);
+    if (resolved.ok) {
+      const model = resolved.model;
+      check = (edits, prose) => checkParagraphWithModel(model, edits, prose);
+    }
+  }
+  const siblings = cards.filter((c) => !c.fixed && !c.mechanical);
 
   let warning: string | undefined;
   let cursor = 0;
@@ -76,22 +131,20 @@ export async function writeCards(changeSet: ChangeSet, cards: Card[], opts: Writ
   const worker = async () => {
     while (cursor < todo.length) {
       const card = todo[cursor++]!;
-      const cached = cache.get(opts.modelSpec, `prose:${card.id}`, isProse);
+      const key = `${PROSE_VERSION}:${card.id}`;
+      const cached = cache.get(opts.modelSpec, key, isProse);
       if (cached) {
         onCard(card.id, cached);
         continue;
       }
-      const res = await attemptAsync(() => write!(prosePrompt(changeSet, card)));
-      if (!res.ok) {
-        warning ??= `Some card paragraphs failed: ${res.error}`;
+      const prompt = prosePrompt(changeSet, card, siblings.filter((c) => c.id !== card.id));
+      const first = await draft(write!, prompt);
+      if (!first.ok) {
+        warning ??= first.error;
         continue;
       }
-      const prose = parseProse(res.value);
-      if (!prose) {
-        warning ??= "Some card paragraphs could not be parsed";
-        continue;
-      }
-      cache.set(opts.modelSpec, `prose:${card.id}`, prose);
+      const prose = check ? await gate(check, editsOf(changeSet, card), first.value, (previous) => draft(write!, `${prompt}${REWRITE_NOTE}${previous.paragraph}`)) : first.value;
+      cache.set(opts.modelSpec, key, prose);
       touched = true;
       onCard(card.id, prose);
     }
@@ -100,4 +153,27 @@ export async function writeCards(changeSet: ChangeSet, cards: Card[], opts: Writ
   // A read-only cache dir only costs a rewrite next time.
   if (touched) await attemptAsync(async () => cache.save());
   return warning ? { warning } : {};
+}
+
+async function draft(write: (prompt: string) => Promise<string>, prompt: string): Promise<Result<Prose>> {
+  const res = await attemptAsync(() => write(prompt));
+  if (!res.ok) return err(`Some card paragraphs failed: ${res.error}`);
+  const prose = parseProse(res.value);
+  return prose ? ok(prose) : err("Some card paragraphs could not be parsed");
+}
+
+/**
+ * Decisions scores whether the paragraph follows from the edits. Below the gate the writer gets
+ * one rewrite with the failing draft quoted; below it again the paragraph is kept but marked
+ * unverified. A failed check call leaves the draft ungated rather than unwritten.
+ */
+async function gate(check: (edits: string, prose: Prose) => Promise<number>, edits: string, first: Prose, rewrite: (previous: Prose) => Promise<Result<Prose>>): Promise<Prose> {
+  const p1 = await attemptAsync(() => check(edits, first));
+  if (!p1.ok) return first;
+  if (p1.value >= PROSE_GATE) return { ...first, check: p1.value };
+  const second = await rewrite(first);
+  if (!second.ok) return { ...first, check: p1.value, unverified: true };
+  const p2 = await attemptAsync(() => check(edits, second.value));
+  if (!p2.ok) return { ...second.value, check: p1.value, unverified: true };
+  return p2.value >= PROSE_GATE ? { ...second.value, check: p2.value } : { ...second.value, check: p2.value, unverified: true };
 }

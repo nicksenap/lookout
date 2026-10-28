@@ -26,8 +26,9 @@ export function buildCards(changeSet: ChangeSet, policy: Policy, splits: Splits 
   const haveKinds = live.length > 0 && live.every((r) => r.block.kind !== undefined);
   const cards = haveKinds
     ? groupBlocks(live).flatMap((g) => applySplit(g, splits)).map((g) => {
-        const card = makeCard(cardId(g.refs.map((r) => r.block.id)), titleFor(g.refs, g.topIdentifiers), g.refs, policy);
+        const card = makeCard(cardId(g.refs.map((r) => r.block.id)), g.hint ?? titleFor(g.refs, g.topIdentifiers), g.refs, policy);
         if (g.kind) card.blockKind = g.kind;
+        if (g.hint) card.hint = g.hint;
         if (isMechanical(g.kind)) {
           const text = mechanicalText(g);
           card.title = text.title;
@@ -50,12 +51,13 @@ function applySplit(group: Group, splits: Splits): Group[] {
   const partition = splits.get(cardId(group.refs.map((r) => r.block.id)));
   if (!partition) return [group];
   const byId = new Map(group.refs.map((r) => [r.block.id, r]));
-  return partition.map((ids) => {
-    const refs = ids.map((id) => byId.get(id)).filter((r): r is BlockRef => r !== undefined);
+  return partition.map((concern) => {
+    const refs = concern.blockIds.map((id) => byId.get(id)).filter((r): r is BlockRef => r !== undefined);
     const counts = new Map<string, number>();
     for (const r of refs) for (const w of changedIdentifiers(r)) counts.set(w, (counts.get(w) ?? 0) + 1);
     const topIdentifiers = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(([w]) => w);
-    return group.kind ? { refs, kind: group.kind, topIdentifiers } : { refs, topIdentifiers };
+    const split: Group = { refs, topIdentifiers, hint: concern.title || undefined };
+    return group.kind ? { ...split, kind: group.kind } : split;
   });
 }
 

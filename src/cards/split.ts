@@ -5,8 +5,12 @@ import { RankCache } from "../rank/cache.ts";
 import { cardId } from "./build.ts";
 import { type Env, resolveWriter, writeText } from "../rank/model.ts";
 
-/** Partition of a blob card's block ids into concerns, keyed by the blob's card id. */
-export type Splits = Map<string, string[][]>;
+/** Partition of a blob card's block ids into titled concerns, keyed by the blob's card id. */
+export type Splits = Map<string, Concern[]>;
+export interface Concern {
+  title: string;
+  blockIds: string[];
+}
 
 export const BLOB_BLOCKS = 8;
 export const BLOB_FILES = 3;
@@ -31,7 +35,7 @@ export interface SplitOptions {
 const CACHE_PREFIX = "split-v2";
 /** A concern this large after one split is asked again, once. */
 const RESPLIT_BLOCKS = 24;
-const isPartition = (v: unknown): v is string[][] => Array.isArray(v) && v.every((g) => Array.isArray(g) && g.every((id) => typeof id === "string"));
+const isPartition = (v: unknown): v is Concern[] => Array.isArray(v) && v.every((g) => typeof g === "object" && g !== null && typeof (g as Concern).title === "string" && Array.isArray((g as Concern).blockIds) && (g as Concern).blockIds.every((id) => typeof id === "string"));
 
 export const SPLIT_PROMPT = `You are preparing an agent-written code change for a senior engineer's review. Below is ONE oversized group of edits. Split it into the separate decisions a reviewer evaluates one at a time ("narrow cache invalidation on mutations", "rewrite storage scope for moved artifacts", "run-start guard", "UI dialog").
 Rules:
@@ -69,7 +73,7 @@ export function splitPrompt(changeSet: ChangeSet, card: Pick<Card, "blockIds">):
  * largest), and a one-block concern merges into the concern with most blocks in its file
  * (else the nearest by line). Fewer than two concerns left means no split.
  */
-export function parseSplit(text: string, card: Pick<Card, "blockIds">, refs: BlockRef[]): string[][] | undefined {
+export function parseSplit(text: string, card: Pick<Card, "blockIds">, refs: BlockRef[]): Concern[] | undefined {
   const json = /\{[\s\S]*\}/.exec(text)?.[0];
   if (!json) return undefined;
   let parsed: unknown;
@@ -82,9 +86,12 @@ export function parseSplit(text: string, card: Pick<Card, "blockIds">, refs: Blo
   if (!Array.isArray(concerns)) return undefined;
   const allowed = new Set(card.blockIds);
   const seen = new Set<string>();
-  const groups = concerns
-    .map((c: { blockIds?: unknown }) => (Array.isArray(c.blockIds) ? c.blockIds.filter((id): id is string => typeof id === "string" && allowed.has(id) && !seen.has(id) && !!seen.add(id)) : []))
-    .filter((g) => g.length > 0);
+  const titled = concerns.map((c: { title?: unknown; blockIds?: unknown }) => ({
+    title: typeof c.title === "string" ? c.title.trim().slice(0, 80) : "",
+    blockIds: Array.isArray(c.blockIds) ? c.blockIds.filter((id): id is string => typeof id === "string" && allowed.has(id) && !seen.has(id) && !!seen.add(id)) : [],
+  }));
+  const groups = titled.filter((c) => c.blockIds.length > 0).map((c) => c.blockIds);
+  const titleOf = new Map(groups.map((g, k) => [g, titled.filter((c) => c.blockIds.length > 0)[k]!.title]));
   if (groups.length < 2) return undefined;
 
   const byId = new Map(refs.map((r) => [r.block.id, r]));
@@ -106,7 +113,7 @@ export function parseSplit(text: string, card: Pick<Card, "blockIds">, refs: Blo
     home(g[0]!, others).push(g[0]!);
     groups.splice(groups.indexOf(g), 1);
   }
-  return groups.length >= 2 ? groups : undefined;
+  return groups.length >= 2 ? groups.map((g) => ({ title: titleOf.get(g) ?? "", blockIds: g })) : undefined;
 }
 
 /**
@@ -129,7 +136,7 @@ export async function proposeSplits(changeSet: ChangeSet, cards: Card[], opts: S
   const refs = allBlocks(changeSet);
   let warning: string | undefined;
   let touched = false;
-  const splitOne = async (card: Pick<Card, "id" | "blockIds">): Promise<string[][] | undefined> => {
+  const splitOne = async (card: Pick<Card, "id" | "blockIds">): Promise<Concern[] | undefined> => {
     const cached = cache.get(opts.modelSpec, `${CACHE_PREFIX}:${card.id}`, isPartition);
     if (cached) return cached.length > 0 ? cached : undefined;
     const res = await attemptAsync(() => write!(splitPrompt(changeSet, card)));
@@ -149,7 +156,7 @@ export async function proposeSplits(changeSet: ChangeSet, cards: Card[], opts: S
       const first = await splitOne(card);
       if (!first) return;
       // One more round for concerns still too large to read; the model tends to keep "the main change" whole.
-      const second = await Promise.all(first.map(async (ids) => (ids.length > RESPLIT_BLOCKS ? (await splitOne({ id: cardId(ids), blockIds: ids })) ?? [ids] : [ids])));
+      const second = await Promise.all(first.map(async (c) => (c.blockIds.length > RESPLIT_BLOCKS ? (await splitOne({ id: cardId(c.blockIds), blockIds: c.blockIds })) ?? [c] : [c])));
       splits.set(card.id, second.flat());
     }),
   );

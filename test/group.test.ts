@@ -140,6 +140,39 @@ describe("writer", () => {
   });
 });
 
+describe("writeCards gate", () => {
+  test("a paragraph under the gate is rewritten once with the draft quoted; still under, it lands unverified; shape and hint reach the prompt", async () => {
+    const text = diff("infra/deploy/stage.ts", "@@ -1,3 +1,3 @@", [" a", "-tools: [portal],", "+tools: [portal, reports],", " b"]);
+    const set = cs(text, ["config"]);
+    const cards = buildCards(set, DEFAULT_POLICY).map((c) => ({ ...c, hint: "Serve new-tool tools on stage" }));
+    const dir = mkdtempSync(join(tmpdir(), "lookout-gate-"));
+    const prompts: string[] = [];
+    const checks: string[] = [];
+    const write = async (p: string) => {
+      prompts.push(p);
+      return p.includes("Previous draft") ? "TITLE: Configure stage tools\nPARAGRAPH: Stage adds reports." : "TITLE: Configure tools\nPARAGRAPH: Production adds reports and removes portal.";
+    };
+    const check = async (_edits: string, prose: { paragraph: string }) => {
+      checks.push(prose.paragraph);
+      return prose.paragraph.includes("Production") ? 0.2 : 0.95;
+    };
+    const landed: Record<string, unknown>[] = [];
+    await writeCards(set, cards, { modelSpec: "mock:w", cache: new RankCache(dir), write, check }, (_id, prose) => landed.push(prose));
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toContain("Configure");
+    expect(prompts[0]).toContain("Serve new-tool tools on stage");
+    expect(prompts[1]).toContain("Previous draft");
+    expect(checks).toHaveLength(2);
+    expect(landed[0]).toEqual({ title: "Configure stage tools", paragraph: "Stage adds reports.", check: 0.95 });
+
+    const stubborn = async () => "TITLE: Configure tools\nPARAGRAPH: Production adds reports and removes portal.";
+    const bad: Record<string, unknown>[] = [];
+    await writeCards(set, cards.map((c) => ({ ...c, id: `${c.id}x` })), { modelSpec: "mock:w", cache: new RankCache(dir), write: stubborn, check }, (_id, prose) => bad.push(prose));
+    expect(bad[0]).toMatchObject({ unverified: true, check: 0.2 });
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe("LocalSession prose", () => {
   test("after model ranking, titles and paragraphs arrive as card.updated patches before done", async () => {
     const text = diff("src/b.ts", "@@ -1,3 +1,3 @@", [" a", "-retry(1);", "+retry(3);", " b"]);

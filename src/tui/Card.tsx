@@ -131,7 +131,11 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   }
 
   lines.push(row([{ text: fit(card.title, inner), bold: true }]));
-  if (card.paragraph) for (const l of wrap(card.paragraph, inner)) lines.push(row([{ text: l }]));
+  if (card.paragraph && card.unverified) {
+    // The gate failed twice: the text is shown, but dimmed and labelled so nobody reads it as checked.
+    lines.push(row([{ text: fit("paragraph unverified · read the diff", inner), color: theme.card.amber }]));
+    for (const l of wrap(card.paragraph, inner)) lines.push(row([{ text: l, dim: true }]));
+  } else if (card.paragraph) for (const l of wrap(card.paragraph, inner)) lines.push(row([{ text: l }]));
   else {
     const spin = ctx.pending ? `${theme.spinner[ctx.frame % theme.spinner.length]} ` : "";
     const summary = files.length === 1 ? `${card.attention}, score ${card.score.toFixed(2)}` : `${card.attention} · ${files.join(", ")}`;

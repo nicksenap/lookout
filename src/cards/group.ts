@@ -53,6 +53,8 @@ export interface Group {
   kind?: BlockKind;
   /** Identifiers most shared across the group, for a deterministic title. */
   topIdentifiers: string[];
+  /** Working title from a split, when the group is one concern of a larger one. */
+  hint?: string;
 }
 
 /**

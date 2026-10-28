@@ -57,6 +57,7 @@ export interface LocalSessionOptions {
   pick?: typeof pickQuestions;
   judge?: typeof judgeVerdicts;
   write?: (prompt: string) => Promise<string>;
+  check?: (edits: string, prose: { title: string; paragraph: string }) => Promise<number>;
   /** Model cache for prose and splits; tests pass a temp dir so fakes never land in the user's cache. */
   cache?: RankCache;
   env?: Record<string, string | undefined>;
@@ -240,8 +241,11 @@ export class LocalSession implements ReviewSession {
     }
     const current = this.snapshot();
     const [wrote, extracted] = await Promise.all([
-      writeCards(current.changeSet, current.cards, { modelSpec: this.opts.config.model.write, ...modelOpts }, (id, prose) => {
-        this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, title: prose.title, paragraph: prose.paragraph } : c)) }), { type: "card.updated", id, patch: { title: prose.title, paragraph: prose.paragraph } });
+      writeCards(current.changeSet, current.cards, { modelSpec: this.opts.config.model.write, checkSpec: this.opts.config.model.decide, ...modelOpts, ...(this.opts.check ? { check: this.opts.check } : {}) }, (id, prose) => {
+        const patch: Partial<Card> = { title: prose.title, paragraph: prose.paragraph };
+        if (prose.check !== undefined) patch.proseCheck = prose.check;
+        if (prose.unverified) patch.unverified = true;
+        this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, ...patch } : c)) }), { type: "card.updated", id, patch });
       }),
       needsModelExtraction(current.changeSet.intent, current.claims) ? extractClaimsWithModel(current.changeSet.intent!, { modelSpec: this.opts.config.model.write, ...modelOpts }) : undefined,
     ]);

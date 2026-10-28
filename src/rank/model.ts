@@ -151,6 +151,36 @@ export async function scoreBlockBatch(model: AttentionModel, refs: BlockRef[], i
   return out;
 }
 
+// ---------------------------------------------------------------- paragraph gate (plan v2 step 19)
+
+/**
+ * One `boolean`: does every statement of a card's paragraph follow from the card's edits?
+ * Returns the probability. A name that is not in the edits, a wrong direction (added vs
+ * removed, replaced vs kept) or a claim about code outside the edits should fail it.
+ */
+export async function checkParagraphWithModel(model: AttentionModel, edits: string, prose: { title: string; paragraph: string }): Promise<number> {
+  const result = await experimental_decide({
+    model,
+    state: {
+      task: "Check a briefing paragraph about a code change against the edits it describes.",
+      edits: edits.length > 48_000 ? `${edits.slice(0, 48_000)}\n…` : edits,
+      title: prose.title,
+      paragraph: prose.paragraph,
+    },
+    questions: {
+      follows: {
+        type: "boolean",
+        instructions:
+          "Does every statement in the paragraph follow from the edits shown? Fail it if any sentence names a function, value or file the edits do not show; says something was replaced, removed or added when the edits show otherwise; or describes behaviour the edits do not establish. Omissions are fine; a wrong statement is not.",
+      },
+    },
+    abortSignal: AbortSignal.timeout(60_000),
+  });
+  const a = (result.answers as Record<string, { type: string; probability?: number }>).follows;
+  if (a?.type !== "boolean" || typeof a.probability !== "number") throw new Error("no answer from the paragraph check");
+  return a.probability;
+}
+
 // ---------------------------------------------------------------- claims (plan step 7)
 
 export const CLAIM_STATUSES = {
