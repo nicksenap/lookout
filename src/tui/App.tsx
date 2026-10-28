@@ -244,7 +244,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
         return setAsking(
           openComposer(
             card && card.fixed !== "clean" ? "card" : "change",
-            review.exchanges.map((e) => e.question),
+            session.snapshot().exchanges.map((e) => e.question),
           ),
         );
       case "expand":
