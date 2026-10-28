@@ -35,7 +35,7 @@
     "@ai-sdk/perplexity": "5.0.21",
     "@ai-sdk/typesafe-ai": "3.0.28",
     "ai": "7.0.154",
-    "ink": "6.8.0",
+    "ink": "8.0.0",
     "react": "19.3.1"
   },
   "devDependencies": {
