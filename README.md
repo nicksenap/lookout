@@ -58,7 +58,7 @@ lookout <target> --json          # the same Review as JSON
 lookout <target> --json --evidence   # plus claims, grounding, unmentioned and questions (JSON only)
 ```
 
-Keys follow vim and helix: `j/k` move (`ctrl-d/u` half page, `gg`/`G`), `]`/`[` jump between colour bands, `}`/`{` between red and amber cards, `enter`/`l` expands a card (scope, tests, door signals, then its diff with other cards' edits faded), `o` toggles, `esc`/`h` back. `a` opens a composer above the keys to ask about the selected card (`tab` switches to the whole change; `↑/↓` recall earlier questions; readline editing). `?` opens a help popup with a keys page and a glossary page (`tab` switches). Answers are written from that scope's edits only, checked by Decisions, and labelled *unverified* when the check fails. While cards load, a bar under the header shows the phase (ranking → splitting → writing) and the count.
+Keys follow vim and helix: `j/k` move (`ctrl-d/u` half page, `gg`/`G`), `]`/`[` jump between colour bands, `}`/`{` between red and amber cards, `enter`/`l` expands a card (scope, tests, door signals, then its diff with other cards' edits faded), `o` toggles, `esc`/`h` back. `a` opens a composer above the keys to ask about the selected card (`tab` switches to the whole change; `↑/↓` recall earlier questions; readline editing). `?` overlays a help popup on the stack with a keys page and a glossary page (`tab` switches, `j/k` scroll by entry). Answers are written from that scope's edits only, checked by Decisions, and labelled *unverified* when the check fails. While cards load, a bar under the header shows the phase (ranking → splitting → writing) and the count.
 
 ## What you are looking at
 

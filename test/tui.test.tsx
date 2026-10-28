@@ -64,26 +64,36 @@ describe.each([
     expect(screen().some((l) => l.includes("@@"))).toBe(false);
   });
 
-  test("? shows the key list and esc closes it", async () => {
+  test("? overlays a help popup on the stack: keys page, tab to the glossary, j scrolls by entry, esc restores the frame", async () => {
     const { app, screen } = await mount("review-b", columns, rows);
+    const before = screen();
     app.stdin.write("?");
     await tick();
     const popup = screen();
+    expect(popup.length).toBe(before.length);
     expect(popup.some((l) => l.includes("expand the card"))).toBe(true);
-    expect(popup.some((l) => l.includes("┌─") && l.includes("keys") && l.includes("glossary"))).toBe(true);
+    const top = popup.findIndex((l) => l.includes("┌─") && l.includes("keys") && l.includes("glossary"));
+    expect(top).toBeGreaterThan(0);
+    // An overlay: the header and the rows beside the box are still the stack's own text.
+    expect(popup[0]).toBe(before[0]);
+    expect(popup[top]!.startsWith(before[top]!.slice(0, 1))).toBe(true);
     expect(widest(popup)).toBeLessThanOrEqual(columns);
     app.stdin.write("\t");
     await tick();
     const glossary = screen();
-    expect(glossary.some((l) => l.includes("one logical change"))).toBe(true);
+    expect(glossary.some((l) => l.includes("│ Card "))).toBe(true);
+    expect(glossary.some((l) => l.includes("One logical change"))).toBe(true);
     expect(glossary.some((l) => l.includes("expand the card"))).toBe(false);
     app.stdin.write("j");
     await tick();
-    // Scrolling only shows a position when the glossary overflows the box, which depends on the terminal height.
-    expect(screen().some((l) => (l.includes("of ") && l.includes("j/k")) || l.includes("esc closes"))).toBe(true);
+    const scrolled = screen();
+    // The first visible body row is an entry title, never the middle of a definition.
+    const firstBody = scrolled.findIndex((l) => l.includes("┌─")) + 1;
+    expect(scrolled[firstBody]!).toMatch(/│ [A-Za-z-]/);
+    expect(scrolled.some((l) => l.includes("│ Card "))).toBe(false);
     app.stdin.write("\x1b");
     await tick();
-    expect(screen().some((l) => l.includes("one logical change"))).toBe(false);
+    expect(screen()).toEqual(before);
   });
 });
 

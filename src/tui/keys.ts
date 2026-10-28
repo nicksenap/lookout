@@ -84,28 +84,3 @@ export const HELP_KEYS: readonly string[] = [
   "  ?                    this help · tab for the glossary",
   "  q                    quit",
 ];
-
-export const HELP_GLOSSARY: readonly string[] = [
-  "Card           one logical change, from edit blocks across any files; the unit you review.",
-  "               Two fixed cards: verified clean (every inert edit) and untouched (sensitive areas not reached).",
-  "Edit block     one contiguous run of +/- lines; the smallest unit lookout reasons about.",
-  "Colour         a rule, never an opinion.  RED: suspicious, or behaviour inside a sensitive area, or a one-way",
-  "               edit that needs eyes.  AMBER: needs eyes, config/deps/CI, or a one-way signal.  GREEN: fine.",
-  "               GREY: verified clean.  Tests, renames and docs inside an area stay green and keep the badge.",
-  "Attention      per edit: inert · routine · needs-eyes · suspicious.  A model may raise it, never lower it.",
-  "Kind           what an edit does: behavior, typing-refactor, rename, move, test, types, config, docs.",
-  "Mechanical     a rename / typing / move card whose label rules confirmed (one-to-one identifier swap,",
-  "               type-only edit, verbatim move).  Its sentence is a template; anything else is behaviour.",
-  "Area           a named set of sensitive paths from the repo's policy (auth, billing, data, infra, prompts).",
-  "Verdict        header: risk tier (low · medium · high) and how many humans must review, with reasons.",
-  "One-way        a door signal in the diff: migration, destructive SQL, in-place data write, removed public",
-  "               export or route, contract change.  Attached to the card that owns the line; raises its colour.",
-  "Scope          the declarations and keys enclosing an edit at head: DEPLOYMENTS › stage › servedTools.",
-  "tests touched  a test card in this change exercises this card's files (same dir, name stem or import).",
-  "covers         on a test card: the cards it exercises.",
-  "unverified     the paragraph (or an answer) failed its check twice: a name not in the edits, or Decisions",
-  "               put under 70 % on 'every statement follows from the edits'.  Shown dimmed; read the diff.",
-  "Exchange       a question you asked (a) and its answer, written from that scope's edits only.",
-  "Progress       the bar under the header while cards load: ranking → splitting → writing.",
-  "--evidence     JSON-only for now: PR claims graded against the diff, unmentioned cards, review questions.",
-];
