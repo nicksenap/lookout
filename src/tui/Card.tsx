@@ -101,7 +101,7 @@ export function claimsBadge(claims: Claim[]): string {
 /** Evidence words on the badge line: unmentioned, a one-way signal, test coverage. */
 export function evidenceBadges(review: Review, card: Card): string[] {
   const out: string[] = [];
-  if (card.unmentioned) out.push("unmentioned");
+  if (review.evidence && card.unmentioned) out.push("unmentioned");
   if (card.doorSignals?.length) out.push(`one-way · ${card.doorSignals[0]!.kind}`);
   if (card.covers?.length) out.push(`covers ${card.covers.map((id) => `card ${review.cards.findIndex((c) => c.id === id) + 1}`).join(", ")}`);
   else if (card.testsTouched) out.push("tests touched");
@@ -118,7 +118,7 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
 
   const files = filesOf(ctx.review, card);
   const badges = [COLOR_LABEL[card.color], card.kind, ...card.labels.filter((l) => l !== "test" || card.kind !== "test"), ...card.areas.map((a) => `${a}/*`)];
-  const claims = cardClaims(ctx.review, card);
+  const claims = ctx.review.evidence ? cardClaims(ctx.review, card) : [];
   const evidence = card.fixed ? [] : evidenceBadges(ctx.review, card);
   const right = [plural(card.blockIds.length, "edit"), plural(files.length, "file"), ctx.findings.length ? plural(ctx.findings.length, "finding") : "", claimsBadge(claims)].filter(Boolean).join(" · ");
   const badgeSegs: Segment[] = [{ text: badges[0]!, color, bold: true }, { text: badges.length > 1 ? `  ${badges.slice(1).join(" · ")}` : "", dim: true }];
@@ -250,7 +250,7 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
 export function evidenceLines(card: Card, w: number, review: Review): Segment[][] {
   const color = theme.card[card.color];
   const out: Segment[][] = [];
-  const claims = cardClaims(review, card);
+  const claims = review.evidence ? cardClaims(review, card) : [];
   if (claims.length > 0 || card.unmentioned) {
     out.push([{ text: `claims (${claims.length})`, color, bold: true }, { text: card.unmentioned ? "   unmentioned: no claim in the PR description covers this card" : "", color: theme.card.amber }]);
     for (const c of claims) out.push(claimLine(c, w));

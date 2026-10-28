@@ -132,6 +132,22 @@ describe("stack contents", () => {
     expect(screen().at(-1)).toContain("no open question on this card");
   });
 
+  test("without --evidence the header shows the model instead of claims, c is a notice, and no claim glyphs render", async () => {
+    const review = await loadReview("review-c");
+    const session = new FixtureSession({ ...review, evidence: false, rankedBy: "rules+openai:gpt-6-luna" }, { dispatchMs: 0 });
+    sessions.push(session);
+    const app = render(<App session={session} dispatchable={false} size={{ columns: 110, rows: 32 }} frame={0} throttleMs={0} />);
+    await tick();
+    const s = lines(app.lastFrame());
+    expect(s[0]).toContain("gpt-6-luna");
+    expect(s[0]).not.toContain("claim");
+    expect(s.some((l) => l.includes("✗ contradicted"))).toBe(false);
+    expect(s.at(-1)).not.toContain("c claims");
+    app.stdin.write("c");
+    await tick();
+    expect(lines(app.lastFrame()).at(-1)).toContain("claims need --evidence");
+  });
+
   test("claims: a contradicted claim shows on its card and in the header; c opens the claims view with door and radius; esc returns", async () => {
     const { app, screen } = await mount("review-c", 110, 32);
     const s = screen();
