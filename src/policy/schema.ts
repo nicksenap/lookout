@@ -1,5 +1,5 @@
+import { err, ok, type Result } from "../core/result.ts";
 import type { ChangeKind, Tier } from "../core/types.ts";
-import { ok, err, type Result } from "../core/result.ts";
 
 /** A rule raises the tier to at least `tier` when every stated condition holds and no `unless` condition does. */
 export interface PolicyRule {
@@ -27,7 +27,23 @@ export interface Policy {
 }
 
 export const DEFAULT_AREAS: Record<string, string[]> = {
-  auth: ["**/auth/**", "**/auth*.*", "**/authn/**", "**/authz/**", "**/oauth/**", "**/oidc/**", "**/sso/**", "**/session/**", "**/sessions/**", "**/*token*", "**/*credential*", "**/*password*", "**/*secret*", "**/permission*/**", "**/rbac/**"],
+  auth: [
+    "**/auth/**",
+    "**/auth*.*",
+    "**/authn/**",
+    "**/authz/**",
+    "**/oauth/**",
+    "**/oidc/**",
+    "**/sso/**",
+    "**/session/**",
+    "**/sessions/**",
+    "**/*token*",
+    "**/*credential*",
+    "**/*password*",
+    "**/*secret*",
+    "**/permission*/**",
+    "**/rbac/**",
+  ],
   billing: ["**/billing/**", "**/payment/**", "**/payments/**", "**/stripe/**", "**/invoice*/**"],
   // Deliberately narrow: `schema.ts` is a common name for validation code, not a database.
   data: ["**/migration/**", "**/migrations/**", "*.sql", "**/prisma/**", "**/db/schema*", "**/database/**", "**/*.prisma"],
@@ -56,7 +72,13 @@ export const DEFAULT_RULES: PolicyRule[] = [
   { area: "prompts", tier: "medium", reason: "touches prompts" },
 ];
 
-export const DEFAULT_POLICY: Policy = { areas: DEFAULT_AREAS, kinds: DEFAULT_KINDS, humans: DEFAULT_HUMANS, rules: DEFAULT_RULES, source: "built-in defaults" };
+export const DEFAULT_POLICY: Policy = {
+  areas: DEFAULT_AREAS,
+  kinds: DEFAULT_KINDS,
+  humans: DEFAULT_HUMANS,
+  rules: DEFAULT_RULES,
+  source: "built-in defaults",
+};
 
 const KINDS: ChangeKind[] = ["docs", "test", "deps", "ci", "config", "additive", "logic"];
 const TIERS: Tier[] = ["low", "medium", "high"];
@@ -68,7 +90,14 @@ const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every
  * `areas` replaces areas by name (an empty list removes one); `policy.rules` replaces the rule list.
  */
 export function validatePolicy(raw: Record<string, unknown>, source: string, base: Policy = DEFAULT_POLICY): Result<Policy> {
-  const policy: Policy = { ...base, areas: { ...base.areas }, kinds: { ...base.kinds }, humans: { ...base.humans }, rules: [...base.rules], source };
+  const policy: Policy = {
+    ...base,
+    areas: { ...base.areas },
+    kinds: { ...base.kinds },
+    humans: { ...base.humans },
+    rules: [...base.rules],
+    source,
+  };
 
   if (raw.areas !== undefined) {
     if (!isTable(raw.areas)) return err(`${source}: [areas] must be a table of name = [globs]`);
@@ -107,17 +136,21 @@ export function validatePolicy(raw: Record<string, unknown>, source: string, bas
       for (const [k, r] of p.rules.entries()) {
         const where = `${source}: policy.rules[${k}]`;
         if (!isTable(r)) return err(`${where} must be a table`);
-        for (const key of Object.keys(r)) if (!["area", "kind", "attention", "tier", "reason", "unless"].includes(key)) return err(`${where}: unknown key "${key}"`);
+        for (const key of Object.keys(r))
+          if (!["area", "kind", "attention", "tier", "reason", "unless"].includes(key)) return err(`${where}: unknown key "${key}"`);
         if (!TIERS.includes(r.tier as Tier)) return err(`${where}: tier must be one of ${TIERS.join(", ")}`);
         const rule: PolicyRule = { tier: r.tier as Tier };
         if (r.unless !== undefined) {
           const u = r.unless as { kind?: unknown; oneWay?: unknown };
-          if (typeof r.unless !== "object" || r.unless === null || !KINDS.includes(u.kind as ChangeKind)) return err(`${where}.unless: needs kind = one of ${KINDS.join(", ")}`);
-          if (u.oneWay !== undefined && u.oneWay !== false) return err(`${where}.unless.oneWay: only false is meaningful (the rule stands down when the diff shows no one-way signal)`);
+          if (typeof r.unless !== "object" || r.unless === null || !KINDS.includes(u.kind as ChangeKind))
+            return err(`${where}.unless: needs kind = one of ${KINDS.join(", ")}`);
+          if (u.oneWay !== undefined && u.oneWay !== false)
+            return err(`${where}.unless.oneWay: only false is meaningful (the rule stands down when the diff shows no one-way signal)`);
           rule.unless = u.oneWay === false ? { kind: u.kind as ChangeKind, oneWay: false } : { kind: u.kind as ChangeKind };
         }
         if (r.area !== undefined) {
-          if (typeof r.area !== "string" || !(r.area in policy.areas)) return err(`${where}: area "${String(r.area)}" is not defined in [areas] (known: ${Object.keys(policy.areas).join(", ")})`);
+          if (typeof r.area !== "string" || !(r.area in policy.areas))
+            return err(`${where}: area "${String(r.area)}" is not defined in [areas] (known: ${Object.keys(policy.areas).join(", ")})`);
           rule.area = r.area;
         }
         if (r.kind !== undefined) {
@@ -125,7 +158,8 @@ export function validatePolicy(raw: Record<string, unknown>, source: string, bas
           rule.kind = r.kind as ChangeKind;
         }
         if (r.attention !== undefined) {
-          if (r.attention !== "needs-eyes" && r.attention !== "suspicious") return err(`${where}: attention must be needs-eyes or suspicious`);
+          if (r.attention !== "needs-eyes" && r.attention !== "suspicious")
+            return err(`${where}: attention must be needs-eyes or suspicious`);
           rule.attention = r.attention;
         }
         if (r.reason !== undefined) {

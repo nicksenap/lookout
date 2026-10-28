@@ -1,8 +1,29 @@
 import { allBlocks, blockText } from "../core/blocks.ts";
 import { attemptAsync } from "../core/result.ts";
-import { ATTENTION_ORDER, type Card, type ChangeSet, type Claim, type ClaimSection, type ClaimStatus, type Door, type DoorKind, type Intent, type Radius } from "../core/types.ts";
+import {
+  ATTENTION_ORDER,
+  type Card,
+  type ChangeSet,
+  type Claim,
+  type ClaimSection,
+  type ClaimStatus,
+  type Door,
+  type DoorKind,
+  type Intent,
+  type Radius,
+} from "../core/types.ts";
 import { RankCache } from "../rank/cache.ts";
-import { type ClaimJudgement, type Env, type GroundCard, groundClaimBatch, type ModelClaimStatus, resolveAttentionModel, type ResolvedModel, resolveWriter, writeText } from "../rank/model.ts";
+import {
+  type ClaimJudgement,
+  type Env,
+  type GroundCard,
+  groundClaimBatch,
+  type ModelClaimStatus,
+  type ResolvedModel,
+  resolveAttentionModel,
+  resolveWriter,
+  writeText,
+} from "../rank/model.ts";
 
 /**
  * Claims are the author's `- ` bullets, one claim each, tagged by the section they sit under.
@@ -61,7 +82,9 @@ export function extractClaims(intent: Intent | undefined): Claim[] {
 /** The author's door word, from a door claim or anywhere in the body. */
 export function authorDoor(intent: Intent | undefined, claims: Claim[]): DoorKind | undefined {
   const doorClaim = claims.find((c) => c.section === "door");
-  const m = doorClaim ? /\b(one|two)[- ]way\b|\b(irreversible|reversible)\b/i.exec(doorClaim.text) : /\b(one|two)[- ]way\b/i.exec(intent?.body ?? "");
+  const m = doorClaim
+    ? /\b(one|two)[- ]way\b|\b(irreversible|reversible)\b/i.exec(doorClaim.text)
+    : /\b(one|two)[- ]way\b/i.exec(intent?.body ?? "");
   if (!m) return undefined;
   return m[1]?.toLowerCase() === "one" || m[2]?.toLowerCase() === "irreversible" ? "one-way" : "two-way";
 }
@@ -79,7 +102,10 @@ export function needsModelExtraction(intent: Intent | undefined, claims: Claim[]
 /** The body up to the first heading that is not a summary (Evidence, Merge Danger, …), fences included. */
 export function summarySection(body: string): string {
   const out: string[] = [];
-  for (const line of body.replace(/<!--[\s\S]*?-->/g, "").replace(/\r\n?/g, "\n").split("\n")) {
+  for (const line of body
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")) {
     const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading && sectionOf(heading[1]!) !== "summary") break;
     if (heading) continue;
@@ -95,7 +121,8 @@ Title: {title}
 
 {body}`;
 
-export const claimsPrompt = (intent: Intent): string => CLAIMS_PROMPT.replace("{title}", intent.title).replace("{body}", summarySection(intent.body).slice(0, 12_000));
+export const claimsPrompt = (intent: Intent): string =>
+  CLAIMS_PROMPT.replace("{title}", intent.title).replace("{body}", summarySection(intent.body).slice(0, 12_000));
 
 /** Claims from the model's bullet list; the same splitter as for authored bullets. */
 export function parseClaimList(text: string): Claim[] {
@@ -152,14 +179,23 @@ export interface GroundOptions {
   radius?: Radius;
 }
 
-const isJudgement = (v: unknown): v is ClaimJudgement => typeof v === "object" && v !== null && typeof (v as ClaimJudgement).confidence === "number" && typeof (v as ClaimJudgement).status === "string";
+const isJudgement = (v: unknown): v is ClaimJudgement =>
+  typeof v === "object" &&
+  v !== null &&
+  typeof (v as ClaimJudgement).confidence === "number" &&
+  typeof (v as ClaimJudgement).status === "string";
 
 /**
  * Ground every claim that still has no status, in one Decisions call, cached by claim id and
  * card set. Door claims are never sent (rules judged them). Never throws: a failed call leaves
  * the claims ungrounded and returns a warning.
  */
-export async function groundClaims(changeSet: ChangeSet, cards: Card[], claims: Claim[], opts: GroundOptions): Promise<{ claims: Claim[]; warning?: string }> {
+export async function groundClaims(
+  changeSet: ChangeSet,
+  cards: Card[],
+  claims: Claim[],
+  opts: GroundOptions,
+): Promise<{ claims: Claim[]; warning?: string }> {
   const todo = claims.filter((c) => c.status === undefined && c.section !== "door");
   if (todo.length === 0) return { claims };
   const env = opts.env ?? process.env;
@@ -168,7 +204,10 @@ export async function groundClaims(changeSet: ChangeSet, cards: Card[], claims: 
 
   const live = cards.filter((c) => !c.fixed);
   const cache = opts.cache ?? new RankCache();
-  const setKey = live.map((c) => c.id).sort().join(",");
+  const setKey = live
+    .map((c) => c.id)
+    .sort()
+    .join(",");
   // The key carries the prompt version: a sharper question must not be answered from an older cache.
   const key = (c: Claim) => `ground-v2:${c.id}:${setKey}`;
   const judged = new Map<string, ClaimJudgement>();
@@ -178,8 +217,15 @@ export async function groundClaims(changeSet: ChangeSet, cards: Card[], claims: 
   }
   const missing = todo.filter((c) => !judged.has(c.id));
   if (missing.length > 0) {
-    const radius = opts.radius ? { areas: opts.radius.areas, ...(opts.radius.importers ? { importers: opts.radius.importers } : {}) } : undefined;
-    const res = await attemptAsync(() => groundClaimBatch(resolved.model, missing, groundCards(changeSet, live), { ...(changeSet.intent ? { intent: changeSet.intent } : {}), ...(radius ? { radius } : {}) }));
+    const radius = opts.radius
+      ? { areas: opts.radius.areas, ...(opts.radius.importers ? { importers: opts.radius.importers } : {}) }
+      : undefined;
+    const res = await attemptAsync(() =>
+      groundClaimBatch(resolved.model, missing, groundCards(changeSet, live), {
+        ...(changeSet.intent ? { intent: changeSet.intent } : {}),
+        ...(radius ? { radius } : {}),
+      }),
+    );
     if (!res.ok) return { claims, warning: `Claims not grounded: ${opts.modelSpec} failed (${res.error}).` };
     for (const [id, j] of res.value) {
       judged.set(id, j);
@@ -207,7 +253,12 @@ function groundCards(changeSet: ChangeSet, cards: Card[]): GroundCard[] {
     const ids = new Set(card.blockIds);
     const own = refs.filter((r) => ids.has(r.block.id));
     const diff = own.map((r) => `### ${r.block.path} ${r.hunk.header}\n${blockText(r.hunk, r.block, 2)}`).join("\n\n");
-    const gc: GroundCard = { id: card.id, title: card.title, files: [...new Set(own.map((r) => r.block.path))], diff: diff.length > MAX_DIFF_PER_CARD ? `${diff.slice(0, MAX_DIFF_PER_CARD)}\n…` : diff };
+    const gc: GroundCard = {
+      id: card.id,
+      title: card.title,
+      files: [...new Set(own.map((r) => r.block.path))],
+      diff: diff.length > MAX_DIFF_PER_CARD ? `${diff.slice(0, MAX_DIFF_PER_CARD)}\n…` : diff,
+    };
     if (card.paragraph) gc.paragraph = card.paragraph;
     return gc;
   });
@@ -238,7 +289,10 @@ export function claimId(text: string): string {
 function bodyLines(body: string): string[] {
   const out: string[] = [];
   let fenced = false;
-  for (const raw of body.replace(/<!--[\s\S]*?-->/g, "").replace(/\r\n?/g, "\n").split("\n")) {
+  for (const raw of body
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")) {
     if (/^\s*(```|~~~)/.test(raw)) {
       fenced = !fenced;
       continue;

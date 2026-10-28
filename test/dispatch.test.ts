@@ -2,14 +2,14 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { buildCards, untouchedAreas } from "../src/cards/build.ts";
 import { parseDiff } from "../src/core/diff.ts";
+import type { Result } from "../src/core/result.ts";
 import { ReviewStore } from "../src/core/store.ts";
 import type { Review } from "../src/core/types.ts";
-import type { Result } from "../src/core/result.ts";
 import { BUILTIN_DISPATCHERS, type Config, loadConfig, validateConfig } from "../src/dispatch/config.ts";
 import { buildPrompt, FINDINGS_CONTRACT } from "../src/dispatch/prompt.ts";
 import { DispatchRunner, expandCommand, shellQuote } from "../src/dispatch/runner.ts";
-import { buildCards, untouchedAreas } from "../src/cards/build.ts";
 import { classify, evaluate } from "../src/policy/evaluate.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 
@@ -19,9 +19,28 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 async function review(): Promise<Review> {
   const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/result-errors.diff`).text());
-  const changeSet = { target: "HEAD~1..HEAD", base: "a", head: "b", files, intent: { title: "Return Result everywhere", body: "Expected failures are returned, not thrown." } };
+  const changeSet = {
+    target: "HEAD~1..HEAD",
+    base: "a",
+    head: "b",
+    files,
+    intent: { title: "Return Result everywhere", body: "Expected failures are returned, not thrown." },
+  };
   const classification = classify(changeSet, DEFAULT_POLICY);
-  return { changeSet, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(changeSet, DEFAULT_POLICY), untouched: untouchedAreas(changeSet, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules", evidence: true, exchanges: [] };
+  return {
+    changeSet,
+    classification,
+    verdict: evaluate(classification, DEFAULT_POLICY),
+    cards: buildCards(changeSet, DEFAULT_POLICY),
+    untouched: untouchedAreas(changeSet, DEFAULT_POLICY),
+    claims: [],
+    door: { computed: "two-way", signals: [] },
+    radius: { areas: [] },
+    dispatches: [],
+    rankedBy: "rules",
+    evidence: true,
+    exchanges: [],
+  };
 }
 
 /** Unwrap a Result in tests; a failure is a test failure with the message. */
@@ -30,7 +49,14 @@ function must<T>(r: Result<T>): T {
   return r.value;
 }
 
-const config = (cmd: string, extra: Partial<Config> = {}): Config => ({ model: { decide: "openai:gpt-6-luna", write: "openai:gpt-6-luna" }, rank: { model: "openai:gpt-6-luna" }, dispatchers: [{ name: "fake", cmd }], policy: DEFAULT_POLICY, source: "test", ...extra });
+const config = (cmd: string, extra: Partial<Config> = {}): Config => ({
+  model: { decide: "openai:gpt-6-luna", write: "openai:gpt-6-luna" },
+  rank: { model: "openai:gpt-6-luna" },
+  dispatchers: [{ name: "fake", cmd }],
+  policy: DEFAULT_POLICY,
+  source: "test",
+  ...extra,
+});
 
 describe("config", () => {
   test("missing file → built-in pi dispatcher", () => {
@@ -42,7 +68,10 @@ describe("config", () => {
 
   test("PLAN.md example parses", () => {
     const p = join(tmp, "config.toml");
-    writeFileSync(p, `[rank]\nmodel = "anthropic:claude-haiku-4-5-20251001"\n\n[dispatch.pi]\ncmd = "pi -p @{prompt_file}"\n\n[dispatch.claude]\ncmd = "claude -p {prompt}"\n`);
+    writeFileSync(
+      p,
+      `[rank]\nmodel = "anthropic:claude-haiku-4-5-20251001"\n\n[dispatch.pi]\ncmd = "pi -p @{prompt_file}"\n\n[dispatch.claude]\ncmd = "claude -p {prompt}"\n`,
+    );
     const c = must(loadConfig(p));
     expect(c.rank.model).toBe("anthropic:claude-haiku-4-5-20251001");
     expect(c.dispatchers.map((d) => d.name)).toEqual(["pi", "claude"]);
@@ -53,7 +82,9 @@ describe("config", () => {
       const r = validateConfig(raw, "c.toml");
       return r.ok ? "ok" : r.error;
     };
-    expect(error({ dispatch: { x: { cmd: "run {promt}" } } })).toBe("c.toml: dispatch.x.cmd: unknown placeholder {promt}. Allowed: {prompt} {prompt_file} {repo} {diff_file}");
+    expect(error({ dispatch: { x: { cmd: "run {promt}" } } })).toBe(
+      "c.toml: dispatch.x.cmd: unknown placeholder {promt}. Allowed: {prompt} {prompt_file} {repo} {diff_file}",
+    );
     expect(error({ dispatch: { x: { command: "a" } } })).toContain('unknown key "dispatch.x.command"');
     expect(error({ rank: { model: "gpt" } })).toContain("provider:model");
     expect(error({ prompt: "Review {diff} for {target}" })).toContain("c.toml: prompt: unknown placeholder {target}");
@@ -94,11 +125,16 @@ describe("prompt", () => {
 
 describe("expandCommand", () => {
   test("values are shell-quoted words", () => {
-    expect(expandCommand("claude -p {prompt}", { prompt: "it's $HOME `x`", prompt_file: "", repo: "", diff_file: "" })).toBe(`claude -p ${shellQuote("it's $HOME `x`")}`);
+    expect(expandCommand("claude -p {prompt}", { prompt: "it's $HOME `x`", prompt_file: "", repo: "", diff_file: "" })).toBe(
+      `claude -p ${shellQuote("it's $HOME `x`")}`,
+    );
   });
   test("a quoted prompt survives the shell intact", async () => {
     const tricky = `a 'b' "c" $(rm -rf /) \`d\` \\ e\nline2`;
-    const proc = Bun.spawn(["/bin/sh", "-c", expandCommand("printf %s {prompt}", { prompt: tricky, prompt_file: "", repo: "", diff_file: "" })], { stdout: "pipe" });
+    const proc = Bun.spawn(
+      ["/bin/sh", "-c", expandCommand("printf %s {prompt}", { prompt: tricky, prompt_file: "", repo: "", diff_file: "" })],
+      { stdout: "pipe" },
+    );
     expect(await new Response(proc.stdout).text()).toBe(tricky);
   });
 });
@@ -130,7 +166,10 @@ describe("DispatchRunner with a fake dispatcher", () => {
 
   test("{diff_file} and {repo} are provided; cwd is the repo", async () => {
     const store = new ReviewStore(await review());
-    const runner = new DispatchRunner(store, { repo: tmp, config: config("pwd; test {repo} = \"$(pwd -P)\" || test {repo} = \"$(pwd)\"; head -1 {diff_file}") });
+    const runner = new DispatchRunner(store, {
+      repo: tmp,
+      config: config('pwd; test {repo} = "$(pwd -P)" || test {repo} = "$(pwd)"; head -1 {diff_file}'),
+    });
     runner.start("fake", { kind: "change" });
     await runner.settled();
     const d = store.getSnapshot().dispatches[0]!;

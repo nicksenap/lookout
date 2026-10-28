@@ -49,7 +49,13 @@ export function checkPlaceholders(template: string, where: string, allowed: read
   return ok(undefined);
 }
 
-export const DEFAULT_CONFIG: Config = { model: { decide: DEFAULT_MODEL, write: DEFAULT_MODEL }, rank: { model: DEFAULT_MODEL }, dispatchers: BUILTIN_DISPATCHERS, policy: DEFAULT_POLICY, source: "built-in defaults" };
+export const DEFAULT_CONFIG: Config = {
+  model: { decide: DEFAULT_MODEL, write: DEFAULT_MODEL },
+  rank: { model: DEFAULT_MODEL },
+  dispatchers: BUILTIN_DISPATCHERS,
+  policy: DEFAULT_POLICY,
+  source: "built-in defaults",
+};
 
 const MODEL_SPEC = /^[\w.-]+:.+$/;
 
@@ -61,7 +67,8 @@ const MODEL_SPEC = /^[\w.-]+:.+$/;
 export function validateConfig(raw: unknown, source: string, base: Config = DEFAULT_CONFIG): Result<Config> {
   if (!isTable(raw)) return err(`${source}: expected a TOML table at top level`);
   const known = new Set(["model", "rank", "dispatch", "prompt", "verify", "areas", "policy"]);
-  for (const key of Object.keys(raw)) if (!known.has(key)) return err(`${source}: unknown key "${key}" (expected model, dispatch, prompt, verify, areas, policy)`);
+  for (const key of Object.keys(raw))
+    if (!known.has(key)) return err(`${source}: unknown key "${key}" (expected model, dispatch, prompt, verify, areas, policy)`);
 
   let decide = base.model.decide;
   let write = base.model.write;
@@ -69,18 +76,21 @@ export function validateConfig(raw: unknown, source: string, base: Config = DEFA
     if (!isTable(raw.rank)) return err(`${source}: [rank] must be a table`);
     for (const key of Object.keys(raw.rank)) if (key !== "model") return err(`${source}: unknown key "rank.${key}" (expected rank.model)`);
     if (raw.rank.model !== undefined) {
-      if (typeof raw.rank.model !== "string" || !MODEL_SPEC.test(raw.rank.model)) return err(`${source}: rank.model must be a "provider:model" string, e.g. "${DEFAULT_MODEL}"`);
+      if (typeof raw.rank.model !== "string" || !MODEL_SPEC.test(raw.rank.model))
+        return err(`${source}: rank.model must be a "provider:model" string, e.g. "${DEFAULT_MODEL}"`);
       decide = raw.rank.model;
       write = raw.rank.model;
     }
   }
   if (raw.model !== undefined) {
     if (!isTable(raw.model)) return err(`${source}: [model] must be a table with decide and/or write`);
-    for (const key of Object.keys(raw.model)) if (key !== "decide" && key !== "write") return err(`${source}: unknown key "model.${key}" (expected decide, write)`);
+    for (const key of Object.keys(raw.model))
+      if (key !== "decide" && key !== "write") return err(`${source}: unknown key "model.${key}" (expected decide, write)`);
     for (const key of ["decide", "write"] as const) {
       const v = raw.model[key];
       if (v === undefined) continue;
-      if (typeof v !== "string" || !MODEL_SPEC.test(v)) return err(`${source}: model.${key} must be a "provider:model" string, e.g. "${DEFAULT_MODEL}"`);
+      if (typeof v !== "string" || !MODEL_SPEC.test(v))
+        return err(`${source}: model.${key} must be a "provider:model" string, e.g. "${DEFAULT_MODEL}"`);
       if (key === "decide") decide = v;
       else write = v;
     }
@@ -115,10 +125,12 @@ export function validateConfig(raw: unknown, source: string, base: Config = DEFA
   } else if (base.prompt !== undefined) config.prompt = base.prompt;
   if (raw.verify !== undefined) {
     if (!isTable(raw.verify)) return err(`${source}: [verify] must be a table with dispatcher`);
-    for (const key of Object.keys(raw.verify)) if (key !== "dispatcher") return err(`${source}: unknown key "verify.${key}" (expected dispatcher)`);
+    for (const key of Object.keys(raw.verify))
+      if (key !== "dispatcher") return err(`${source}: unknown key "verify.${key}" (expected dispatcher)`);
     const verifier = raw.verify.dispatcher;
     if (verifier !== undefined) {
-      if (typeof verifier !== "string" || !dispatchers.some((d) => d.name === verifier)) return err(`${source}: verify.dispatcher must name a [dispatch.<name>] (have: ${dispatchers.map((d) => d.name).join(", ")})`);
+      if (typeof verifier !== "string" || !dispatchers.some((d) => d.name === verifier))
+        return err(`${source}: verify.dispatcher must name a [dispatch.<name>] (have: ${dispatchers.map((d) => d.name).join(", ")})`);
       config.verifier = verifier;
     }
   } else if (base.verifier !== undefined && dispatchers.some((d) => d.name === base.verifier)) config.verifier = base.verifier;

@@ -9,7 +9,19 @@ import { LocalSession } from "../src/core/session.ts";
 import type { ReviewEvent } from "../src/core/store.ts";
 import type { Card, ChangeSet, Claim } from "../src/core/types.ts";
 import { DEFAULT_CONFIG } from "../src/dispatch/config.ts";
-import { ANSWER_MIN, applyClaims, authorDoor, CONTRADICTED_MIN, extractClaims, extractClaimsWithModel, gateStatus, groundClaims, judgeDoorClaim, needsModelExtraction, parseClaimList } from "../src/evidence/claims.ts";
+import {
+  ANSWER_MIN,
+  applyClaims,
+  authorDoor,
+  CONTRADICTED_MIN,
+  extractClaims,
+  extractClaimsWithModel,
+  gateStatus,
+  groundClaims,
+  judgeDoorClaim,
+  needsModelExtraction,
+  parseClaimList,
+} from "../src/evidence/claims.ts";
 import { attachDoorSignals, detectDoor, doorSignals } from "../src/evidence/door.ts";
 import { markTests, stemOf } from "../src/evidence/tests.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
@@ -27,11 +39,17 @@ const tmp = (prefix: string) => {
 afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
 
 const fixture = async (name: string, intent?: ChangeSet["intent"]): Promise<ChangeSet> => {
-  const cs: ChangeSet = { target: name, base: "a", head: "b", files: parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/${name}.diff`).text()) };
+  const cs: ChangeSet = {
+    target: name,
+    base: "a",
+    head: "b",
+    files: parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/${name}.diff`).text()),
+  };
   if (intent) cs.intent = intent;
   return cs;
 };
-const diff = (path: string, header: string, body: string[]) => [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n") + "\n";
+const diff = (path: string, header: string, body: string[]) =>
+  `${[`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n")}\n`;
 
 const BODY = `## Summary
 
@@ -76,7 +94,12 @@ describe("extractClaims", () => {
       ["radius", "minimal"],
     ]);
     expect(new Set(claims.map((c) => c.id)).size).toBe(claims.length);
-    expect(claims[0]!.id).toBe(extractClaims({ title: "x", body: "- reads `~/.config/lookout/.env`  at startup and never overrides variables already set in the shell" })[0]!.id);
+    expect(claims[0]!.id).toBe(
+      extractClaims({
+        title: "x",
+        body: "- reads `~/.config/lookout/.env`  at startup and never overrides variables already set in the shell",
+      })[0]!.id,
+    );
   });
 
   test("no body, or a body of only prose, yields no claims; prose asks for the model, bullets and empty bodies do not", () => {
@@ -86,13 +109,18 @@ describe("extractClaims", () => {
     expect(extractClaims(prose)).toEqual([]);
     expect(needsModelExtraction(prose, [])).toBe(true);
     expect(needsModelExtraction({ title: "t", body: BODY }, extractClaims({ title: "t", body: BODY }))).toBe(false);
-    expect(needsModelExtraction({ title: "t", body: "**Door:** one-way" }, extractClaims({ title: "t", body: "**Door:** one-way" }))).toBe(false);
+    expect(needsModelExtraction({ title: "t", body: "**Door:** one-way" }, extractClaims({ title: "t", body: "**Door:** one-way" }))).toBe(
+      false,
+    );
     expect(needsModelExtraction(undefined, [])).toBe(false);
   });
 
   test("model fallback parses its bullet list and treats `- none` as nothing", async () => {
     const intent = { title: "t", body: "Prose only, long enough to be worth a model call for claims." };
-    const got = await extractClaimsWithModel(intent, { modelSpec: "mock:x", write: async (prompt) => (prompt.includes(intent.body) ? "- Reads the env file\n- Never overrides shell variables" : "- none") });
+    const got = await extractClaimsWithModel(intent, {
+      modelSpec: "mock:x",
+      write: async (prompt) => (prompt.includes(intent.body) ? "- Reads the env file\n- Never overrides shell variables" : "- none"),
+    });
     expect(got.claims.map((c) => c.text)).toEqual(["Reads the env file", "Never overrides shell variables"]);
     expect(parseClaimList("- none")).toEqual([]);
     const failed = await extractClaimsWithModel(intent, { modelSpec: "mock:x", write: async () => Promise.reject(new Error("down")) });
@@ -105,7 +133,12 @@ describe("extractClaims", () => {
   test("authorDoor reads the Door line, or a one-way/two-way phrase in the body", () => {
     const claims = extractClaims({ title: "t", body: BODY });
     expect(authorDoor({ title: "t", body: BODY }, claims)).toBe("two-way");
-    expect(authorDoor({ title: "t", body: "Door: irreversible, drops a column" }, extractClaims({ title: "t", body: "Door: irreversible, drops a column" }))).toBe("one-way");
+    expect(
+      authorDoor(
+        { title: "t", body: "Door: irreversible, drops a column" },
+        extractClaims({ title: "t", body: "Door: irreversible, drops a column" }),
+      ),
+    ).toBe("one-way");
     expect(authorDoor({ title: "t", body: "This is a one-way door." }, [])).toBe("one-way");
     expect(authorDoor({ title: "t", body: "nothing here" }, [])).toBeUndefined();
   });
@@ -120,7 +153,10 @@ describe("confidence gate and door judgement", () => {
     expect(gateStatus("not-in-diff", 0.76)).toBe("not-in-diff");
   });
   test("rules judge the door claim", () => {
-    const oneWay = { computed: "one-way" as const, signals: [{ kind: "migration" as const, path: "db/migrations/1.sql", text: "migration file changed" }] };
+    const oneWay = {
+      computed: "one-way" as const,
+      signals: [{ kind: "migration" as const, path: "db/migrations/1.sql", text: "migration file changed" }],
+    };
     const twoWay = { computed: "two-way" as const, signals: [] };
     expect(judgeDoorClaim("two-way", oneWay).status).toBe("contradicted");
     expect(judgeDoorClaim("one-way", oneWay).status).toBe("supported");
@@ -135,7 +171,8 @@ const jsonState = (state: unknown): Record<string, unknown> => {
   return (Array.isArray(parts) ? parts.find((p) => p.type === "json")?.value : state) as Record<string, unknown>;
 };
 /** A complete distribution with `p` on `choice` and the rest spread over the other options. */
-const distribution = (options: string[], choice: string, p: number): Record<string, number> => Object.fromEntries(options.map((o) => [o, o === choice ? p : (1 - p) / (options.length - 1)]));
+const distribution = (options: string[], choice: string, p: number): Record<string, number> =>
+  Object.fromEntries(options.map((o) => [o, o === choice ? p : (1 - p) / (options.length - 1)]));
 
 /** Mock decision model: answers status + card per claim from `answer`, counts calls. */
 function groundingMock(answer: (claimText: string) => { status: string; p: number; card?: string }) {
@@ -150,7 +187,12 @@ function groundingMock(answer: (claimText: string) => { status: string; p: numbe
       for (const [id, q] of Object.entries(questions)) {
         const text = /"([^"]+)"/.exec(String(q.instructions))?.[1] ?? "";
         const a = answer(text);
-        if (id.startsWith("claim_status_")) answers[id] = { type: "choice", choice: a.status, probabilities: distribution(Object.keys((q as { criteria?: Record<string, string> }).criteria ?? {}), a.status, a.p) };
+        if (id.startsWith("claim_status_"))
+          answers[id] = {
+            type: "choice",
+            choice: a.status,
+            probabilities: distribution(Object.keys((q as { criteria?: Record<string, string> }).criteria ?? {}), a.status, a.p),
+          };
         else answers[id] = { type: "choice", choice: a.card ?? "none" };
       }
       return { answers, warnings: [] };
@@ -177,7 +219,12 @@ describe("groundClaims", () => {
       if (text.startsWith("Numbered")) return { status: "contradicted", p: 0.5 };
       return { status: "supported", p: 0.8 };
     });
-    const res = await groundClaims(cs, cards, claims, { modelSpec: "mock:ground", cache: new RankCache(tmp("lookout-ground-")), resolveModel: () => ({ ok: true, model }), radius: { areas: [], importers: ["x.ts"] } });
+    const res = await groundClaims(cs, cards, claims, {
+      modelSpec: "mock:ground",
+      cache: new RankCache(tmp("lookout-ground-")),
+      resolveModel: () => ({ ok: true, model }),
+      radius: { areas: [], importers: ["x.ts"] },
+    });
     expect(res.warning).toBeUndefined();
     expect(calls).toHaveLength(1);
     const by = (prefix: string) => res.claims.find((c) => c.text.startsWith(prefix))!;
@@ -202,10 +249,23 @@ describe("groundClaims", () => {
       supportedQuestionTypes: ["choice"],
       doDecide: async ({ questions, state }) => {
         seen.push({ questions: Object.keys(questions), state: jsonState(state) });
-        return { answers: Object.fromEntries(Object.keys(questions).map((id) => [id, { type: "choice" as const, choice: id.startsWith("claim_status_") ? "supported" : "none" }])), warnings: [] };
+        return {
+          answers: Object.fromEntries(
+            Object.keys(questions).map((id) => [
+              id,
+              { type: "choice" as const, choice: id.startsWith("claim_status_") ? "supported" : "none" },
+            ]),
+          ),
+          warnings: [],
+        };
       },
     });
-    await groundClaims(cs, withProse, claims, { modelSpec: "mock:ground", cache: new RankCache(tmp("lookout-ground-")), resolveModel: () => ({ ok: true, model }), radius: { areas: ["auth"], importers: ["a.ts"] } });
+    await groundClaims(cs, withProse, claims, {
+      modelSpec: "mock:ground",
+      cache: new RankCache(tmp("lookout-ground-")),
+      resolveModel: () => ({ ok: true, model }),
+      radius: { areas: ["auth"], importers: ["a.ts"] },
+    });
     const ids = seen[0]!.questions as string[];
     const sent = claims.filter((c) => c.section !== "door");
     for (const c of sent) expect(ids).toContain(claimStatusId(c.id));
@@ -221,9 +281,17 @@ describe("groundClaims", () => {
     const { cs, cards, claims } = await setup();
     const dir = tmp("lookout-ground-");
     const first = groundingMock(() => ({ status: "supported", p: 0.9 }));
-    await groundClaims(cs, cards, claims, { modelSpec: "mock:ground", cache: new RankCache(dir), resolveModel: () => ({ ok: true, model: first.model }) });
+    await groundClaims(cs, cards, claims, {
+      modelSpec: "mock:ground",
+      cache: new RankCache(dir),
+      resolveModel: () => ({ ok: true, model: first.model }),
+    });
     const second = groundingMock(() => ({ status: "contradicted", p: 0.99 }));
-    const again = await groundClaims(cs, cards, claims, { modelSpec: "mock:ground", cache: new RankCache(dir), resolveModel: () => ({ ok: true, model: second.model }) });
+    const again = await groundClaims(cs, cards, claims, {
+      modelSpec: "mock:ground",
+      cache: new RankCache(dir),
+      resolveModel: () => ({ ok: true, model: second.model }),
+    });
     expect(second.calls).toHaveLength(0);
     expect(again.claims.filter((c) => c.section !== "door").every((c) => c.status === "supported")).toBe(true);
 
@@ -233,17 +301,47 @@ describe("groundClaims", () => {
         throw new Error("boom");
       },
     });
-    const failed = await groundClaims(cs, cards, claims, { modelSpec: "mock:ground", cache: new RankCache(tmp("lookout-ground-")), resolveModel: () => ({ ok: true, model: broken }) });
+    const failed = await groundClaims(cs, cards, claims, {
+      modelSpec: "mock:ground",
+      cache: new RankCache(tmp("lookout-ground-")),
+      resolveModel: () => ({ ok: true, model: broken }),
+    });
     expect(failed.warning).toContain("boom");
     expect(failed.claims.every((c) => c.status === undefined)).toBe(true);
-    const noKey = await groundClaims(cs, cards, claims, { modelSpec: "openai:gpt-6-luna", env: {}, cache: new RankCache(tmp("lookout-ground-")) });
+    const noKey = await groundClaims(cs, cards, claims, {
+      modelSpec: "openai:gpt-6-luna",
+      env: {},
+      cache: new RankCache(tmp("lookout-ground-")),
+    });
     expect(noKey.warning).toContain("OPENAI_API_KEY");
     expect(await groundClaims(cs, cards, [], { modelSpec: "openai:gpt-6-luna", env: {} })).toEqual({ claims: [] });
   });
 
   test("applyClaims: cards get their claim ids; an uncovered card at needs-eyes or above is unmentioned, a routine or mechanical one is not", () => {
-    const card = (id: string, attention: Card["attention"], extra: Partial<Card> = {}): Card => ({ id, title: id, color: "green", kind: "logic", areas: [], labels: [], blockIds: [id], files: [id], attention, score: 0, claimIds: [], unmentioned: false, testsTouched: false, questions: [], ...extra });
-    const cards = [card("a", "needs-eyes"), card("b", "needs-eyes"), card("c", "routine"), card("d", "suspicious", { mechanical: true }), card("clean", "inert", { fixed: "clean" })];
+    const card = (id: string, attention: Card["attention"], extra: Partial<Card> = {}): Card => ({
+      id,
+      title: id,
+      color: "green",
+      kind: "logic",
+      areas: [],
+      labels: [],
+      blockIds: [id],
+      files: [id],
+      attention,
+      score: 0,
+      claimIds: [],
+      unmentioned: false,
+      testsTouched: false,
+      questions: [],
+      ...extra,
+    });
+    const cards = [
+      card("a", "needs-eyes"),
+      card("b", "needs-eyes"),
+      card("c", "routine"),
+      card("d", "suspicious", { mechanical: true }),
+      card("clean", "inert", { fixed: "clean" }),
+    ];
     const claims: Claim[] = [
       { id: "1", text: "x", section: "summary", status: "supported", cardId: "a" },
       { id: "2", text: "y", section: "summary", status: "not-in-diff" },
@@ -289,8 +387,16 @@ describe("tests touched", () => {
 describe("door", () => {
   test("migrations, destructive SQL, removed public exports and routes are one-way signals; test code and internal renames are not", () => {
     const files = parseDiff(
-      diff("db/migrations/0042_drop_legacy.sql", "@@ -0,0 +1,2 @@", ["+ALTER TABLE users DROP COLUMN legacy_id;", "+INSERT INTO audit (what) VALUES ('drop');"]) +
-        diff("src/api/index.ts", "@@ -1,3 +1,2 @@", ["-export function legacyHandler() {}", "-router.get('/v1/legacy', legacyHandler);", " export function keep() {}", "+export function renamedKeep() {}"]) +
+      diff("db/migrations/0042_drop_legacy.sql", "@@ -0,0 +1,2 @@", [
+        "+ALTER TABLE users DROP COLUMN legacy_id;",
+        "+INSERT INTO audit (what) VALUES ('drop');",
+      ]) +
+        diff("src/api/index.ts", "@@ -1,3 +1,2 @@", [
+          "-export function legacyHandler() {}",
+          "-router.get('/v1/legacy', legacyHandler);",
+          " export function keep() {}",
+          "+export function renamedKeep() {}",
+        ]) +
         diff("src/rank/model.ts", "@@ -1,1 +1,1 @@", ["-export function scoreHunkBatch() {}", "+export function scoreBlockBatch() {}"]) +
         diff("test/db.test.ts", "@@ -1,1 +1,2 @@", [" x", "+await db.deleteMany({});"]),
     );
@@ -317,13 +423,18 @@ describe("door", () => {
   });
 });
 
-
 describe("LocalSession evidence", () => {
   const rankMock = () =>
     new Experimental_DecisionMockModelV4({
       supportedQuestionTypes: ["score", "choice"],
       doDecide: async ({ questions }) => ({
-        answers: Object.fromEntries(Object.keys(questions).map((q) => (q.startsWith("kind_") ? [q, { type: "choice" as const, choice: q.includes("test") ? "test" : "behavior" }] : [q, { type: "score" as const, score: 2 }]))),
+        answers: Object.fromEntries(
+          Object.keys(questions).map((q) =>
+            q.startsWith("kind_")
+              ? [q, { type: "choice" as const, choice: q.includes("test") ? "test" : "behavior" }]
+              : [q, { type: "score" as const, score: 2 }],
+          ),
+        ),
         warnings: [],
       }),
     });
@@ -339,10 +450,25 @@ describe("LocalSession evidence", () => {
       repo: `${import.meta.dir}/..`,
       rank: (c, opts) => rankWithModel(c, { ...opts, cache: new RankCache(tmp("lookout-ev-")), resolveModel: () => ({ ok: true, model }) }),
       write: async () => "TITLE: Load user env\nPARAGRAPH: Reads the env file.",
-      ground: async (_cs, cards, claims) => ({ claims: claims.map((c) => (c.section === "door" ? c : { ...c, status: "supported" as const, confidence: 0.9, cardId: c.section === "radius" ? undefined : cards[0]!.id })) }),
+      ground: async (_cs, cards, claims) => ({
+        claims: claims.map((c) =>
+          c.section === "door"
+            ? c
+            : { ...c, status: "supported" as const, confidence: 0.9, cardId: c.section === "radius" ? undefined : cards[0]!.id },
+        ),
+      }),
     });
     const first = session.snapshot();
-    expect(first.claims.map((c) => c.section)).toEqual(["summary", "summary", "summary", "summary", "summary", "evidence", "door", "radius"]);
+    expect(first.claims.map((c) => c.section)).toEqual([
+      "summary",
+      "summary",
+      "summary",
+      "summary",
+      "summary",
+      "evidence",
+      "door",
+      "radius",
+    ]);
     expect(first.claims.find((c) => c.section === "door")).toMatchObject({ status: "supported", confidence: 1 });
     expect(first.door).toEqual({ author: "two-way", computed: "two-way", signals: [] });
     expect(first.radius).toEqual({ areas: [], author: "minimal" });
@@ -359,7 +485,12 @@ describe("LocalSession evidence", () => {
   });
 
   test("without a key nothing is grounded, the door claim is still judged, and done fires", async () => {
-    const session = new LocalSession({ config: DEFAULT_CONFIG, changeSet: await fixture("user-env", { title: "t", body: BODY }), env: {}, evidence: true });
+    const session = new LocalSession({
+      config: DEFAULT_CONFIG,
+      changeSet: await fixture("user-env", { title: "t", body: BODY }),
+      env: {},
+      evidence: true,
+    });
     await session.ready();
     const r = session.snapshot();
     expect(r.claims.filter((c) => c.section !== "door").every((c) => c.status === undefined)).toBe(true);

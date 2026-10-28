@@ -12,21 +12,63 @@ export interface HelpState {
 
 /** One glossary entry per term: the term on its own line, the definition wrapped below it. */
 export const GLOSSARY: readonly { term: string; text: string }[] = [
-  { term: "Card", text: "One logical change, built from edit blocks across any files. The unit you review. Two fixed cards: verified clean (every inert edit) and untouched (sensitive areas the change does not reach)." },
-  { term: "Edit block", text: "One contiguous run of added or removed lines. The smallest unit lookout reasons about; a git hunk may hold several." },
-  { term: "Colour", text: "A rule, never an opinion. RED: a suspicious edit, behaviour inside a sensitive area, or a one-way edit that needs eyes. AMBER: needs eyes, config/deps/CI, or a one-way signal. GREEN: fine. GREY: verified clean. Tests, renames and docs inside a sensitive area stay green and keep the area badge." },
-  { term: "Attention", text: "How much one edit deserves a look: inert, routine, needs-eyes, suspicious. A model may raise it and never lower it; only rules may call an edit inert." },
-  { term: "Kind", text: "What an edit does: behavior, typing-refactor, rename, move, test, types, config, docs. The model proposes it; rules confirm the non-behaviour kinds." },
-  { term: "Mechanical", text: "A rename, typing or move card whose label rules confirmed: a consistent one-to-one identifier swap, a type-only edit with no narrowing, code that reappears verbatim. Its sentence is a template. Anything rules could not confirm is behaviour." },
-  { term: "Area", text: "A named set of sensitive paths from the repo's policy: auth, billing, data, infra, prompts. Floors colour and tier; the untouched card lists the areas the change misses." },
-  { term: "Verdict", text: "In the header: the risk tier (low, medium, high) and how many humans must review, with the reasons. Kind defaults, area rules and floors; a rule can stand down for an additive two-way change." },
-  { term: "One-way", text: "A door signal in the diff: a migration, destructive SQL, an in-place data write, a removed public export or route, a contract change. Attached to the card that owns the line and raises its colour." },
-  { term: "Scope", text: "The declarations and object keys that enclose an edit in the file at head, outermost first: DEPLOYMENTS › stage › servedTools › web. Shown above each hunk in the expanded card." },
-  { term: "tests touched · covers", text: "A test card in this change exercises this card's files (same directory, name stem or import). On the test card, covers lists what it exercises." },
-  { term: "unverified", text: "A paragraph or answer that failed its check twice: it named something not in the edits, or Decisions put under 70 % on 'every statement follows from the edits'. Shown dimmed. Read the diff." },
+  {
+    term: "Card",
+    text: "One logical change, built from edit blocks across any files. The unit you review. Two fixed cards: verified clean (every inert edit) and untouched (sensitive areas the change does not reach).",
+  },
+  {
+    term: "Edit block",
+    text: "One contiguous run of added or removed lines. The smallest unit lookout reasons about; a git hunk may hold several.",
+  },
+  {
+    term: "Colour",
+    text: "A rule, never an opinion. RED: a suspicious edit, behaviour inside a sensitive area, or a one-way edit that needs eyes. AMBER: needs eyes, config/deps/CI, or a one-way signal. GREEN: fine. GREY: verified clean. Tests, renames and docs inside a sensitive area stay green and keep the area badge.",
+  },
+  {
+    term: "Attention",
+    text: "How much one edit deserves a look: inert, routine, needs-eyes, suspicious. A model may raise it and never lower it; only rules may call an edit inert.",
+  },
+  {
+    term: "Kind",
+    text: "What an edit does: behavior, typing-refactor, rename, move, test, types, config, docs. The model proposes it; rules confirm the non-behaviour kinds.",
+  },
+  {
+    term: "Mechanical",
+    text: "A rename, typing or move card whose label rules confirmed: a consistent one-to-one identifier swap, a type-only edit with no narrowing, code that reappears verbatim. Its sentence is a template. Anything rules could not confirm is behaviour.",
+  },
+  {
+    term: "Area",
+    text: "A named set of sensitive paths from the repo's policy: auth, billing, data, infra, prompts. Floors colour and tier; the untouched card lists the areas the change misses.",
+  },
+  {
+    term: "Verdict",
+    text: "In the header: the risk tier (low, medium, high) and how many humans must review, with the reasons. Kind defaults, area rules and floors; a rule can stand down for an additive two-way change.",
+  },
+  {
+    term: "One-way",
+    text: "A door signal in the diff: a migration, destructive SQL, an in-place data write, a removed public export or route, a contract change. Attached to the card that owns the line and raises its colour.",
+  },
+  {
+    term: "Scope",
+    text: "The declarations and object keys that enclose an edit in the file at head, outermost first: DEPLOYMENTS › stage › servedTools › web. Shown above each hunk in the expanded card.",
+  },
+  {
+    term: "tests touched · covers",
+    text: "A test card in this change exercises this card's files (same directory, name stem or import). On the test card, covers lists what it exercises.",
+  },
+  {
+    term: "unverified",
+    text: "A paragraph or answer that failed its check twice: it named something not in the edits, or Decisions put under 70 % on 'every statement follows from the edits'. Shown dimmed. Read the diff.",
+  },
   { term: "Exchange", text: "A question you asked with a and its answer, written from that scope's edits only and checked the same way." },
-  { term: "Progress", text: "The bar under the header while cards load: ranking, then splitting oversized cards, then writing paragraphs." },
-  { term: "--evidence", text: "JSON only for now: the PR description's claims graded against the diff, cards no claim mentions, and review questions." },
+  {
+    term: "Progress",
+    text: "The bar under the header while cards load: ranking, then splitting oversized cards, then writing paragraphs.",
+  },
+  {
+    term: "--evidence",
+    text: "JSON only for now: the PR description's claims graded against the diff, cards no claim mentions, and review questions.",
+  },
 ];
 
 const MAX_W = 96;
@@ -37,20 +79,31 @@ interface HelpRow {
 }
 
 function helpRows(page: HelpState["page"], inner: number): HelpRow[] {
-  if (page === "keys") return HELP_KEYS.flatMap((l) => (width(l) <= inner ? [{ text: l, style: /^[A-Z][a-z]+$/.test(l.trim()) ? ("heading" as const) : undefined }] : wrap(l, inner).map((t) => ({ text: t }))));
-  return GLOSSARY.flatMap((e, k) => [...(k ? [{ text: "" }] : []), { text: e.term, style: "term" as const }, ...wrap(e.text, inner - 2).map((t) => ({ text: `  ${t}` }))]);
+  if (page === "keys")
+    return HELP_KEYS.flatMap((l) =>
+      width(l) <= inner
+        ? [{ text: l, style: /^[A-Z][a-z]+$/.test(l.trim()) ? ("heading" as const) : undefined }]
+        : wrap(l, inner).map((t) => ({ text: t })),
+    );
+  return GLOSSARY.flatMap((e, k) => [
+    ...(k ? [{ text: "" }] : []),
+    { text: e.term, style: "term" as const },
+    ...wrap(e.text, inner - 2).map((t) => ({ text: `  ${t}` })),
+  ]);
 }
 
 /** Keys while the popup is open: returns the next state, or `undefined` to close it. */
 export function helpKey(help: HelpState, input: string, key: Key, w: number): HelpState | undefined {
   if (help.find !== undefined) {
     if (key.escape || key.return) return { ...help, find: undefined };
-    const find = key.backspace || key.delete ? [...help.find].slice(0, -1).join("") : input && !key.ctrl && !key.meta ? help.find + input : help.find;
+    const find =
+      key.backspace || key.delete ? [...help.find].slice(0, -1).join("") : input && !key.ctrl && !key.meta ? help.find + input : help.find;
     return findInHelp({ ...help, find }, w);
   }
   if (key.escape || input === "?" || input === "q" || key.return) return undefined;
   if (input === "/") return { ...help, find: "" };
-  if (key.tab || input === "h" || input === "l" || key.leftArrow || key.rightArrow) return { page: help.page === "keys" ? "glossary" : "keys", scroll: 0 };
+  if (key.tab || input === "h" || input === "l" || key.leftArrow || key.rightArrow)
+    return { page: help.page === "keys" ? "glossary" : "keys", scroll: 0 };
   if (input === "j" || key.downArrow) return scrollHelp(help, 1, w);
   if (input === "k" || key.upArrow) return scrollHelp(help, -1, w);
   if (input === "J" || (key.ctrl && input === "d") || input === " ") return scrollHelp(help, 5, w);
@@ -87,12 +140,27 @@ export function helpBox(help: HelpState, w: number, h: number): { lines: Line[];
   const bodyH = Math.max(1, Math.min(rows.length, h - 4));
   const top = Math.max(0, Math.min(help.scroll, rows.length - bodyH));
   const accent = theme.accent;
-  const tab = (page: HelpState["page"]): Segment => ({ text: ` ${page} `, color: accent, bold: help.page === page, inverse: help.page === page });
-  const head: Segment[] = [{ text: "┌─", color: accent }, tab("keys"), { text: "─", color: accent }, tab("glossary"), { text: "─ tab switches ", color: accent, dim: true }];
+  const tab = (page: HelpState["page"]): Segment => ({
+    text: ` ${page} `,
+    color: accent,
+    bold: help.page === page,
+    inverse: help.page === page,
+  });
+  const head: Segment[] = [
+    { text: "┌─", color: accent },
+    tab("keys"),
+    { text: "─", color: accent },
+    tab("glossary"),
+    { text: "─ tab switches ", color: accent, dim: true },
+  ];
   head.push({ text: `${"─".repeat(Math.max(0, boxW - width(head.map((s) => s.text).join("")) - 1))}┐`, color: accent });
   const where = rows.length > bodyH ? ` ${top + 1}–${top + bodyH} of ${rows.length} · j/k scroll ` : "";
   const footText = help.find !== undefined ? ` /${help.find}▏  enter keep · esc clear ` : ` esc closes ${where}· / find `;
-  const foot: Segment[] = [{ text: "└", color: accent }, { text: footText, color: accent, dim: true }, { text: `${"─".repeat(Math.max(0, boxW - width(footText) - 2))}┘`, color: accent }];
+  const foot: Segment[] = [
+    { text: "└", color: accent },
+    { text: footText, color: accent, dim: true },
+    { text: `${"─".repeat(Math.max(0, boxW - width(footText) - 2))}┘`, color: accent },
+  ];
   const body = rows.slice(top, top + bodyH).map(
     (r): Line => ({
       segments: [

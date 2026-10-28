@@ -19,21 +19,52 @@ const CHECK: Record<PrSummary["checks"], { glyph: string; color?: string }> = {
   pending: { glyph: "…", color: theme.card.amber },
   none: { glyph: " " },
 };
-const REVIEW: Record<PrSummary["review"], string> = { approved: "approved", changes: "changes requested", required: "needs review", none: "" };
+const REVIEW: Record<PrSummary["review"], string> = {
+  approved: "approved",
+  changes: "changes requested",
+  required: "needs review",
+  none: "",
+};
 
 /** Rows of the picker: a header, then one row per PR that matches the filter. `selected` is the index into `shown`. */
 export function pickerLines(repo: string, shown: PrSummary[], selected: number, filter: string, w: number): Line[] {
-  const header: Line = { segments: sides([{ text: " " }, { text: `${repo} · open pull requests`, bold: true }], filter ? `/${filter.trimStart()}▏` : plural(shown.length, "PR"), w, theme.accent) };
+  const header: Line = {
+    segments: sides(
+      [{ text: " " }, { text: `${repo} · open pull requests`, bold: true }],
+      filter ? `/${filter.trimStart()}▏` : plural(shown.length, "PR"),
+      w,
+      theme.accent,
+    ),
+  };
   const rows = shown.map((pr, k): Line => {
     const on = k === selected;
     const bar: Segment = { text: `${on ? "█" : "┃"} `, color: pr.requested ? theme.accent : theme.faint, bold: on };
     const num = `#${pr.number}`.padEnd(6);
     const check = CHECK[pr.checks];
-    const right = [pr.requested ? "for you" : "", REVIEW[pr.review], pr.draft ? "draft" : "", `${plural(pr.files, "file")} +${pr.additions}/−${pr.deletions}`, pr.author].filter(Boolean).join(" · ");
+    const right = [
+      pr.requested ? "for you" : "",
+      REVIEW[pr.review],
+      pr.draft ? "draft" : "",
+      `${plural(pr.files, "file")} +${pr.additions}/−${pr.deletions}`,
+      pr.author,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     const titleW = Math.max(10, w - 2 - num.length - 2 - width(right) - 3);
-    return { segments: [bar, { text: num, dim: !on }, { text: `${check.glyph} `, color: check.color }, { text: fit(pr.title, titleW), bold: on }, { text: " ".repeat(Math.max(1, w - 2 - num.length - 2 - width(fit(pr.title, titleW)) - width(right) - 1)) }, { text: right, dim: true }], card: k };
+    return {
+      segments: [
+        bar,
+        { text: num, dim: !on },
+        { text: `${check.glyph} `, color: check.color },
+        { text: fit(pr.title, titleW), bold: on },
+        { text: " ".repeat(Math.max(1, w - 2 - num.length - 2 - width(fit(pr.title, titleW)) - width(right) - 1)) },
+        { text: right, dim: true },
+      ],
+      card: k,
+    };
   });
-  if (rows.length === 0) rows.push({ segments: [{ text: filter ? `  nothing matches "${filter}"` : "  no open pull requests", dim: true }] });
+  if (rows.length === 0)
+    rows.push({ segments: [{ text: filter ? `  nothing matches "${filter}"` : "  no open pull requests", dim: true }] });
   return [header, ...rows];
 }
 

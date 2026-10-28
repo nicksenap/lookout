@@ -12,7 +12,9 @@ if (!repo) throw new Error("usage: bun scripts/tier-survey.ts <repo> [n]");
 const sh = (args: string[]) => Bun.spawnSync(args, { cwd: repo, stdout: "pipe", stderr: "pipe", maxBuffer: 1 << 28 }).stdout.toString();
 
 const tally: Record<string, number> = {};
-for (const line of sh(["git", "log", `-${n}`, "--no-merges", "--format=%h%x09%s"]).trim().split("\n")) {
+for (const line of sh(["git", "log", `-${n}`, "--no-merges", "--format=%h%x09%s"])
+  .trim()
+  .split("\n")) {
   const [sha, subject] = line.split("\t") as [string, string];
   const cs = applyRules({ target: sha, base: "", head: "", files: parseDiff(sh(["git", "diff", ...DIFF_FLAGS, `${sha}^`, sha, "--"])) });
   const k = classify(cs, DEFAULT_POLICY);
@@ -20,7 +22,9 @@ for (const line of sh(["git", "log", `-${n}`, "--no-merges", "--format=%h%x09%s"
   tally[v.tier] = (tally[v.tier] ?? 0) + 1;
   const areas = k.areas.length ? ` areas=${k.areas.join(",")}` : "";
   const sens = k.sensitivePaths.length ? ` sensitive=${k.sensitivePaths.length}` : "";
-  console.log(`${v.tier.padEnd(6)} ${v.requiredHumans}h ${k.kind.padEnd(8)} ${k.maxAttention.padEnd(10)} ${String(k.counts.files).padStart(3)}f ${String(k.counts.blocks).padStart(3)}b${areas}${sens}  ${sha} ${subject.slice(0, 60)}`);
+  console.log(
+    `${v.tier.padEnd(6)} ${v.requiredHumans}h ${k.kind.padEnd(8)} ${k.maxAttention.padEnd(10)} ${String(k.counts.files).padStart(3)}f ${String(k.counts.blocks).padStart(3)}b${areas}${sens}  ${sha} ${subject.slice(0, 60)}`,
+  );
   if (v.tier === "high") for (const r of v.reasons) console.log(`         ↳ ${r}`);
 }
 console.log("\n", tally);

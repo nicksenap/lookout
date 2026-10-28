@@ -3,8 +3,27 @@ import { render } from "ink-testing-library";
 import type { PrSummary } from "../src/core/types.ts";
 import { matches, Picker, pickerLines } from "../src/tui/Picker.tsx";
 
-const pr = (number: number, title: string, extra: Partial<PrSummary> = {}): PrSummary => ({ number, title, author: "ann", branch: `feat/${number}`, draft: false, files: 3, additions: 40, deletions: 5, checks: "pass", review: "none", requested: false, updatedAt: "2026-10-28T00:00:00Z", target: `org/repo#${number}`, ...extra });
-const prs = [pr(826, "replace multi-select", { requested: true, review: "required" }), pr(827, "portals illustration", { checks: "fail" }), pr(822, "align query keys", { author: "dpk", draft: true, checks: "pending" })];
+const pr = (number: number, title: string, extra: Partial<PrSummary> = {}): PrSummary => ({
+  number,
+  title,
+  author: "ann",
+  branch: `feat/${number}`,
+  draft: false,
+  files: 3,
+  additions: 40,
+  deletions: 5,
+  checks: "pass",
+  review: "none",
+  requested: false,
+  updatedAt: "2026-10-28T00:00:00Z",
+  target: `org/repo#${number}`,
+  ...extra,
+});
+const prs = [
+  pr(826, "replace multi-select", { requested: true, review: "required" }),
+  pr(827, "portals illustration", { checks: "fail" }),
+  pr(822, "align query keys", { author: "dpk", draft: true, checks: "pending" }),
+];
 const ANSI = /\x1b\[[0-9;]*m/g;
 const lines = (frame: string | undefined) => (frame ?? "").replace(ANSI, "").split("\n");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

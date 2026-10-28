@@ -70,7 +70,10 @@ export class ReviewStore {
   }
 
   appendOutput(id: string, chunk: string): void {
-    this.set(this.patchDispatch(id, (d) => ({ ...d, output: d.output + chunk })), { type: "dispatch.output", id, chunk });
+    this.set(
+      this.patchDispatch(id, (d) => ({ ...d, output: d.output + chunk })),
+      { type: "dispatch.output", id, chunk },
+    );
   }
 
   finishDispatch(id: string, patch: Partial<Dispatch>): void {

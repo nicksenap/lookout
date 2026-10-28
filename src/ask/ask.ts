@@ -26,7 +26,13 @@ const PREAMBLE = `A senior engineer reviewing an agent-written code change asks 
 
 /** The question's grounding: one card's edits, or every card's title + paragraph plus the whole diff (truncated) for the change. */
 export function askPrompt(review: Review, question: string, card?: Card): { prompt: string; edits: string } {
-  const edits = card ? editsOf(review.changeSet, card) : review.cards.filter((c) => !c.fixed).map((c) => editsOf(review.changeSet, c)).join("\n\n").slice(0, 60_000);
+  const edits = card
+    ? editsOf(review.changeSet, card)
+    : review.cards
+        .filter((c) => !c.fixed)
+        .map((c) => editsOf(review.changeSet, c))
+        .join("\n\n")
+        .slice(0, 60_000);
   const scope = card
     ? `Scope: one logical change, "${card.title}".`
     : `Scope: the whole change. Cards so far:\n${review.cards

@@ -1,6 +1,6 @@
-import type { Attention, ChangeSet, EditBlock, FileChange, Hunk } from "../core/types.ts";
 import { isolateBlock, mapBlocks } from "../core/blocks.ts";
-import { type CodeLang, LANGS, lex, type LexResult, type StartState } from "./lexer.ts";
+import type { Attention, ChangeSet, EditBlock, FileChange, Hunk } from "../core/types.ts";
+import { type CodeLang, LANGS, type LexResult, lex, type StartState } from "./lexer.ts";
 
 // ---------------------------------------------------------------- path globs
 
@@ -17,7 +17,11 @@ export function globToRegExp(glob: string): RegExp {
     else if (c === "?") re += "[^/]";
     else if (c === "{") {
       const end = glob.indexOf("}", i);
-      re += `(?:${glob.slice(i + 1, end).split(",").map(escapeRe).join("|")})`;
+      re += `(?:${glob
+        .slice(i + 1, end)
+        .split(",")
+        .map(escapeRe)
+        .join("|")})`;
       i = end;
     } else re += escapeRe(c);
   }
@@ -31,31 +35,106 @@ export const PATH_GLOBS: Record<"generated" | "lockfile" | "ci" | "test" | "docs
     "{Cargo.lock,go.sum,poetry.lock,Pipfile.lock,uv.lock,Gemfile.lock,composer.lock,gradle.lockfile}",
   ],
   generated: [
-    "*.min.{js,css}", "*.map", "**/dist/**", "**/__generated__/**", "**/generated/**",
-    "*.generated.*", "*.gen.*", "*.pb.go", "*_pb2.py", "*_pb2_grpc.py",
+    "*.min.{js,css}",
+    "*.map",
+    "**/dist/**",
+    "**/__generated__/**",
+    "**/generated/**",
+    "*.generated.*",
+    "*.gen.*",
+    "*.pb.go",
+    "*_pb2.py",
+    "*_pb2_grpc.py",
   ],
   ci: [
-    ".github/workflows/**", ".github/actions/**", ".gitlab-ci.yml", ".circleci/**", ".buildkite/**",
-    "Jenkinsfile", "azure-pipelines.yml", "bitbucket-pipelines.yml", ".travis.yml",
+    ".github/workflows/**",
+    ".github/actions/**",
+    ".gitlab-ci.yml",
+    ".circleci/**",
+    ".buildkite/**",
+    "Jenkinsfile",
+    "azure-pipelines.yml",
+    "bitbucket-pipelines.yml",
+    ".travis.yml",
   ],
   test: [
-    "*.{test,spec}.*", "**/__tests__/**", "**/__mocks__/**", "**/test/**", "**/tests/**", "**/src/test/**",
-    "*_test.go", "test_*.py", "*_test.py", "conftest.py", "test-setup.*", "**/testdata/**", "**/fixtures/**",
+    "*.{test,spec}.*",
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/src/test/**",
+    "*_test.go",
+    "test_*.py",
+    "*_test.py",
+    "conftest.py",
+    "test-setup.*",
+    "**/testdata/**",
+    "**/fixtures/**",
   ],
   docs: ["*.{md,markdown,mdx,rst,adoc}", "docs/**", "**/docs/**", "LICENSE*", "CHANGELOG*"],
 };
-const PATH_RES = Object.fromEntries(
-  Object.entries(PATH_GLOBS).map(([k, globs]) => [k, globs.map(globToRegExp)]),
-) as Record<keyof typeof PATH_GLOBS, RegExp[]>;
+const PATH_RES = Object.fromEntries(Object.entries(PATH_GLOBS).map(([k, globs]) => [k, globs.map(globToRegExp)])) as Record<
+  keyof typeof PATH_GLOBS,
+  RegExp[]
+>;
 
 /** Path words (split on separators and camelCase) that mark security- or money-relevant code. */
 export const SENSITIVE_WORDS = new Set([
-  "auth", "authn", "authz", "authentication", "authorization", "oauth", "oidc", "saml", "sso",
-  "login", "logout", "signin", "signup", "session", "sessions", "token", "tokens", "jwt",
-  "secret", "secrets", "credential", "credentials", "password", "passwords", "passwd",
-  "crypto", "encrypt", "encryption", "decrypt", "security", "csp", "cors", "csrf", "xss", "sanitize",
-  "permission", "permissions", "rbac", "acl", "iam", "billing", "payment", "payments", "stripe",
-  "migration", "migrations", "env", "codeowners", "dockerfile", "terraform", "tf", "infra", "k8s", "helm",
+  "auth",
+  "authn",
+  "authz",
+  "authentication",
+  "authorization",
+  "oauth",
+  "oidc",
+  "saml",
+  "sso",
+  "login",
+  "logout",
+  "signin",
+  "signup",
+  "session",
+  "sessions",
+  "token",
+  "tokens",
+  "jwt",
+  "secret",
+  "secrets",
+  "credential",
+  "credentials",
+  "password",
+  "passwords",
+  "passwd",
+  "crypto",
+  "encrypt",
+  "encryption",
+  "decrypt",
+  "security",
+  "csp",
+  "cors",
+  "csrf",
+  "xss",
+  "sanitize",
+  "permission",
+  "permissions",
+  "rbac",
+  "acl",
+  "iam",
+  "billing",
+  "payment",
+  "payments",
+  "stripe",
+  "migration",
+  "migrations",
+  "env",
+  "codeowners",
+  "dockerfile",
+  "terraform",
+  "tf",
+  "infra",
+  "k8s",
+  "helm",
 ]);
 
 function pathWords(path: string): string[] {
@@ -80,17 +159,26 @@ export type Lang = CodeLang | "markdown";
 export function languageOf(path: string): Lang | undefined {
   const ext = /\.([^./]+)$/.exec(path)?.[1]?.toLowerCase();
   switch (ext) {
-    case "ts": case "js": case "mjs": case "cjs": case "mts": case "cts":
+    case "ts":
+    case "js":
+    case "mjs":
+    case "cjs":
+    case "mts":
+    case "cts":
       return "js";
-    case "tsx": case "jsx":
+    case "tsx":
+    case "jsx":
       return "jsx";
-    case "py": case "pyi":
+    case "py":
+    case "pyi":
       return "python";
     case "go":
       return "go";
-    case "kt": case "kts":
+    case "kt":
+    case "kts":
       return "kotlin";
-    case "md": case "markdown":
+    case "md":
+    case "markdown":
       return "markdown";
     default:
       return undefined;
@@ -206,7 +294,12 @@ export interface RuleResult {
 }
 
 const LABEL_WEIGHTS: Record<string, number> = {
-  sensitive: 0.3, ci: 0.2, test: -0.2, docs: -0.3, lockfile: -0.5, generated: -0.5,
+  sensitive: 0.3,
+  ci: 0.2,
+  test: -0.2,
+  docs: -0.3,
+  lockfile: -0.5,
+  generated: -0.5,
 };
 
 /** Rank one edit block. Content classification sees the whole hunk for lexer context but only this block's change. */
@@ -229,7 +322,6 @@ export function rankBlockByRules(file: FileChange, hunk: Hunk, block: EditBlock)
   if (attention === "inert") score = 0;
   return { labels, attention, score };
 }
-
 
 export function applyRules(changeSet: ChangeSet): ChangeSet {
   return mapBlocks(changeSet, ({ file, hunk, block }) => ({ ...block, ...rankBlockByRules(file, hunk, block) }));

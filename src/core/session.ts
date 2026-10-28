@@ -1,10 +1,18 @@
+import { ask } from "../ask/ask.ts";
 import { buildCards, untouchedAreas } from "../cards/build.ts";
 import { proposeSplits, type Splits } from "../cards/split.ts";
-import { ask } from "../ask/ask.ts";
 import { writeCards } from "../cards/write.ts";
 import type { Config } from "../dispatch/config.ts";
 import type { DispatchRunner } from "../dispatch/runner.ts";
-import { applyClaims, authorDoor, extractClaims, extractClaimsWithModel, groundClaims, judgeDoorClaim, needsModelExtraction } from "../evidence/claims.ts";
+import {
+  applyClaims,
+  authorDoor,
+  extractClaims,
+  extractClaimsWithModel,
+  groundClaims,
+  judgeDoorClaim,
+  needsModelExtraction,
+} from "../evidence/claims.ts";
 import { attachDoorSignals, detectDoor } from "../evidence/door.ts";
 import { initialRadius } from "../evidence/radius.ts";
 import { markTests } from "../evidence/tests.ts";
@@ -12,11 +20,11 @@ import { classify, evaluate } from "../policy/evaluate.ts";
 import { answer, pickQuestions } from "../questions/pick.ts";
 import type { RankCache } from "../rank/cache.ts";
 import { rankWithModel } from "../rank/rank.ts";
-import { attachScopes } from "../rank/scope.ts";
-import { allBlocks, mapBlocks } from "./blocks.ts";
 import { applyRules } from "../rank/rules.ts";
+import { attachScopes } from "../rank/scope.ts";
 import { buildVerifyPrompt } from "../verify/prompt.ts";
 import { duplicates, judgeVerdicts, parseVerdicts } from "../verify/verify.ts";
+import { allBlocks, mapBlocks } from "./blocks.ts";
 import { err, ok, type Result } from "./result.ts";
 import { type ReviewEvent, ReviewStore } from "./store.ts";
 import type { Card, ChangeSet, Claim, Exchange, Finding, Progress, QuestionAnswer, Review } from "./types.ts";
@@ -96,7 +104,12 @@ export class LocalSession implements ReviewSession {
         if (text === "") return err("ask something");
         const card = c.cardId ? this.snapshot().cards.find((x) => x.id === c.cardId) : undefined;
         if (c.cardId && !card) return err(`no card ${c.cardId}`);
-        const exchange: Exchange = { id: `q${this.snapshot().exchanges.length + 1}-${Date.now().toString(36)}`, question: text, status: "pending", ...(card ? { cardId: card.id } : {}) };
+        const exchange: Exchange = {
+          id: `q${this.snapshot().exchanges.length + 1}-${Date.now().toString(36)}`,
+          question: text,
+          status: "pending",
+          ...(card ? { cardId: card.id } : {}),
+        };
         this.store.update((r) => ({ ...r, exchanges: [...r.exchanges, exchange] }), { type: "exchange.added", exchange });
         // Answered in the background so the stack stays live; the patch lands whenever the model does.
         void this.answer(exchange, card);
@@ -127,7 +140,11 @@ export class LocalSession implements ReviewSession {
         if (!card) return err(`no card ${c.cardId}`);
         if (!card.questions.some((q) => q.id === c.questionId)) return err(`no question ${c.questionId} on card ${c.cardId}`);
         const next = answer(card, c.questionId, c.answer);
-        this.store.update((r) => ({ ...r, cards: r.cards.map((x) => (x.id === card.id ? next : x)) }), { type: "card.updated", id: card.id, patch: { questions: next.questions } });
+        this.store.update((r) => ({ ...r, cards: r.cards.map((x) => (x.id === card.id ? next : x)) }), {
+          type: "card.updated",
+          id: card.id,
+          patch: { questions: next.questions },
+        });
         return ok(undefined);
       }
       case "refresh":
@@ -181,11 +198,20 @@ export class LocalSession implements ReviewSession {
     await runner.settled();
     const done = this.snapshot().dispatches.find((d) => d.id === started.value.id)!;
     if (done.status === "cancelled") return;
-    const parsed = parseVerdicts(done.output, findings.map((f) => f.id));
-    this.store.updateDispatch(done.id, { verdicts: parsed.verdicts, freeform: [parsed.freeform, parsed.notes.map((n) => `lookout: ${n}`).join("\n")].filter(Boolean).join("\n\n") });
+    const parsed = parseVerdicts(
+      done.output,
+      findings.map((f) => f.id),
+    );
+    this.store.updateDispatch(done.id, {
+      verdicts: parsed.verdicts,
+      freeform: [parsed.freeform, parsed.notes.map((n) => `lookout: ${n}`).join("\n")].filter(Boolean).join("\n\n"),
+    });
     if (parsed.verdicts.length === 0) return;
     const judge = this.opts.judge ?? judgeVerdicts;
-    const res = await judge(this.snapshot().changeSet, card, findings, parsed.verdicts, verifier, { modelSpec: this.opts.config.model.decide, env: this.opts.env });
+    const res = await judge(this.snapshot().changeSet, card, findings, parsed.verdicts, verifier, {
+      modelSpec: this.opts.config.model.decide,
+      env: this.opts.env,
+    });
     if (res.warning) this.warn(res.warning);
     const owner = (id: string) => this.snapshot().dispatches.find((d) => d.findings.some((f) => f.id === id))!.id;
     for (const [id, patch] of res.patches) this.store.patchFinding(owner(id), id, patch);
@@ -196,17 +222,39 @@ export class LocalSession implements ReviewSession {
   private async answer(exchange: Exchange, card: Card | undefined): Promise<void> {
     const write = this.opts.write ? { write: this.opts.write } : {};
     // Tests inject one checker for paragraphs and answers; it is asked the answer as a one-paragraph prose.
-    const check = this.opts.check ? { check: (edits: string, question: string, answer: string) => this.opts.check!(edits, { title: question, paragraph: answer }) } : {};
-    const res = await (this.opts.answer ?? ask)(this.snapshot(), exchange.question, card, { modelSpec: this.opts.config.model.write, checkSpec: this.opts.config.model.decide, env: this.opts.env, ...write, ...check });
-    const patch: Partial<Exchange> = res.ok ? { status: "answered", answer: res.value.text, ...(res.value.check !== undefined ? { check: res.value.check } : {}), ...(res.value.unverified ? { unverified: true } : {}) } : { status: "failed", error: res.error };
-    this.store.update((r) => ({ ...r, exchanges: r.exchanges.map((e) => (e.id === exchange.id ? { ...e, ...patch } : e)) }), { type: "exchange.updated", id: exchange.id, patch });
+    const check = this.opts.check
+      ? { check: (edits: string, question: string, answer: string) => this.opts.check!(edits, { title: question, paragraph: answer }) }
+      : {};
+    const res = await (this.opts.answer ?? ask)(this.snapshot(), exchange.question, card, {
+      modelSpec: this.opts.config.model.write,
+      checkSpec: this.opts.config.model.decide,
+      env: this.opts.env,
+      ...write,
+      ...check,
+    });
+    const patch: Partial<Exchange> = res.ok
+      ? {
+          status: "answered",
+          answer: res.value.text,
+          ...(res.value.check !== undefined ? { check: res.value.check } : {}),
+          ...(res.value.unverified ? { unverified: true } : {}),
+        }
+      : { status: "failed", error: res.error };
+    this.store.update((r) => ({ ...r, exchanges: r.exchanges.map((e) => (e.id === exchange.id ? { ...e, ...patch } : e)) }), {
+      type: "exchange.updated",
+      id: exchange.id,
+      patch,
+    });
   }
 
   private progress(progress: Progress | undefined): void {
-    this.store.update((r) => {
-      const { progress: _, ...rest } = r;
-      return progress ? { ...rest, progress } : rest;
-    }, { type: "progress", ...(progress ? { progress } : {}) });
+    this.store.update(
+      (r) => {
+        const { progress: _, ...rest } = r;
+        return progress ? { ...rest, progress } : rest;
+      },
+      { type: "progress", ...(progress ? { progress } : {}) },
+    );
   }
 
   private assemble(changeSet: ChangeSet, rankedBy: string, warning?: string): Review {
@@ -245,16 +293,29 @@ export class LocalSession implements ReviewSession {
     const rank = this.opts.rank ?? rankWithModel;
     // Scopes (the enclosing declarations at head) are read while the model ranks; both land before cards are built.
     const [res, scoped] = await Promise.all([
-      rank(ruled, { modelSpec: this.opts.config.model.decide, env: this.opts.env, onProgress: (done, total) => this.progress({ phase: "ranking", done, total }) }),
+      rank(ruled, {
+        modelSpec: this.opts.config.model.decide,
+        env: this.opts.env,
+        onProgress: (done, total) => this.progress({ phase: "ranking", done, total }),
+      }),
       this.opts.scopes === false ? Promise.resolve(ruled) : attachScopes(ruled, this.opts.repo),
     ]);
-    const scopeOf = new Map(allBlocks(scoped).filter((r) => r.block.scope).map((r) => [r.block.id, r.block.scope!]));
-    const changeSet = scopeOf.size ? mapBlocks(res.changeSet, ({ block }) => (scopeOf.has(block.id) ? { ...block, scope: scopeOf.get(block.id)! } : block)) : res.changeSet;
+    const scopeOf = new Map(
+      allBlocks(scoped)
+        .filter((r) => r.block.scope)
+        .map((r) => [r.block.id, r.block.scope!]),
+    );
+    const changeSet = scopeOf.size
+      ? mapBlocks(res.changeSet, ({ block }) => (scopeOf.has(block.id) ? { ...block, scope: scopeOf.get(block.id)! } : block))
+      : res.changeSet;
     const before = this.snapshot();
     const after = this.assemble(changeSet, res.rankedBy, res.warning);
     this.store.update(() => after);
     for (const event of cardPatches(before.cards, after.cards, after.untouched)) this.store.emit(event);
-    if (JSON.stringify(before.verdict) !== JSON.stringify(after.verdict) || JSON.stringify(before.classification) !== JSON.stringify(after.classification)) {
+    if (
+      JSON.stringify(before.verdict) !== JSON.stringify(after.verdict) ||
+      JSON.stringify(before.classification) !== JSON.stringify(after.classification)
+    ) {
       this.store.emit({ type: "verdict.updated", verdict: after.verdict, classification: after.classification });
     }
     if (after.warning !== before.warning) this.store.emit({ type: "warning", text: after.warning });
@@ -267,7 +328,11 @@ export class LocalSession implements ReviewSession {
     const write = this.opts.write ? { write: this.opts.write } : {};
     const modelOpts = { env: this.opts.env, ...write, ...(this.opts.cache ? { cache: this.opts.cache } : {}) };
     // Oversized cards are split before any prose is written, so paragraphs describe the concerns a reviewer reads.
-    const split = await proposeSplits(after.changeSet, after.cards, { modelSpec: this.opts.config.model.write, ...modelOpts, onProgress: (done, total) => this.progress({ phase: "splitting", done, total }) });
+    const split = await proposeSplits(after.changeSet, after.cards, {
+      modelSpec: this.opts.config.model.write,
+      ...modelOpts,
+      onProgress: (done, total) => this.progress({ phase: "splitting", done, total }),
+    });
     if (split.warning) this.warn(split.warning);
     if (split.splits.size > 0) {
       this.splits = split.splits;
@@ -280,14 +345,30 @@ export class LocalSession implements ReviewSession {
     let written = 0;
     if (toWrite > 0) this.progress({ phase: "writing", done: 0, total: toWrite });
     const [wrote, extracted] = await Promise.all([
-      writeCards(current.changeSet, current.cards, { modelSpec: this.opts.config.model.write, checkSpec: this.opts.config.model.decide, ...modelOpts, ...(this.opts.check ? { check: this.opts.check } : {}) }, (id, prose) => {
-        this.progress({ phase: "writing", done: ++written, total: toWrite });
-        const patch: Partial<Card> = { title: prose.title, paragraph: prose.paragraph };
-        if (prose.check !== undefined) patch.proseCheck = prose.check;
-        if (prose.unverified) patch.unverified = true;
-        this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, ...patch } : c)) }), { type: "card.updated", id, patch });
-      }),
-      this.opts.evidence && needsModelExtraction(current.changeSet.intent, current.claims) ? extractClaimsWithModel(current.changeSet.intent!, { modelSpec: this.opts.config.model.write, ...modelOpts }) : undefined,
+      writeCards(
+        current.changeSet,
+        current.cards,
+        {
+          modelSpec: this.opts.config.model.write,
+          checkSpec: this.opts.config.model.decide,
+          ...modelOpts,
+          ...(this.opts.check ? { check: this.opts.check } : {}),
+        },
+        (id, prose) => {
+          this.progress({ phase: "writing", done: ++written, total: toWrite });
+          const patch: Partial<Card> = { title: prose.title, paragraph: prose.paragraph };
+          if (prose.check !== undefined) patch.proseCheck = prose.check;
+          if (prose.unverified) patch.unverified = true;
+          this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, ...patch } : c)) }), {
+            type: "card.updated",
+            id,
+            patch,
+          });
+        },
+      ),
+      this.opts.evidence && needsModelExtraction(current.changeSet.intent, current.claims)
+        ? extractClaimsWithModel(current.changeSet.intent!, { modelSpec: this.opts.config.model.write, ...modelOpts })
+        : undefined,
     ]);
     if (wrote.warning) this.warn(wrote.warning);
     if (extracted?.warning) this.warn(extracted.warning);
@@ -309,7 +390,11 @@ export class LocalSession implements ReviewSession {
     if (res.warning) this.warn(res.warning);
     for (const [id, questions] of res.questions) {
       if (questions.length === 0) continue;
-      this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, questions } : c)) }), { type: "card.updated", id, patch: { questions } });
+      this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, questions } : c)) }), {
+        type: "card.updated",
+        id,
+        patch: { questions },
+      });
     }
   }
 
@@ -318,14 +403,19 @@ export class LocalSession implements ReviewSession {
     const current = this.snapshot();
     if (current.claims.length === 0) return;
     const ground = this.opts.ground ?? groundClaims;
-    const res = await ground(current.changeSet, current.cards, current.claims, { modelSpec: this.opts.config.model.decide, env: this.opts.env, radius: this.snapshot().radius });
+    const res = await ground(current.changeSet, current.cards, current.claims, {
+      modelSpec: this.opts.config.model.decide,
+      env: this.opts.env,
+      radius: this.snapshot().radius,
+    });
     if (res.warning) this.warn(res.warning);
     const before = this.snapshot();
     const cards = applyClaims(before.cards, res.claims);
     this.store.update((r) => ({ ...r, claims: res.claims, cards }));
     for (const claim of res.claims) {
       const prev = before.claims.find((c) => c.id === claim.id);
-      if (JSON.stringify(prev) !== JSON.stringify(claim)) this.store.emit({ type: "claim.updated", id: claim.id, patch: claimPatch(prev, claim) });
+      if (JSON.stringify(prev) !== JSON.stringify(claim))
+        this.store.emit({ type: "claim.updated", id: claim.id, patch: claimPatch(prev, claim) });
     }
     for (const event of cardPatches(before.cards, cards, before.untouched)) this.store.emit(event);
   }

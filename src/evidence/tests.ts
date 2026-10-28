@@ -41,7 +41,10 @@ export function markTests(changeSet: ChangeSet, cards: Card[]): Card[] {
 
   const exercises = (t: (typeof tests)[number], file: string): boolean => {
     const stem = stemOf(file);
-    return t.files.some((tf) => tf !== file && (dirOf(tf) === dirOf(file) || stemOf(tf) === stem)) || new RegExp(`(?:^|[/'"\`])${escape(stem)}(?:\\.[a-z]+)?['"\`]`, "m").test(t.added);
+    return (
+      t.files.some((tf) => tf !== file && (dirOf(tf) === dirOf(file) || stemOf(tf) === stem)) ||
+      new RegExp(`(?:^|[/'"\`])${escapeRegExp(stem)}(?:\\.[a-z]+)?['"\`]`, "m").test(t.added)
+    );
   };
   const covers = new Map(tests.map((t) => [t.card.id, code.filter((c) => c.files.some((f) => exercises(t, f))).map((c) => c.card.id)]));
 
@@ -52,4 +55,4 @@ export function markTests(changeSet: ChangeSet, cards: Card[]): Card[] {
   });
 }
 
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

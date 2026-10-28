@@ -4,8 +4,15 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createPerplexity } from "@ai-sdk/perplexity";
 import { createTypeSafeAi } from "@ai-sdk/typesafe-ai";
-import { createProviderRegistry, experimental_decide, type Experimental_DecisionModel, type Experimental_DecisionQuestion, generateText, type LanguageModel } from "ai";
-import { blockText, type BlockRef } from "../core/blocks.ts";
+import {
+  createProviderRegistry,
+  type Experimental_DecisionModel,
+  type Experimental_DecisionQuestion,
+  experimental_decide,
+  generateText,
+  type LanguageModel,
+} from "ai";
+import { type BlockRef, blockText } from "../core/blocks.ts";
 import { attempt } from "../core/result.ts";
 import type { Claim, Finding, Intent } from "../core/types.ts";
 
@@ -33,7 +40,11 @@ const FACTORIES: Record<ProviderId, (apiKey: string) => Parameters<typeof create
 export type ResolvedModel = { ok: true; model: AttentionModel } | { ok: false; reason: string };
 export type ResolvedWriter = { ok: true; model: LanguageModel } | { ok: false; reason: string };
 
-function registryFor(spec: string, env: Env, where: string): { ok: true; registry: ReturnType<typeof createProviderRegistry> } | { ok: false; reason: string } {
+function registryFor(
+  spec: string,
+  env: Env,
+  where: string,
+): { ok: true; registry: ReturnType<typeof createProviderRegistry> } | { ok: false; reason: string } {
   const sep = spec.indexOf(":");
   const providerId = sep > 0 ? spec.slice(0, sep) : "";
   if (!(providerId in PROVIDER_KEYS)) {
@@ -66,7 +77,12 @@ export function resolveWriter(spec: string, env: Env): ResolvedWriter {
 
 /** One short prose call. Reasoning is kept low: these are 3-sentence paragraphs, not analyses. */
 export async function writeText(model: LanguageModel, prompt: string, abortMs = 60_000): Promise<string> {
-  const res = await generateText({ model, prompt, providerOptions: { openai: { reasoningEffort: "low" } }, abortSignal: AbortSignal.timeout(abortMs) });
+  const res = await generateText({
+    model,
+    prompt,
+    providerOptions: { openai: { reasoningEffort: "low" } },
+    abortSignal: AbortSignal.timeout(abortMs),
+  });
   return res.text.trim();
 }
 
@@ -158,7 +174,11 @@ export async function scoreBlockBatch(model: AttentionModel, refs: BlockRef[], i
  * Returns the probability. A name that is not in the edits, a wrong direction (added vs
  * removed, replaced vs kept) or a claim about code outside the edits should fail it.
  */
-export async function checkParagraphWithModel(model: AttentionModel, edits: string, prose: { title: string; paragraph: string }): Promise<number> {
+export async function checkParagraphWithModel(
+  model: AttentionModel,
+  edits: string,
+  prose: { title: string; paragraph: string },
+): Promise<number> {
   const result = await experimental_decide({
     model,
     state: {
@@ -213,8 +233,10 @@ export async function checkAnswerWithModel(model: AttentionModel, edits: string,
 
 export const CLAIM_STATUSES = {
   supported: "the diff does what the claim says",
-  contradicted: "a specific edit in the diff makes the claim false: the code does the opposite or something incompatible with it. Missing or partial evidence is not contradiction, and a comment or name that merely resembles the claim's words is not evidence against it",
-  "not-in-diff": "the claim is about something the diff does not show: the state before the change, tests that were run, a screenshot, process, deployment, future work; or it cannot be checked from the diff",
+  contradicted:
+    "a specific edit in the diff makes the claim false: the code does the opposite or something incompatible with it. Missing or partial evidence is not contradiction, and a comment or name that merely resembles the claim's words is not evidence against it",
+  "not-in-diff":
+    "the claim is about something the diff does not show: the state before the change, tests that were run, a screenshot, process, deployment, future work; or it cannot be checked from the diff",
 } as const;
 export type ModelClaimStatus = keyof typeof CLAIM_STATUSES;
 /** Same keys for the radius claim, judged against the computed radius rather than the diff. */
@@ -247,7 +269,12 @@ export const claimCardId = (claimId: string) => `claim_card_${claimId}`;
  * claim: its status and which card is the evidence (`none` allowed). Radius claims get the status
  * question only, judged against the computed radius in the state.
  */
-export async function groundClaimBatch(model: AttentionModel, claims: Pick<Claim, "id" | "text" | "section">[], cards: GroundCard[], ctx: { intent?: Intent; radius?: { areas: string[]; importers?: string[] } }): Promise<Map<string, ClaimJudgement>> {
+export async function groundClaimBatch(
+  model: AttentionModel,
+  claims: Pick<Claim, "id" | "text" | "section">[],
+  cards: GroundCard[],
+  ctx: { intent?: Intent; radius?: { areas: string[]; importers?: string[] } },
+): Promise<Map<string, ClaimJudgement>> {
   const questions: Record<string, Experimental_DecisionQuestion> = {};
   const cardChoices: Record<string, string> = Object.fromEntries(cards.map((c) => [c.id, `${c.title} (${c.files.join(", ")})`]));
   cardChoices.none = "no card is evidence for this claim";
@@ -280,7 +307,10 @@ export async function groundClaimBatch(model: AttentionModel, claims: Pick<Claim
   for (const claim of claims) {
     const status = answers[claimStatusId(claim.id)];
     if (status?.type !== "choice" || !(status.choice! in CLAIM_STATUSES)) throw new Error(`no status for claim ${claim.id}`);
-    const judgement: ClaimJudgement = { status: status.choice as ModelClaimStatus, confidence: status.probabilities?.[status.choice!] ?? 1 };
+    const judgement: ClaimJudgement = {
+      status: status.choice as ModelClaimStatus,
+      confidence: status.probabilities?.[status.choice!] ?? 1,
+    };
     const card = answers[claimCardId(claim.id)];
     if (card?.type === "choice" && card.choice && card.choice !== "none" && card.choice in cardChoices) judgement.cardId = card.choice;
     out.set(claim.id, judgement);
@@ -304,7 +334,11 @@ export const verdictQuestionId = (findingId: string) => `verdict_${findingId}`;
  * note actually establishes the verdict against the card's diff. The gate (`verify/verify.ts`)
  * turns a weak argument into `unsure`.
  */
-export async function scoreVerdictBatch(model: AttentionModel, cases: VerdictCase[], card: { title: string; diff: string }): Promise<Map<string, number>> {
+export async function scoreVerdictBatch(
+  model: AttentionModel,
+  cases: VerdictCase[],
+  card: { title: string; diff: string },
+): Promise<Map<string, number>> {
   const questions: Record<string, Experimental_DecisionQuestion> = {};
   for (const c of cases) {
     questions[verdictQuestionId(c.finding.id)] = {
@@ -318,7 +352,15 @@ export async function scoreVerdictBatch(model: AttentionModel, cases: VerdictCas
   const state = {
     task: "Check whether a verifier's verdicts on review findings are backed by their stated evidence or reasons.",
     card: { title: card.title, diff: card.diff.length > 24_000 ? `${card.diff.slice(0, 24_000)}\n…` : card.diff },
-    findings: cases.map((c) => ({ id: c.finding.id, severity: c.finding.severity, title: c.finding.title, body: c.finding.body, anchor: c.finding.anchor ?? null, verdict: c.verdict, note: c.note })),
+    findings: cases.map((c) => ({
+      id: c.finding.id,
+      severity: c.finding.severity,
+      title: c.finding.title,
+      body: c.finding.body,
+      anchor: c.finding.anchor ?? null,
+      verdict: c.verdict,
+      note: c.note,
+    })),
   };
   const result = await experimental_decide({ model, state, questions, abortSignal: AbortSignal.timeout(90_000) });
   const answers = result.answers as Record<string, { type: string; probability?: number }>;
@@ -356,7 +398,12 @@ export const pickQuestionId = (cardId: string, questionId: string) => `ask_${car
  * probability that a reviewer of this card should be asked that question. The picker keeps
  * the top 2–4 per card.
  */
-export async function pickQuestionBatch(model: AttentionModel, candidates: QuestionCandidate[], cards: QuestionCard[], intent?: Intent): Promise<Map<string, number>> {
+export async function pickQuestionBatch(
+  model: AttentionModel,
+  candidates: QuestionCandidate[],
+  cards: QuestionCard[],
+  intent?: Intent,
+): Promise<Map<string, number>> {
   const questions: Record<string, Experimental_DecisionQuestion> = {};
   for (const c of candidates) {
     questions[pickQuestionId(c.cardId, c.questionId)] = {
@@ -367,16 +414,25 @@ export async function pickQuestionBatch(model: AttentionModel, candidates: Quest
   const state = {
     task: "Pick the review questions a human should answer for each card of an agent-written code change.",
     intent: intent ? { title: intent.title, body: intent.body.slice(0, 4000) } : null,
-    cards: cards.map((c) => ({ id: c.id, title: c.title, paragraph: c.paragraph ?? null, color: c.color, kind: c.kind, unmentioned: c.unmentioned, testsTouched: c.testsTouched, files: c.files })),
+    cards: cards.map((c) => ({
+      id: c.id,
+      title: c.title,
+      paragraph: c.paragraph ?? null,
+      color: c.color,
+      kind: c.kind,
+      unmentioned: c.unmentioned,
+      testsTouched: c.testsTouched,
+      files: c.files,
+    })),
   };
   const result = await experimental_decide({ model, state, questions, abortSignal: AbortSignal.timeout(90_000) });
   const answers = result.answers as Record<string, { type: string; probability?: number }>;
   const out = new Map<string, number>();
   for (const c of candidates) {
     const a = answers[pickQuestionId(c.cardId, c.questionId)];
-    if (a?.type !== "boolean" || typeof a.probability !== "number") throw new Error(`no answer for question ${c.questionId} on card ${c.cardId}`);
+    if (a?.type !== "boolean" || typeof a.probability !== "number")
+      throw new Error(`no answer for question ${c.questionId} on card ${c.cardId}`);
     out.set(pickQuestionId(c.cardId, c.questionId), a.probability);
   }
   return out;
 }
-

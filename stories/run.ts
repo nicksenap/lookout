@@ -18,10 +18,15 @@ const review = await loadReview(name);
 const pendingMs = slow ? 4000 : 800;
 const session = new FixtureSession(review, { pendingMs, dispatchMs: slow ? 8000 : 2500, answerMs: 1200 });
 // A fake pipeline for the eye: the bar walks ranking then writing and clears when `done` fires.
-const steps = [{ phase: "ranking" as const, total: 3 }, { phase: "writing" as const, total: review.cards.length }];
+const steps = [
+  { phase: "ranking" as const, total: 3 },
+  { phase: "writing" as const, total: review.cards.length },
+];
 const ticks = steps.reduce((n, s) => n + s.total + 1, 0);
 let k = 0;
-for (const step of steps) for (let d = 0; d <= step.total; d++) setTimeout(() => session.setProgress({ phase: step.phase, done: d, total: step.total }), (pendingMs * k++) / ticks);
+for (const step of steps)
+  for (let d = 0; d <= step.total; d++)
+    setTimeout(() => session.setProgress({ phase: step.phase, done: d, total: step.total }), (pendingMs * k++) / ticks);
 setTimeout(() => session.setProgress(undefined), pendingMs);
 
 if (args.includes("--paragraphs")) {
@@ -30,7 +35,13 @@ if (args.includes("--paragraphs")) {
     "Changes the route to return 503 instead of 500 when refresh fails. The PR description does not mention this.",
     "Adds retry tests for refresh(): success after one failure and exhaustion after three. No test covers the 503 path.",
   ];
-  setTimeout(() => review.cards.filter((c) => !c.fixed).forEach((c, k) => setTimeout(() => session.setParagraph(c.id, samples[k % samples.length]!), k * 400)), 1500);
+  setTimeout(
+    () =>
+      review.cards
+        .filter((c) => !c.fixed)
+        .forEach((c, k) => setTimeout(() => session.setParagraph(c.id, samples[k % samples.length]!), k * 400)),
+    1500,
+  );
 }
 
 await runTui(session, async () => session.dispose());

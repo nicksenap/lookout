@@ -12,7 +12,8 @@ export interface Prose {
   /** Failed the gate twice. */
   unverified?: boolean;
 }
-const isProse = (v: unknown): v is Prose => typeof v === "object" && v !== null && typeof (v as Prose).title === "string" && typeof (v as Prose).paragraph === "string";
+const isProse = (v: unknown): v is Prose =>
+  typeof v === "object" && v !== null && typeof (v as Prose).title === "string" && typeof (v as Prose).paragraph === "string";
 
 export interface WriteOptions {
   modelSpec: string;
@@ -67,7 +68,9 @@ export function shapeOf(card: Pick<Card, "kind" | "blockKind">): Shape {
 export function prosePrompt(changeSet: ChangeSet, card: Card, siblings: Card[] = []): string {
   const hintLines = [
     card.hint ? `Working title from the grouping step (refine it; keep the meaning): ${card.hint}` : "",
-    siblings.length ? `Other cards in this review are titled: ${siblings.map((c) => c.hint ?? c.title).join(" | ")}. Your title must be distinguishable from them.` : "",
+    siblings.length
+      ? `Other cards in this review are titled: ${siblings.map((c) => c.hint ?? c.title).join(" | ")}. Your title must be distinguishable from them.`
+      : "",
   ].filter(Boolean);
   return `${SHAPE_PROMPTS[shapeOf(card)]}${TAIL}`
     .replace("{intent}", changeSet.intent?.title ?? "(none)")
@@ -79,7 +82,10 @@ export function editsOf(changeSet: ChangeSet, card: Pick<Card, "blockIds">): str
   const ids = new Set(card.blockIds);
   return allBlocks(changeSet)
     .filter((r) => ids.has(r.block.id))
-    .map((r) => `### ${r.block.path}${r.block.scope ? ` in ${r.block.scope.join(" › ")}` : ` ${r.hunk.header}`}\n${blockText(r.hunk, r.block, 3)}`)
+    .map(
+      (r) =>
+        `### ${r.block.path}${r.block.scope ? ` in ${r.block.scope.join(" › ")}` : ` ${r.hunk.header}`}\n${blockText(r.hunk, r.block, 3)}`,
+    )
     .join("\n\n")
     .slice(0, 48_000);
 }
@@ -97,20 +103,31 @@ export function unsupportedNames(edits: string, paragraph: string): string[] {
   const names = [...paragraph.matchAll(/`([^`]+)`/g)].map((m) => m[1]!.trim());
   // The edits text includes each block's scope path, so a paragraph may name the enclosing key (`stage`).
   const code = edits.toLowerCase();
-  return [...new Set(names.filter((n) => {
-    // A path or an expression is judged by its identifier parts: `fieldsQueryKeys.dependencies('w')` → fieldsQueryKeys, dependencies.
-    const parts = n.match(/[A-Za-z_$][\w$]*/g)?.filter((w) => w.length > 2) ?? [];
-    return parts.length > 0 && parts.some((w) => !code.includes(w.toLowerCase()));
-  }))];
+  return [
+    ...new Set(
+      names.filter((n) => {
+        // A path or an expression is judged by its identifier parts: `fieldsQueryKeys.dependencies('w')` → fieldsQueryKeys, dependencies.
+        const parts = n.match(/[A-Za-z_$][\w$]*/g)?.filter((w) => w.length > 2) ?? [];
+        return parts.length > 0 && parts.some((w) => !code.includes(w.toLowerCase()));
+      }),
+    ),
+  ];
 }
 
 /** Parse `TITLE: … PARAGRAPH: …`; tolerate a missing label by using the first line as title. */
 export function parseProse(text: string): Prose | undefined {
   // Titles carry no code formatting: a stray backtick around one word reads as a typo in a heading.
-  const title = /TITLE:\s*(.+)/i.exec(text)?.[1]?.trim().replace(/^[*"'`]+|[*"'`.]+$/g, "").replace(/`/g, "");
+  const title = /TITLE:\s*(.+)/i
+    .exec(text)?.[1]
+    ?.trim()
+    .replace(/^[*"'`]+|[*"'`.]+$/g, "")
+    .replace(/`/g, "");
   const paragraph = /PARAGRAPH:\s*([\s\S]+)/i.exec(text)?.[1]?.trim().replace(/\s+/g, " ");
   if (title && paragraph) return { title, paragraph };
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (lines.length >= 2) return { title: lines[0]!.replace(/^[*#"'`]+|[*"'`.]+$/g, "").slice(0, 80), paragraph: lines.slice(1).join(" ") };
   return undefined;
 }
@@ -120,7 +137,12 @@ export function parseProse(text: string): Prose | undefined {
  * Calls `onCard` as each lands so the UI can patch it in. Never throws: a card whose write
  * fails keeps its placeholder title, and the first error is returned as a warning.
  */
-export async function writeCards(changeSet: ChangeSet, cards: Card[], opts: WriteOptions, onCard: (id: string, prose: Prose) => void): Promise<{ warning?: string }> {
+export async function writeCards(
+  changeSet: ChangeSet,
+  cards: Card[],
+  opts: WriteOptions,
+  onCard: (id: string, prose: Prose) => void,
+): Promise<{ warning?: string }> {
   const todo = cards.filter((c) => !c.fixed && !c.mechanical && !c.paragraph);
   if (todo.length === 0) return {};
   const cache = opts.cache ?? new RankCache();
@@ -153,14 +175,22 @@ export async function writeCards(changeSet: ChangeSet, cards: Card[], opts: Writ
         onCard(card.id, cached);
         continue;
       }
-      const prompt = prosePrompt(changeSet, card, siblings.filter((c) => c.id !== card.id));
+      const prompt = prosePrompt(
+        changeSet,
+        card,
+        siblings.filter((c) => c.id !== card.id),
+      );
       const first = await draft(write!, prompt);
       if (!first.ok) {
         warning ??= first.error;
         continue;
       }
       const edits = editsOf(changeSet, card);
-      const rewrite = (previous: Prose) => draft(write!, `${prompt}${REWRITE_NOTE.replace("{names}", unsupportedNames(edits, previous.paragraph).length ? ` (names not in the edits: ${unsupportedNames(edits, previous.paragraph).join(", ")})` : "")}${previous.paragraph}`);
+      const rewrite = (previous: Prose) =>
+        draft(
+          write!,
+          `${prompt}${REWRITE_NOTE.replace("{names}", unsupportedNames(edits, previous.paragraph).length ? ` (names not in the edits: ${unsupportedNames(edits, previous.paragraph).join(", ")})` : "")}${previous.paragraph}`,
+        );
       const prose = check ? await gate(check, edits, first.value, rewrite) : await nameGate(edits, first.value, rewrite);
       cache.set(opts.modelSpec, key, prose);
       touched = true;
@@ -185,7 +215,12 @@ async function draft(write: (prompt: string) => Promise<string>, prompt: string)
  * one rewrite with the failing draft quoted; below it again the paragraph is kept but marked
  * unverified. A failed check call leaves the draft ungated rather than unwritten.
  */
-async function gate(check: (edits: string, prose: Prose) => Promise<number>, edits: string, first: Prose, rewrite: (previous: Prose) => Promise<Result<Prose>>): Promise<Prose> {
+async function gate(
+  check: (edits: string, prose: Prose) => Promise<number>,
+  edits: string,
+  first: Prose,
+  rewrite: (previous: Prose) => Promise<Result<Prose>>,
+): Promise<Prose> {
   // Names come first: a rule failure costs no model call and the rewrite can quote the offending names.
   const named = await nameGate(edits, first, rewrite);
   if (named.unverified) return named;
@@ -207,4 +242,3 @@ async function nameGate(edits: string, first: Prose, rewrite: (previous: Prose) 
   if (!second.ok) return { ...first, unverified: true };
   return unsupportedNames(edits, second.value.paragraph).length === 0 ? second.value : { ...second.value, unverified: true };
 }
-

@@ -5,12 +5,21 @@ import type { EditBlock, Hunk } from "../src/core/types.ts";
 import { applyRules } from "../src/rank/rules.ts";
 
 const diff = (path: string, header: string, body: string[]) =>
-  [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n") + "\n";
+  `${[`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n")}\n`;
 
 describe("edit blocks", () => {
   test("a hunk fusing two edits splits into two blocks with correct line ranges", () => {
     const files = parseDiff(
-      diff("src/a.ts", "@@ -1,6 +1,6 @@", [" const a = 1;", "-const b = 2;", "+const b = 3;", " const c = 4;", " const d = 5;", "-const e = 6;", "+const e = 7;", " const f = 8;"]),
+      diff("src/a.ts", "@@ -1,6 +1,6 @@", [
+        " const a = 1;",
+        "-const b = 2;",
+        "+const b = 3;",
+        " const c = 4;",
+        " const d = 5;",
+        "-const e = 6;",
+        "+const e = 7;",
+        " const f = 8;",
+      ]),
     );
     const hunk = files[0]!.hunks[0]!;
     expect(hunk.blocks).toHaveLength(2);
@@ -34,7 +43,15 @@ describe("edit blocks", () => {
   });
 
   test("a mixed del+add run is one block; context-only input yields none", () => {
-    const h = { id: "h", path: "p", lines: [{ kind: "del" as const, text: "a", oldLine: 1 }, { kind: "add" as const, text: "b", newLine: 1 }, { kind: "add" as const, text: "c", newLine: 2 }] };
+    const h = {
+      id: "h",
+      path: "p",
+      lines: [
+        { kind: "del" as const, text: "a", oldLine: 1 },
+        { kind: "add" as const, text: "b", newLine: 1 },
+        { kind: "add" as const, text: "c", newLine: 2 },
+      ],
+    };
     expect(splitHunk(h)).toHaveLength(1);
     expect(splitHunk({ id: "h", path: "p", lines: [{ kind: "context", text: "x", oldLine: 1, newLine: 1 }] })).toEqual([]);
   });
@@ -63,18 +80,47 @@ describe("edit blocks", () => {
 
 describe("hunks derive from their blocks", () => {
   const base = (blocks: Partial<EditBlock>[]): Hunk => ({
-    id: "h", path: "p", header: "@@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], labels: [], attention: "routine", score: 0,
-    blocks: blocks.map((b, k) => ({ id: `b${k}`, hunkId: "h", path: "p", from: 0, to: 0, labels: [], attention: "routine", score: 0, ...b })),
+    id: "h",
+    path: "p",
+    header: "@@",
+    oldStart: 1,
+    oldLines: 1,
+    newStart: 1,
+    newLines: 1,
+    lines: [],
+    labels: [],
+    attention: "routine",
+    score: 0,
+    blocks: blocks.map((b, k) => ({
+      id: `b${k}`,
+      hunkId: "h",
+      path: "p",
+      from: 0,
+      to: 0,
+      labels: [],
+      attention: "routine",
+      score: 0,
+      ...b,
+    })),
   });
   test("attention is the highest block; score the highest block", () => {
-    const h = deriveHunk(base([{ attention: "inert", score: 0 }, { attention: "suspicious", score: 0.9 }, { attention: "routine", score: 0.3 }]));
+    const h = deriveHunk(
+      base([
+        { attention: "inert", score: 0 },
+        { attention: "suspicious", score: 0.9 },
+        { attention: "routine", score: 0.3 },
+      ]),
+    );
     expect(h.attention).toBe("suspicious");
     expect(h.score).toBe(0.9);
   });
   test("content label only when every block has one; comment-only wins over whitespace-only", () => {
     expect(deriveHunk(base([{ labels: ["whitespace-only"] }, { labels: ["comment-only"] }])).labels).toEqual(["comment-only"]);
     expect(deriveHunk(base([{ labels: ["whitespace-only"] }, { labels: [] }])).labels).toEqual([]);
-    expect(deriveHunk(base([{ labels: ["test", "whitespace-only"] }, { labels: ["test", "whitespace-only"] }])).labels).toEqual(["test", "whitespace-only"]);
+    expect(deriveHunk(base([{ labels: ["test", "whitespace-only"] }, { labels: ["test", "whitespace-only"] }])).labels).toEqual([
+      "test",
+      "whitespace-only",
+    ]);
   });
 });
 

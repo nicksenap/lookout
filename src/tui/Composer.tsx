@@ -21,12 +21,23 @@ export interface Composer {
   draft: string;
 }
 
-export const openComposer = (scope: Composer["scope"], history: string[]): Composer => ({ scope, text: "", cursor: 0, history, historyAt: history.length, draft: "" });
+export const openComposer = (scope: Composer["scope"], history: string[]): Composer => ({
+  scope,
+  text: "",
+  cursor: 0,
+  history,
+  historyAt: history.length,
+  draft: "",
+});
 
 export type ComposerResult = { composer: Composer } | { send: string; scope: Composer["scope"] } | { close: true };
 
 const chars = (s: string) => [...s];
-const splice = (c: Composer, text: string, cursor: number): Composer => ({ ...c, text, cursor: Math.max(0, Math.min(cursor, chars(text).length)) });
+const splice = (c: Composer, text: string, cursor: number): Composer => ({
+  ...c,
+  text,
+  cursor: Math.max(0, Math.min(cursor, chars(text).length)),
+});
 
 export function composerKey(c: Composer, input: string, key: Key): ComposerResult {
   const cs = chars(c.text);
@@ -42,7 +53,8 @@ export function composerKey(c: Composer, input: string, key: Key): ComposerResul
   if (key.rightArrow) return { composer: { ...c, cursor: Math.min(cs.length, c.cursor + 1) } };
   if (key.ctrl && input === "a") return { composer: { ...c, cursor: 0 } };
   if (key.ctrl && input === "e") return { composer: { ...c, cursor: cs.length } };
-  if (key.backspace || key.delete || (key.ctrl && input === "h")) return { composer: splice(c, chars(before).slice(0, -1).join("") + after, c.cursor - 1) };
+  if (key.backspace || key.delete || (key.ctrl && input === "h"))
+    return { composer: splice(c, chars(before).slice(0, -1).join("") + after, c.cursor - 1) };
   if (key.ctrl && input === "w") {
     const kept = before.replace(/\S+\s*$/u, "");
     return { composer: splice(c, kept + after, chars(kept).length) };
@@ -71,15 +83,39 @@ export function composerLines(c: Composer, about: string, w: number): Line[] {
   const inner = Math.max(8, w - 4);
   const title = ` ask · ${c.scope === "card" ? about : "the whole change"} `;
   const hints = ` enter send · tab ${c.scope === "card" ? "→ whole change" : "→ this card"} · ↑↓ earlier · ctrl-w/u delete · esc `;
-  const frame = (left: string, label: string, right: string, color: string): Line => ({ segments: [{ text: left, color }, { text: fit(label, inner), color, bold: left === "┌" }, { text: "─".repeat(Math.max(0, inner - width(fit(label, inner)))), color }, { text: right, color }] });
+  const frame = (left: string, label: string, right: string, color: string): Line => ({
+    segments: [
+      { text: left, color },
+      { text: fit(label, inner), color, bold: left === "┌" },
+      { text: "─".repeat(Math.max(0, inner - width(fit(label, inner)))), color },
+      { text: right, color },
+    ],
+  });
   const body: Line[] = [];
-  if (c.text === "") body.push({ segments: [{ text: "│ ", color: theme.accent }, { text: "▏", color: theme.accent }, { text: fit(c.scope === "card" ? "Ask about this card… (tab: the whole change)" : "Ask about the whole change… (tab: this card)", inner - 1), dim: true }, { text: " │", color: theme.accent }] });
+  if (c.text === "")
+    body.push({
+      segments: [
+        { text: "│ ", color: theme.accent },
+        { text: "▏", color: theme.accent },
+        {
+          text: fit(
+            c.scope === "card" ? "Ask about this card… (tab: the whole change)" : "Ask about the whole change… (tab: this card)",
+            inner - 1,
+          ),
+          dim: true,
+        },
+        { text: " │", color: theme.accent },
+      ],
+    });
   else {
     // The cursor is a marker character so wrapping keeps it with its word; it is drawn as a thin bar.
     const cs = chars(c.text);
     const marked = [...cs.slice(0, c.cursor), "\u0000", ...cs.slice(c.cursor)].join("");
     const rows = wrap(marked, inner);
-    const cursorRow = Math.max(0, rows.findIndex((r) => r.includes("\u0000")));
+    const cursorRow = Math.max(
+      0,
+      rows.findIndex((r) => r.includes("\u0000")),
+    );
     const first = Math.max(0, Math.min(cursorRow - MAX_BODY_ROWS + 1, rows.length - MAX_BODY_ROWS));
     for (const row of rows.slice(first, first + MAX_BODY_ROWS)) {
       const [pre, post] = row.split("\u0000");

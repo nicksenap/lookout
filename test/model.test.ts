@@ -64,11 +64,19 @@ describe("model ranking with the mock decision model", () => {
     const cs = await sample();
     const dir = tmpCache();
     const first = mockModel(() => 2);
-    await rankChangeSet(cs, { modelSpec: "mock:attention", cache: new RankCache(dir), resolveModel: () => ({ ok: true, model: first.model }) });
+    await rankChangeSet(cs, {
+      modelSpec: "mock:attention",
+      cache: new RankCache(dir),
+      resolveModel: () => ({ ok: true, model: first.model }),
+    });
     expect(first.calls.length).toBeGreaterThan(0);
 
     const second = mockModel(() => 0);
-    const res = await rankChangeSet(cs, { modelSpec: "mock:attention", cache: new RankCache(dir), resolveModel: () => ({ ok: true, model: second.model }) });
+    const res = await rankChangeSet(cs, {
+      modelSpec: "mock:attention",
+      cache: new RankCache(dir),
+      resolveModel: () => ({ ok: true, model: second.model }),
+    });
     expect(second.calls).toEqual([]);
     expect(res.rankedBy).toBe("rules+mock:attention");
     // Cached scores (2 = needs-eyes) were used, not the second model's 0s.
@@ -80,7 +88,11 @@ describe("model ranking with the mock decision model", () => {
     const hunk = cs.files[0]!.hunks[0]!;
     const target = hunk.blocks[0]!.id;
     const { model } = mockModel((id) => (id === target ? 3 : 0.4));
-    const res = await rankChangeSet(cs, { modelSpec: "mock:attention", cache: new RankCache(tmpCache()), resolveModel: () => ({ ok: true, model }) });
+    const res = await rankChangeSet(cs, {
+      modelSpec: "mock:attention",
+      cache: new RankCache(tmpCache()),
+      resolveModel: () => ({ ok: true, model }),
+    });
     const hunks = res.changeSet.files.flatMap((f) => f.hunks);
     const blocks = hunks.flatMap((h) => h.blocks);
     expect(blocks.find((b) => b.id === target)!.attention).toBe("suspicious");
@@ -104,7 +116,11 @@ describe("model ranking with the mock decision model", () => {
         throw new Error("boom: provider down");
       },
     });
-    const res = await rankChangeSet(cs, { modelSpec: "mock:attention", cache: new RankCache(tmpCache()), resolveModel: () => ({ ok: true, model }) });
+    const res = await rankChangeSet(cs, {
+      modelSpec: "mock:attention",
+      cache: new RankCache(tmpCache()),
+      resolveModel: () => ({ ok: true, model }),
+    });
     expect(res.rankedBy).toBe("rules");
     expect(res.warning).toContain("boom: provider down");
     expect(res.changeSet.files.flatMap((f) => f.hunks).every((h) => h.labels !== undefined)).toBe(true);
@@ -113,14 +129,31 @@ describe("model ranking with the mock decision model", () => {
   test("invalid model answer (out of range score) → rules with a warning", async () => {
     const cs = await sample();
     const { model } = mockModel(() => 99);
-    const res = await rankChangeSet(cs, { modelSpec: "mock:attention", cache: new RankCache(tmpCache()), resolveModel: () => ({ ok: true, model }) });
+    const res = await rankChangeSet(cs, {
+      modelSpec: "mock:attention",
+      cache: new RankCache(tmpCache()),
+      resolveModel: () => ({ ok: true, model }),
+    });
     expect(res.rankedBy).toBe("rules");
     expect(res.warning).toBeDefined();
   });
 });
 
 describe("mergeModelScore: rules bound the model", () => {
-  const base: Hunk = { id: "x", path: "a.ts", header: "@@", oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [], blocks: [], labels: [], attention: "inert", score: 0 };
+  const base: Hunk = {
+    id: "x",
+    path: "a.ts",
+    header: "@@",
+    oldStart: 1,
+    oldLines: 1,
+    newStart: 1,
+    newLines: 1,
+    lines: [],
+    blocks: [],
+    labels: [],
+    attention: "inert",
+    score: 0,
+  };
   test("model cannot make a hunk inert", () => {
     expect(mergeModelScore({ ...base, attention: "routine" }, { score: 0, kind: "behavior" }).attention).toBe("routine");
     expect(mergeModelScore({ ...base, attention: "needs-eyes" }, { score: 0, kind: "behavior" }).attention).toBe("needs-eyes");

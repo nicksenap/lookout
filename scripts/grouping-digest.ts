@@ -10,7 +10,9 @@ const review = (await Bun.file(path).json()) as Review;
 const live = allBlocks(review.changeSet).filter((r) => r.block.attention !== "inert");
 console.log(`# ${review.changeSet.target} · ${review.changeSet.files.length} files · ${live.length} live edit blocks\n`);
 for (const r of live) {
-  const where = r.block.newRange ? `new ${r.block.newRange.start}-${r.block.newRange.end}` : `old ${r.block.oldRange!.start}-${r.block.oldRange!.end}`;
+  const where = r.block.newRange
+    ? `new ${r.block.newRange.start}-${r.block.newRange.end}`
+    : `old ${r.block.oldRange!.start}-${r.block.oldRange!.end}`;
   console.log(`## block ${r.block.id} · ${r.file.path} · ${where}`);
   console.log("```diff");
   console.log(blockText(r.hunk, r.block, 2));

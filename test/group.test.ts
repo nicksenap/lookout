@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { buildCards } from "../src/cards/build.ts";
 import { changedIdentifiers, groupBlocks, mechanicalText } from "../src/cards/group.ts";
-import { parseProse, type Prose, prosePrompt, unsupportedNames, writeCards } from "../src/cards/write.ts";
+import { type Prose, parseProse, prosePrompt, unsupportedNames, writeCards } from "../src/cards/write.ts";
 import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { LocalSession } from "../src/core/session.ts";
@@ -11,11 +14,9 @@ import { DEFAULT_CONFIG } from "../src/dispatch/config.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { RankCache } from "../src/rank/cache.ts";
 import { applyRules } from "../src/rank/rules.ts";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-const diff = (path: string, header: string, body: string[]) => [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n") + "\n";
+const diff = (path: string, header: string, body: string[]) =>
+  `${[`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n")}\n`;
 const cs = (text: string, kinds: (BlockKind | undefined)[]): ChangeSet => {
   let k = 0;
   return mapBlocks(applyRules({ target: "t", base: "", head: "", files: parseDiff(text) }), ({ block }) => {
@@ -27,15 +28,37 @@ const cs = (text: string, kinds: (BlockKind | undefined)[]): ChangeSet => {
 describe("groupBlocks", () => {
   test("fragments (imports, re-exports, a lone type, a destructured prop) join the card that owns their file, whatever their kind", () => {
     const text =
-      diff("src/a.ts", "@@ -1,3 +1,4 @@", [" x", "+import { Foo } from './foo';", " y", " z", "@@ -20,2 +21,5 @@", " a", "+export interface Args {", "+  ids: string[];", "+}", " b", "@@ -40,3 +44,4 @@", " p", "+  const total = ids.length * 2;", " q", " r"]) +
-      diff("src/index.ts", "@@ -1,3 +1,4 @@", [" m", "+export { Foo } from './a';", " n", " o"]);
+      diff("src/a.ts", "@@ -1,3 +1,4 @@", [
+        " x",
+        "+import { Foo } from './foo';",
+        " y",
+        " z",
+        "@@ -20,2 +21,5 @@",
+        " a",
+        "+export interface Args {",
+        "+  ids: string[];",
+        "+}",
+        " b",
+        "@@ -40,3 +44,4 @@",
+        " p",
+        "+  const total = ids.length * 2;",
+        " q",
+        " r",
+      ]) + diff("src/index.ts", "@@ -1,3 +1,4 @@", [" m", "+export { Foo } from './a';", " n", " o"]);
     const groups = groupBlocks(allBlocks(cs(text, ["rename", "types", "behavior", "rename"])));
     expect(groups.length).toBe(1);
     expect(groups[0]!.kind).toBe("behavior");
   });
 
   test("a fragment with no owner stays its own group", () => {
-    const text = diff("src/types.ts", "@@ -1,2 +1,5 @@", [" x", "+export type Id = string;", "+export interface Row {", "+  id: Id;", "+}", " y"]);
+    const text = diff("src/types.ts", "@@ -1,2 +1,5 @@", [
+      " x",
+      "+export type Id = string;",
+      "+export interface Row {",
+      "+  id: Id;",
+      "+}",
+      " y",
+    ]);
     expect(groupBlocks(allBlocks(cs(text, ["types"]))).length).toBe(1);
   });
 
@@ -50,14 +73,35 @@ describe("groupBlocks", () => {
   });
 
   test("an orphan edit (no identifiers) joins the previous block of its hunk", () => {
-    const text = diff("src/a.ts", "@@ -1,8 +1,8 @@", [" a", "-const foo = () => {", "+function foo() {", " b", " c", " d", " e", "-};", "+}"]);
+    const text = diff("src/a.ts", "@@ -1,8 +1,8 @@", [
+      " a",
+      "-const foo = () => {",
+      "+function foo() {",
+      " b",
+      " c",
+      " d",
+      " e",
+      "-};",
+      "+}",
+    ]);
     const groups = groupBlocks(allBlocks(cs(text, ["typing-refactor", "typing-refactor"])));
     expect(groups).toHaveLength(1);
     expect(groups[0]!.refs).toHaveLength(2);
   });
 
   test("mechanical kinds group per file regardless of identifiers; title and paragraph are deterministic", () => {
-    const text = diff("src/a.tsx", "@@ -1,9 +1,9 @@", [" a", "-const A: React.FC = () => 1;", "+function A() { return 1 }", " b", " c", " d", " e", " f", "-const B: React.FC = () => 2;", "+function B() { return 2 }"]);
+    const text = diff("src/a.tsx", "@@ -1,9 +1,9 @@", [
+      " a",
+      "-const A: React.FC = () => 1;",
+      "+function A() { return 1 }",
+      " b",
+      " c",
+      " d",
+      " e",
+      " f",
+      "-const B: React.FC = () => 2;",
+      "+function B() { return 2 }",
+    ]);
     const groups = groupBlocks(allBlocks(cs(text, ["typing-refactor", "typing-refactor"])), { neighbourLines: 0 });
     expect(groups).toHaveLength(1);
     const t = mechanicalText(groups[0]!);
@@ -69,19 +113,31 @@ describe("groupBlocks", () => {
   test("same kind, same file, within a few lines merges; far apart with no shared identifiers does not", () => {
     const near = diff("src/a.ts", "@@ -1,6 +1,6 @@", [" a", "-one();", "+uno();", " b", "-two();", "+dos();"]);
     expect(groupBlocks(allBlocks(cs(near, ["behavior", "behavior"])))).toHaveLength(1);
-    const far = diff("src/a.ts", "@@ -1,3 +1,3 @@", [" a", "-one();", "+uno();", " b"]) .replace("@@ -1,3 +1,3 @@", "@@ -1,3 +1,3 @@") + diff("src/a.ts", "@@ -100,3 +100,3 @@", [" z", "-two();", "+dos();", " w"]);
+    const far =
+      diff("src/a.ts", "@@ -1,3 +1,3 @@", [" a", "-one();", "+uno();", " b"]).replace("@@ -1,3 +1,3 @@", "@@ -1,3 +1,3 @@") +
+      diff("src/a.ts", "@@ -100,3 +100,3 @@", [" z", "-two();", "+dos();", " w"]);
     expect(groupBlocks(allBlocks(cs(far, ["behavior", "behavior"])))).toHaveLength(2);
   });
 
   test("changedIdentifiers ignores keywords and noise", () => {
-    const [ref] = allBlocks(cs(diff("a.ts", "@@ -1 +1 @@", ["-const value = React.useMemo(() => budgetPeriod, []);", "+const value = React.useMemo(() => showBudget, []);"]), ["behavior"]));
+    const [ref] = allBlocks(
+      cs(
+        diff("a.ts", "@@ -1 +1 @@", [
+          "-const value = React.useMemo(() => budgetPeriod, []);",
+          "+const value = React.useMemo(() => showBudget, []);",
+        ]),
+        ["behavior"],
+      ),
+    );
     expect([...changedIdentifiers(ref!)].sort()).toEqual(["budgetPeriod", "showBudget"]);
   });
 });
 
 describe("buildCards with kinds", () => {
   test("mechanical cards carry deterministic prose and blockKind; behaviour cards have a placeholder title and no paragraph", () => {
-    const text = diff("src/a.tsx", "@@ -1,3 +1,3 @@", [" a", "-const A: React.FC = () => 1;", "+function A() { return 1 }", " b"]) + diff("src/b.ts", "@@ -1,3 +1,3 @@", [" a", "-retry(1);", "+retry(3);", " b"]);
+    const text =
+      diff("src/a.tsx", "@@ -1,3 +1,3 @@", [" a", "-const A: React.FC = () => 1;", "+function A() { return 1 }", " b"]) +
+      diff("src/b.ts", "@@ -1,3 +1,3 @@", [" a", "-retry(1);", "+retry(3);", " b"]);
     const cards = buildCards(cs(text, ["typing-refactor", "behavior"]), DEFAULT_POLICY);
     const mech = cards.find((c) => c.mechanical)!;
     expect(mech.blockKind).toBe("typing-refactor");
@@ -92,7 +148,9 @@ describe("buildCards with kinds", () => {
     expect(beh.title).toContain("src/b.ts");
   });
   test("without kinds (rules-only) the per-file stand-in is used", () => {
-    const text = diff("src/a.ts", "@@ -1,3 +1,3 @@", [" a", "-x();", "+y();", " b"]) + diff("src/a.ts", "@@ -50,3 +50,3 @@", [" a", "-p();", "+q();", " b"]);
+    const text =
+      diff("src/a.ts", "@@ -1,3 +1,3 @@", [" a", "-x();", "+y();", " b"]) +
+      diff("src/a.ts", "@@ -50,3 +50,3 @@", [" a", "-p();", "+q();", " b"]);
     const cards = buildCards(cs(text, [undefined, undefined]), DEFAULT_POLICY);
     expect(cards).toHaveLength(1);
     expect(cards[0]!.title).toBe("src/a.ts");
@@ -101,13 +159,18 @@ describe("buildCards with kinds", () => {
 
 describe("writer", () => {
   test("parseProse reads the labelled format and tolerates an unlabelled two-line reply", () => {
-    expect(parseProse("TITLE: Add retry\nPARAGRAPH: Wraps refresh in a retry.\nSecond sentence.")).toEqual({ title: "Add retry", paragraph: "Wraps refresh in a retry. Second sentence." });
+    expect(parseProse("TITLE: Add retry\nPARAGRAPH: Wraps refresh in a retry.\nSecond sentence.")).toEqual({
+      title: "Add retry",
+      paragraph: "Wraps refresh in a retry. Second sentence.",
+    });
     expect(parseProse("**Add retry**\nWraps refresh in a retry.")).toEqual({ title: "Add retry", paragraph: "Wraps refresh in a retry." });
     expect(parseProse("just one line")).toBeUndefined();
   });
 
   test("prompt contains only the card's edits", () => {
-    const text = diff("src/a.ts", "@@ -1,3 +1,3 @@", [" a", "-alpha();", "+beta();", " b"]) + diff("src/z.ts", "@@ -1,3 +1,3 @@", [" a", "-gamma();", "+delta();", " b"]);
+    const text =
+      diff("src/a.ts", "@@ -1,3 +1,3 @@", [" a", "-alpha();", "+beta();", " b"]) +
+      diff("src/z.ts", "@@ -1,3 +1,3 @@", [" a", "-gamma();", "+delta();", " b"]);
     const set = cs(text, ["behavior", "behavior"]);
     const cards = buildCards(set, DEFAULT_POLICY);
     expect(cards).toHaveLength(2);
@@ -118,7 +181,10 @@ describe("writer", () => {
 
   test("writeCards skips mechanical and fixed cards, writes the rest in parallel, caches, and reports a failure as a warning", async () => {
     const dir = mkdtempSync(join(tmpdir(), "lookout-write-"));
-    const text = diff("src/a.tsx", "@@ -1,3 +1,3 @@", [" a", "-const A: React.FC = () => 1;", "+function A() { return 1 }", " b"]) + diff("src/b.ts", "@@ -1,3 +1,3 @@", [" a", "-retry(1);", "+retry(3);", " b"]) + diff("src/c.ts", "@@ -1,3 +1,3 @@", [" a", "-boom(1);", "+boom(3);", " b"]);
+    const text =
+      diff("src/a.tsx", "@@ -1,3 +1,3 @@", [" a", "-const A: React.FC = () => 1;", "+function A() { return 1 }", " b"]) +
+      diff("src/b.ts", "@@ -1,3 +1,3 @@", [" a", "-retry(1);", "+retry(3);", " b"]) +
+      diff("src/c.ts", "@@ -1,3 +1,3 @@", [" a", "-boom(1);", "+boom(3);", " b"]);
     const set = cs(text, ["typing-refactor", "behavior", "behavior"]);
     const cards = buildCards(set, DEFAULT_POLICY);
     const prompts: string[] = [];
@@ -134,7 +200,19 @@ describe("writer", () => {
     expect(res.warning).toContain("rate limited");
     // second run: cached, no call for the one that succeeded
     const again: string[] = [];
-    await writeCards(set, cards, { modelSpec: "mock:w", cache: new RankCache(dir), write: async (p) => { again.push(p); throw new Error("x"); } }, () => {});
+    await writeCards(
+      set,
+      cards,
+      {
+        modelSpec: "mock:w",
+        cache: new RankCache(dir),
+        write: async (p) => {
+          again.push(p);
+          throw new Error("x");
+        },
+      },
+      () => {},
+    );
     expect(again).toHaveLength(1);
     rmSync(dir, { recursive: true, force: true });
   });
@@ -143,19 +221,28 @@ describe("writer", () => {
 describe("writeCards gate", () => {
   test("unsupportedNames: backticked names absent from the edits, judged by identifier parts", () => {
     const edits = "+  const result = clear_promotion(task_id, project_id=None)\n+  fieldsQueryKeys.dependencies(ws)";
-    expect(unsupportedNames(edits, "`clear_promotion` replaces `commit_promotion`; `fieldsQueryKeys.dependencies('w')` and `None` stay.")).toEqual(["commit_promotion"]);
+    expect(
+      unsupportedNames(edits, "`clear_promotion` replaces `commit_promotion`; `fieldsQueryKeys.dependencies('w')` and `None` stay."),
+    ).toEqual(["commit_promotion"]);
     expect(unsupportedNames(edits, "No names here.")).toEqual([]);
   });
 
   test("a paragraph naming something the edits lack is rewritten with the names quoted, without a model check", async () => {
-    const text = diff("src/store.py", "@@ -1,3 +1,3 @@", [" a", "-    def commit_promotion(self, task_id: str) -> None:", "+    def clear_promotion(self, task_id: str) -> None:", " b"]);
+    const text = diff("src/store.py", "@@ -1,3 +1,3 @@", [
+      " a",
+      "-    def commit_promotion(self, task_id: str) -> None:",
+      "+    def clear_promotion(self, task_id: str) -> None:",
+      " b",
+    ]);
     const set = cs(text, ["behavior"]);
     const cards = buildCards(set, DEFAULT_POLICY);
     const dir = mkdtempSync(join(tmpdir(), "lookout-names-"));
     const prompts: string[] = [];
     const write = async (p: string) => {
       prompts.push(p);
-      return p.includes("names not in the edits: remove_task_artifact") ? "TITLE: Clear promotion\nPARAGRAPH: `clear_promotion` replaces `commit_promotion`." : "TITLE: Clear promotion\nPARAGRAPH: `remove_task_artifact` and `clear_promotion` replace `commit_promotion`.";
+      return p.includes("names not in the edits: remove_task_artifact")
+        ? "TITLE: Clear promotion\nPARAGRAPH: `clear_promotion` replaces `commit_promotion`."
+        : "TITLE: Clear promotion\nPARAGRAPH: `remove_task_artifact` and `clear_promotion` replace `commit_promotion`.";
     };
     const landed: Prose[] = [];
     await writeCards(set, cards, { modelSpec: "mock:w", cache: new RankCache(dir), write }, (_id, prose) => landed.push(prose));
@@ -174,7 +261,9 @@ describe("writeCards gate", () => {
     const checks: string[] = [];
     const write = async (p: string) => {
       prompts.push(p);
-      return p.includes("Previous draft") ? "TITLE: Configure stage tools\nPARAGRAPH: Stage adds reports." : "TITLE: Configure tools\nPARAGRAPH: Production adds reports and removes portal.";
+      return p.includes("Previous draft")
+        ? "TITLE: Configure stage tools\nPARAGRAPH: Stage adds reports."
+        : "TITLE: Configure tools\nPARAGRAPH: Production adds reports and removes portal.";
     };
     const check = async (_edits: string, prose: { paragraph: string }) => {
       checks.push(prose.paragraph);
@@ -191,7 +280,12 @@ describe("writeCards gate", () => {
 
     const stubborn = async () => "TITLE: Configure tools\nPARAGRAPH: Production adds reports and removes portal.";
     const bad: Prose[] = [];
-    await writeCards(set, cards.map((c) => ({ ...c, id: `${c.id}x` })), { modelSpec: "mock:w", cache: new RankCache(dir), write: stubborn, check }, (_id, prose) => bad.push(prose));
+    await writeCards(
+      set,
+      cards.map((c) => ({ ...c, id: `${c.id}x` })),
+      { modelSpec: "mock:w", cache: new RankCache(dir), write: stubborn, check },
+      (_id, prose) => bad.push(prose),
+    );
     expect(bad[0]).toMatchObject({ unverified: true, check: 0.2 });
     rmSync(dir, { recursive: true, force: true });
   });
@@ -204,7 +298,10 @@ describe("LocalSession prose", () => {
     const session = new LocalSession({
       config: DEFAULT_CONFIG,
       changeSet: base,
-      rank: async (ruled) => ({ changeSet: mapBlocks(ruled, ({ block }) => ({ ...block, kind: "behavior" as const })), rankedBy: "rules+mock" }),
+      rank: async (ruled) => ({
+        changeSet: mapBlocks(ruled, ({ block }) => ({ ...block, kind: "behavior" as const })),
+        rankedBy: "rules+mock",
+      }),
       write: async () => "TITLE: Retry three times\nPARAGRAPH: `retry` is now called with 3.",
     });
     const events: ReviewEvent[] = [];
@@ -217,7 +314,18 @@ describe("LocalSession prose", () => {
   });
 
   test("an oversized card is split before prose: cards.replaced lands, then each concern gets its own paragraph", async () => {
-    const hunks = (path: string, n: number) => [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, ...Array.from({ length: n }, (_, k) => [`@@ -${1 + k * 10},2 +${1 + k * 10},3 @@`, " a", `+  shared.step${k}(${path.length});`, " b"]).flat()].join("\n") + "\n";
+    const hunks = (path: string, n: number) =>
+      `${[
+        `diff --git a/${path} b/${path}`,
+        `--- a/${path}`,
+        `+++ b/${path}`,
+        ...Array.from({ length: n }, (_, k) => [
+          `@@ -${1 + k * 10},2 +${1 + k * 10},3 @@`,
+          " a",
+          `+  shared.step${k}(${path.length});`,
+          " b",
+        ]).flat(),
+      ].join("\n")}\n`;
     const base: ChangeSet = { target: "t", base: "", head: "", files: parseDiff(hunks("src/a.ts", 6) + hunks("src/b.ts", 6)) };
     const ids = allBlocks(base).map((r) => r.block.id);
     const dir = mkdtempSync(join(tmpdir(), "lookout-session-split-"));
@@ -226,11 +334,19 @@ describe("LocalSession prose", () => {
       config: DEFAULT_CONFIG,
       cache: new RankCache(dir),
       changeSet: base,
-      rank: async (ruled) => ({ changeSet: mapBlocks(ruled, ({ block }) => ({ ...block, kind: "behavior" as const })), rankedBy: "rules+mock" }),
+      rank: async (ruled) => ({
+        changeSet: mapBlocks(ruled, ({ block }) => ({ ...block, kind: "behavior" as const })),
+        rankedBy: "rules+mock",
+      }),
       write: async (prompt) => {
         if (prompt.includes("JSON only")) {
           splitPrompts.push(prompt);
-          return JSON.stringify({ concerns: [{ title: "a", blockIds: ids.slice(0, 6) }, { title: "b", blockIds: ids.slice(6) }] });
+          return JSON.stringify({
+            concerns: [
+              { title: "a", blockIds: ids.slice(0, 6) },
+              { title: "b", blockIds: ids.slice(6) },
+            ],
+          });
         }
         return `TITLE: ${prompt.includes("src/a.ts") ? "Change a" : "Change b"}\nPARAGRAPH: One concern.`;
       },

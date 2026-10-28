@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { render } from "ink-testing-library";
 import { buildCards, untouchedAreas } from "../src/cards/build.ts";
-import { isMechanical, isFragment, isOrphan } from "../src/cards/group.ts";
+import { isFragment, isMechanical, isOrphan } from "../src/cards/group.ts";
 import { allBlocks } from "../src/core/blocks.ts";
 import type { Review } from "../src/core/types.ts";
 import { classify, evaluate } from "../src/policy/evaluate.ts";
@@ -50,7 +50,10 @@ describe.each(names)("fixture %s", (name) => {
 
   test("the clean card, if present, is last, grey, and holds exactly the inert blocks", async () => {
     const review = await load(name);
-    const inert = allBlocks(review.changeSet).filter((r) => r.block.attention === "inert").map((r) => r.block.id).sort();
+    const inert = allBlocks(review.changeSet)
+      .filter((r) => r.block.attention === "inert")
+      .map((r) => r.block.id)
+      .sort();
     const clean = review.cards.find((c) => c.fixed === "clean");
     if (inert.length === 0) return expect(clean).toBeUndefined();
     expect(review.cards.at(-1)).toBe(clean);
@@ -90,7 +93,8 @@ describe.each(names)("fixture %s", (name) => {
     const review = await load(name);
     const titles = review.cards.filter((c) => !c.fixed).map((c) => c.title.toLowerCase().replace(/[^a-z]/g, ""));
     expect(new Set(titles).size).toBe(titles.length);
-    for (const c of review.cards) if (c.paragraph && !c.mechanical) expect(c.paragraph.split(/(?<=[.!?])\s+(?=[A-Z`])/).length).toBeLessThanOrEqual(4);
+    for (const c of review.cards)
+      if (c.paragraph && !c.mechanical) expect(c.paragraph.split(/(?<=[.!?])\s+(?=[A-Z`])/).length).toBeLessThanOrEqual(4);
   });
 
   test.each([

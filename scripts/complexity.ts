@@ -23,7 +23,17 @@ interface Entry {
 
 type Node = { type: string; start: number; end: number; [key: string]: unknown };
 const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
-const BRANCH = new Set(["IfStatement", "ForStatement", "ForInStatement", "ForOfStatement", "WhileStatement", "DoWhileStatement", "SwitchCase", "CatchClause", "ConditionalExpression"]);
+const BRANCH = new Set([
+  "IfStatement",
+  "ForStatement",
+  "ForInStatement",
+  "ForOfStatement",
+  "WhileStatement",
+  "DoWhileStatement",
+  "SwitchCase",
+  "CatchClause",
+  "ConditionalExpression",
+]);
 const LOGICAL = new Set(["&&", "||", "??"]);
 
 const isNode = (v: unknown): v is Node => typeof v === "object" && v !== null && typeof (v as Node).type === "string";
@@ -56,10 +66,20 @@ function nameOf(fn: Node, parent: Node | undefined): string {
   const id = fn.id as Node | undefined;
   if (id && typeof id.name === "string") return id.name;
   if (parent?.type === "VariableDeclarator" && isNode(parent.id) && typeof parent.id.name === "string") return parent.id.name;
-  if ((parent?.type === "Property" || parent?.type === "MethodDefinition" || parent?.type === "PropertyDefinition") && isNode(parent.key) && typeof parent.key.name === "string") return parent.key.name;
+  if (
+    (parent?.type === "Property" || parent?.type === "MethodDefinition" || parent?.type === "PropertyDefinition") &&
+    isNode(parent.key) &&
+    typeof parent.key.name === "string"
+  )
+    return parent.key.name;
   if (parent?.type === "CallExpression" && isNode(parent.callee)) {
     const callee = parent.callee;
-    const name = typeof callee.name === "string" ? callee.name : isNode(callee.property) && typeof callee.property.name === "string" ? callee.property.name : "call";
+    const name =
+      typeof callee.name === "string"
+        ? callee.name
+        : isNode(callee.property) && typeof callee.property.name === "string"
+          ? callee.property.name
+          : "call";
     return `${name}(…)`;
   }
   return "(anonymous)";
@@ -79,7 +99,8 @@ for await (const file of new Glob("src/**/*.{ts,tsx}").scan(".")) {
       const c = complexityOf(node);
       const body = node.body as Node | undefined;
       // An arrow with an expression body (`(x) => x + 1`) only counts when it branches.
-      if (c > 1 || body?.type === "BlockStatement") entries.push({ file, name: nameOf(node, parent), line: lineAt(node.start), complexity: c });
+      if (c > 1 || body?.type === "BlockStatement")
+        entries.push({ file, name: nameOf(node, parent), line: lineAt(node.start), complexity: c });
     }
     for (const c of children(node)) walk(c, node);
   };

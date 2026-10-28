@@ -2,8 +2,8 @@ import { allBlocks, type BlockRef, blockText } from "../core/blocks.ts";
 import { attemptAsync } from "../core/result.ts";
 import type { Card, ChangeSet } from "../core/types.ts";
 import { RankCache } from "../rank/cache.ts";
-import { cardId } from "./build.ts";
 import { type Env, resolveWriter, writeText } from "../rank/model.ts";
+import { cardId } from "./build.ts";
 
 /** Partition of a blob card's block ids into titled concerns, keyed by the blob's card id. */
 export type Splits = Map<string, Concern[]>;
@@ -20,7 +20,13 @@ export function isBlob(changeSet: ChangeSet, card: Card): boolean {
   if (card.fixed || card.mechanical) return false;
   if (card.blockIds.length > BLOB_BLOCKS) return true;
   const ids = new Set(card.blockIds);
-  return new Set(allBlocks(changeSet).filter((r) => ids.has(r.block.id)).map((r) => r.file.path)).size > BLOB_FILES;
+  return (
+    new Set(
+      allBlocks(changeSet)
+        .filter((r) => ids.has(r.block.id))
+        .map((r) => r.file.path),
+    ).size > BLOB_FILES
+  );
 }
 
 export interface SplitOptions {
@@ -37,7 +43,16 @@ export interface SplitOptions {
 const CACHE_PREFIX = "split-v2";
 /** A concern this large after one split is asked again, once. */
 const RESPLIT_BLOCKS = 24;
-const isPartition = (v: unknown): v is Concern[] => Array.isArray(v) && v.every((g) => typeof g === "object" && g !== null && typeof (g as Concern).title === "string" && Array.isArray((g as Concern).blockIds) && (g as Concern).blockIds.every((id) => typeof id === "string"));
+const isPartition = (v: unknown): v is Concern[] =>
+  Array.isArray(v) &&
+  v.every(
+    (g) =>
+      typeof g === "object" &&
+      g !== null &&
+      typeof (g as Concern).title === "string" &&
+      Array.isArray((g as Concern).blockIds) &&
+      (g as Concern).blockIds.every((id) => typeof id === "string"),
+  );
 
 export const SPLIT_PROMPT = `You are preparing an agent-written code change for a senior engineer's review. Below is ONE oversized group of edits. Split it into the separate decisions a reviewer evaluates one at a time ("narrow cache invalidation on mutations", "rewrite storage scope for moved artifacts", "run-start guard", "UI dialog").
 Rules:
@@ -61,7 +76,10 @@ export function splitPrompt(changeSet: ChangeSet, card: Pick<Card, "blockIds">):
     .filter((r) => ids.has(r.block.id))
     .map((r) => {
       const lines = blockText(r.hunk, r.block, 2).split("\n");
-      const body = lines.length > MAX_LINES_PER_EDIT ? `${lines.slice(0, MAX_LINES_PER_EDIT).join("\n")}\n… ${lines.length - MAX_LINES_PER_EDIT} more lines` : lines.join("\n");
+      const body =
+        lines.length > MAX_LINES_PER_EDIT
+          ? `${lines.slice(0, MAX_LINES_PER_EDIT).join("\n")}\n… ${lines.length - MAX_LINES_PER_EDIT} more lines`
+          : lines.join("\n");
       return `### edit ${r.block.id} · ${r.block.path}${r.block.scope ? ` in ${r.block.scope.join(" › ")}` : ` ${r.hunk.header}`}\n${body}`;
     })
     .join("\n\n");
@@ -90,7 +108,9 @@ export function parseSplit(text: string, card: Pick<Card, "blockIds">, refs: Blo
   const seen = new Set<string>();
   const titled = concerns.map((c: { title?: unknown; blockIds?: unknown }) => ({
     title: typeof c.title === "string" ? c.title.trim().slice(0, 80) : "",
-    blockIds: Array.isArray(c.blockIds) ? c.blockIds.filter((id): id is string => typeof id === "string" && allowed.has(id) && !seen.has(id) && !!seen.add(id)) : [],
+    blockIds: Array.isArray(c.blockIds)
+      ? c.blockIds.filter((id): id is string => typeof id === "string" && allowed.has(id) && !seen.has(id) && !!seen.add(id))
+      : [],
   }));
   const groups = titled.filter((c) => c.blockIds.length > 0).map((c) => c.blockIds);
   const titleOf = new Map(groups.map((g, k) => [g, titled.filter((c) => c.blockIds.length > 0)[k]!.title]));
@@ -123,7 +143,11 @@ export function parseSplit(text: string, card: Pick<Card, "blockIds">, refs: Blo
  * card id. A failed or unusable answer leaves that blob whole (the first error is a warning):
  * the model proposes structure, rules decide whether to use it.
  */
-export async function proposeSplits(changeSet: ChangeSet, cards: Card[], opts: SplitOptions): Promise<{ splits: Splits; warning?: string }> {
+export async function proposeSplits(
+  changeSet: ChangeSet,
+  cards: Card[],
+  opts: SplitOptions,
+): Promise<{ splits: Splits; warning?: string }> {
   const blobs = cards.filter((c) => isBlob(changeSet, c));
   const splits: Splits = new Map();
   if (blobs.length === 0) return { splits };
@@ -160,7 +184,11 @@ export async function proposeSplits(changeSet: ChangeSet, cards: Card[], opts: S
       const first = await splitOne(card).finally(() => opts.onProgress?.(++settled, blobs.length));
       if (!first) return;
       // One more round for concerns still too large to read; the model tends to keep "the main change" whole.
-      const second = await Promise.all(first.map(async (c) => (c.blockIds.length > RESPLIT_BLOCKS ? (await splitOne({ id: cardId(c.blockIds), blockIds: c.blockIds })) ?? [c] : [c])));
+      const second = await Promise.all(
+        first.map(async (c) =>
+          c.blockIds.length > RESPLIT_BLOCKS ? ((await splitOne({ id: cardId(c.blockIds), blockIds: c.blockIds })) ?? [c]) : [c],
+        ),
+      );
       splits.set(card.id, second.flat());
     }),
   );

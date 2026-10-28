@@ -1,4 +1,4 @@
-import { blockLines, type BlockRef } from "../core/blocks.ts";
+import { type BlockRef, blockLines } from "../core/blocks.ts";
 import type { BlockKind } from "../core/types.ts";
 import { isImport } from "../rank/mechanical.ts";
 
@@ -6,25 +6,47 @@ const MECHANICAL: readonly BlockKind[] = ["typing-refactor", "rename", "move"];
 export const isMechanical = (kind: BlockKind | undefined): boolean => kind !== undefined && MECHANICAL.includes(kind);
 
 const KEYWORDS = new Set(
-  "const let var function return if else for while do import export from type interface class extends implements new this true false null undefined async await of in as default switch case break continue try catch finally throw typeof instanceof void delete yield static readonly public private protected enum declare namespace module require def self None True False and or not elif lambda with pass raise except func package struct map chan go defer val fun when object data override internal".split(" "),
+  "const let var function return if else for while do import export from type interface class extends implements new this true false null undefined async await of in as default switch case break continue try catch finally throw typeof instanceof void delete yield static readonly public private protected enum declare namespace module require def self None True False and or not elif lambda with pass raise except func package struct map chan go defer val fun when object data override internal".split(
+    " ",
+  ),
 );
 /** Identifiers that are too generic to say what an edit is about. */
-const NOISE = new Set("React JSX Element Props string number boolean object any unknown Record Array Promise Error console log length push map filter find some every forEach then catch props children className style key value id name type".split(" "));
+const NOISE = new Set(
+  "React JSX Element Props string number boolean object any unknown Record Array Promise Error console log length push map filter find some every forEach then catch props children className style key value id name type".split(
+    " ",
+  ),
+);
 
 export function identifiers(text: string): Set<string> {
-  return new Set([...text.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)].map((m) => m[0]).filter((w) => w.length > 2 && !KEYWORDS.has(w) && !NOISE.has(w)));
+  return new Set(
+    [...text.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)].map((m) => m[0]).filter((w) => w.length > 2 && !KEYWORDS.has(w) && !NOISE.has(w)),
+  );
 }
 
 /** Identifiers the edit is about: present on one side only. */
 export function changedIdentifiers(r: BlockRef): Set<string> {
   const ls = blockLines(r.hunk, r.block);
-  const added = identifiers(ls.filter((l) => l.kind === "add").map((l) => l.text).join("\n"));
-  const removed = identifiers(ls.filter((l) => l.kind === "del").map((l) => l.text).join("\n"));
+  const added = identifiers(
+    ls
+      .filter((l) => l.kind === "add")
+      .map((l) => l.text)
+      .join("\n"),
+  );
+  const removed = identifiers(
+    ls
+      .filter((l) => l.kind === "del")
+      .map((l) => l.text)
+      .join("\n"),
+  );
   return new Set([...added].filter((w) => !removed.has(w)).concat([...removed].filter((w) => !added.has(w))));
 }
 
 /** A punctuation-only edit (a moved brace, a trailing comma): it belongs to whatever it sits next to. */
-export const isOrphan = (r: BlockRef): boolean => blockLines(r.hunk, r.block).map((l) => l.text).join("").replace(/[^A-Za-z]/g, "").length < 3;
+export const isOrphan = (r: BlockRef): boolean =>
+  blockLines(r.hunk, r.block)
+    .map((l) => l.text)
+    .join("")
+    .replace(/[^A-Za-z]/g, "").length < 3;
 
 /**
  * An edit that cannot stand alone as a logical change: imports, re-exports, a lone type or
@@ -38,14 +60,28 @@ export function isFragment(r: BlockRef): boolean {
     .map((l) => l.text);
   if (lines.length === 0) return false;
   if (lines.every(isImport)) return true;
-  if (lines.every((l) => /^\s*(export\s*\{[^}]*\}\s*;?\s*(from\s+['"][^'"]+['"]\s*;?)?|export\s+\*\s+from\s+['"][^'"]+['"]\s*;?|export\s*\{\s*|\}\s*;?|[A-Za-z_$][\w$]*,?)\s*$/.test(l))) return true;
+  if (
+    lines.every((l) =>
+      /^\s*(export\s*\{[^}]*\}\s*;?\s*(from\s+['"][^'"]+['"]\s*;?)?|export\s+\*\s+from\s+['"][^'"]+['"]\s*;?|export\s*\{\s*|\}\s*;?|[A-Za-z_$][\w$]*,?)\s*$/.test(
+        l,
+      ),
+    )
+  )
+    return true;
   // A whole type/interface declaration, or members of one (`  limit?: number;`), with no runtime statement.
-  if (/^\s*(export\s+)?(type|interface)\b/.test(lines[0]!) && lines.every((l) => !/[=(]\s*(?!>)|\breturn\b|\bawait\b/.test(l.replace(/=>/g, "").replace(/<[^<>]*>/g, "")))) return true;
+  if (
+    /^\s*(export\s+)?(type|interface)\b/.test(lines[0]!) &&
+    lines.every((l) => !/[=(]\s*(?!>)|\breturn\b|\bawait\b/.test(l.replace(/=>/g, "").replace(/<[^<>]*>/g, "")))
+  )
+    return true;
   // One destructured prop, as `onMoveToProject,` inside `({ taskId, onCommit })`.
   return lines.length <= 2 && lines.every((l) => /^\s*[A-Za-z_$][\w$]*\??,?\s*$/.test(l));
 }
 
-const isImportLike = (r: BlockRef): boolean => blockLines(r.hunk, r.block).filter((l) => l.kind !== "context" && l.text.trim() !== "").every((l) => isImport(l.text) || /^\s*(export\s*\{|\}\s*from\b|export\s+\*)/.test(l.text));
+const isImportLike = (r: BlockRef): boolean =>
+  blockLines(r.hunk, r.block)
+    .filter((l) => l.kind !== "context" && l.text.trim() !== "")
+    .every((l) => isImport(l.text) || /^\s*(export\s*\{|\}\s*from\b|export\s+\*)/.test(l.text));
 
 export interface Group {
   refs: BlockRef[];
@@ -80,7 +116,9 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
   // A one-identifier line (a destructured prop, a list entry) is a fragment only when its file
   // has a real edit to own it; otherwise it is the edit, and groups like any other block.
   const candidate = refs.map(isFragment);
-  const fragment = refs.map((r, k) => candidate[k] && (isImportLike(r) || refs.some((o, j) => j !== k && !candidate[j] && o.file.path === r.file.path)));
+  const fragment = refs.map(
+    (r, k) => candidate[k] && (isImportLike(r) || refs.some((o, j) => j !== k && !candidate[j] && o.file.path === r.file.path)),
+  );
   const orphan = refs.map((r, k) => isOrphan(r) && !fragment[k]);
   refs.forEach((r, k) => {
     if (!orphan[k]) return;
@@ -153,7 +191,10 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
   return [...byRoot.values()].map((members) => {
     const counts = new Map<string, number>();
     for (const k of members) for (const w of ids[k]!) counts.set(w, (counts.get(w) ?? 0) + 1);
-    const topIdentifiers = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(([w]) => w);
+    const topIdentifiers = [...counts]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 4)
+      .map(([w]) => w);
     // Orphans and fragments have no say in the group's kind.
     const kinds = new Set(members.filter((k) => !orphan[k] && !fragment[k]).map(kindOf));
     const group: Group = { refs: members.map((k) => refs[k]!), topIdentifiers };
@@ -170,11 +211,20 @@ export function mechanicalText(group: Group): { title: string; paragraph: string
   const edits = `${n} edit${n === 1 ? "" : "s"}`;
   switch (group.kind) {
     case "typing-refactor":
-      return { title: files.length === 1 ? `Typing refactor in ${where}` : `Typing refactor ${where}`, paragraph: `${edits} change types, annotations or function form only${group.topIdentifiers.length ? ` (${group.topIdentifiers.slice(0, 3).join(", ")})` : ""}; runtime behaviour is unchanged.` };
+      return {
+        title: files.length === 1 ? `Typing refactor in ${where}` : `Typing refactor ${where}`,
+        paragraph: `${edits} change types, annotations or function form only${group.topIdentifiers.length ? ` (${group.topIdentifiers.slice(0, 3).join(", ")})` : ""}; runtime behaviour is unchanged.`,
+      };
     case "rename":
-      return { title: files.length === 1 ? `Rename in ${where}` : `Rename ${where}`, paragraph: `${edits} rename identifiers${group.topIdentifiers.length ? ` (${group.topIdentifiers.slice(0, 3).join(", ")})` : ""}; behaviour is unchanged.` };
+      return {
+        title: files.length === 1 ? `Rename in ${where}` : `Rename ${where}`,
+        paragraph: `${edits} rename identifiers${group.topIdentifiers.length ? ` (${group.topIdentifiers.slice(0, 3).join(", ")})` : ""}; behaviour is unchanged.`,
+      };
     case "move":
-      return { title: files.length === 1 ? `Code moved in ${where}` : `Code moved ${where}`, paragraph: `${edits} move code without changing it.` };
+      return {
+        title: files.length === 1 ? `Code moved in ${where}` : `Code moved ${where}`,
+        paragraph: `${edits} move code without changing it.`,
+      };
     default:
       return { title: group.topIdentifiers.slice(0, 3).join(" · ") || where, paragraph: "" };
   }

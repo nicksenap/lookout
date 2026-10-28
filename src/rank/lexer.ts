@@ -37,25 +37,121 @@ interface LangSpec {
 }
 
 export const LANGS: Record<CodeLang, LangSpec> = {
-  js: { lineComment: "//", blockComment: true, nestedBlockComments: false, multilineDelims: ["`"], templateDelims: ["`"], quotes: ["'", '"'], regexLiterals: true, significantIndent: false },
-  jsx: { lineComment: "//", blockComment: true, nestedBlockComments: false, multilineDelims: ["`"], templateDelims: ["`"], quotes: ["'", '"'], regexLiterals: true, significantIndent: false },
-  go: { lineComment: "//", blockComment: true, nestedBlockComments: false, multilineDelims: ["`"], templateDelims: [], quotes: ["'", '"'], regexLiterals: false, significantIndent: false },
-  kotlin: { lineComment: "//", blockComment: true, nestedBlockComments: true, multilineDelims: ['"""'], templateDelims: ['"""', '"'], quotes: ["'"], regexLiterals: false, significantIndent: false },
-  python: { lineComment: "#", blockComment: false, nestedBlockComments: false, multilineDelims: ['"""', "'''"], templateDelims: [], quotes: ["'", '"'], regexLiterals: false, significantIndent: true },
+  js: {
+    lineComment: "//",
+    blockComment: true,
+    nestedBlockComments: false,
+    multilineDelims: ["`"],
+    templateDelims: ["`"],
+    quotes: ["'", '"'],
+    regexLiterals: true,
+    significantIndent: false,
+  },
+  jsx: {
+    lineComment: "//",
+    blockComment: true,
+    nestedBlockComments: false,
+    multilineDelims: ["`"],
+    templateDelims: ["`"],
+    quotes: ["'", '"'],
+    regexLiterals: true,
+    significantIndent: false,
+  },
+  go: {
+    lineComment: "//",
+    blockComment: true,
+    nestedBlockComments: false,
+    multilineDelims: ["`"],
+    templateDelims: [],
+    quotes: ["'", '"'],
+    regexLiterals: false,
+    significantIndent: false,
+  },
+  kotlin: {
+    lineComment: "//",
+    blockComment: true,
+    nestedBlockComments: true,
+    multilineDelims: ['"""'],
+    templateDelims: ['"""', '"'],
+    quotes: ["'"],
+    regexLiterals: false,
+    significantIndent: false,
+  },
+  python: {
+    lineComment: "#",
+    blockComment: false,
+    nestedBlockComments: false,
+    multilineDelims: ['"""', "'''"],
+    templateDelims: [],
+    quotes: ["'", '"'],
+    regexLiterals: false,
+    significantIndent: true,
+  },
 };
 
 const OPERATORS = [
-  ">>>=", "...", "===", "!==", "**=", "<<=", ">>=", ">>>", "&&=", "||=", "??=",
-  "=>", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "++", "--", "+=", "-=", "*=", "/=", "%=",
-  "&=", "|=", "^=", "**", "<<", ">>", "::", "->", ":=", "<-", "//", "!!", "?:", "..",
+  ">>>=",
+  "...",
+  "===",
+  "!==",
+  "**=",
+  "<<=",
+  ">>=",
+  ">>>",
+  "&&=",
+  "||=",
+  "??=",
+  "=>",
+  "==",
+  "!=",
+  "<=",
+  ">=",
+  "&&",
+  "||",
+  "??",
+  "?.",
+  "++",
+  "--",
+  "+=",
+  "-=",
+  "*=",
+  "/=",
+  "%=",
+  "&=",
+  "|=",
+  "^=",
+  "**",
+  "<<",
+  ">>",
+  "::",
+  "->",
+  ":=",
+  "<-",
+  "//",
+  "!!",
+  "?:",
+  "..",
 ];
 
-const REGEX_KEYWORDS = new Set(["return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "instanceof", "yield", "await"]);
+const REGEX_KEYWORDS = new Set([
+  "return",
+  "typeof",
+  "case",
+  "do",
+  "else",
+  "in",
+  "of",
+  "new",
+  "delete",
+  "void",
+  "throw",
+  "instanceof",
+  "yield",
+  "await",
+]);
 const WORD_RE = /[A-Za-z0-9_$\u0080-\uffff]/;
 
-type Frame =
-  | { kind: "code"; depth: number; interp: boolean }
-  | { kind: "template"; delim: string; buf: string };
+type Frame = { kind: "code"; depth: number; interp: boolean } | { kind: "template"; delim: string; buf: string };
 
 export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
   const spec = LANGS[lang];
@@ -87,8 +183,17 @@ export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
     let j = opened ? from : from + 2;
     let depth = 1;
     while (j < src.length) {
-      if (spec.nestedBlockComments && src.startsWith("/*", j)) { depth++; j += 2; continue; }
-      if (src.startsWith("*/", j)) { depth--; j += 2; if (depth === 0) break; continue; }
+      if (spec.nestedBlockComments && src.startsWith("/*", j)) {
+        depth++;
+        j += 2;
+        continue;
+      }
+      if (src.startsWith("*/", j)) {
+        depth--;
+        j += 2;
+        if (depth === 0) break;
+        continue;
+      }
       j++;
     }
     push("comment", src.slice(from, j));
@@ -101,8 +206,15 @@ export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
     const multiline = spec.multilineDelims.includes(q);
     const rawNoEscape = lang === "go" && q === "`";
     while (j < src.length) {
-      if (!rawNoEscape && src[j] === "\\") { j += 2; continue; }
-      if (src.startsWith(q, j)) { j += q.length; push("string", src.slice(from, j)); return j; }
+      if (!rawNoEscape && src[j] === "\\") {
+        j += 2;
+        continue;
+      }
+      if (src.startsWith(q, j)) {
+        j += q.length;
+        push("string", src.slice(from, j));
+        return j;
+      }
       if (src[j] === "\n" && !multiline) {
         ambiguous ??= `unterminated string at line ${src.slice(0, j).split("\n").length}`;
         push("string", src.slice(from, j));
@@ -121,7 +233,10 @@ export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
     atLineStart = false;
   } else if (start.kind === "string") {
     if (spec.templateDelims.includes(start.delim)) stack.push({ kind: "template", delim: start.delim, buf: "" });
-    else { i = simpleString(0, start.delim, true); atLineStart = false; }
+    else {
+      i = simpleString(0, start.delim, true);
+      atLineStart = false;
+    }
   }
 
   while (i < src.length) {
@@ -129,7 +244,11 @@ export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
 
     if (frame.kind === "template") {
       const c = src[i]!;
-      if (c === "\\") { frame.buf += src.slice(i, i + 2); i += 2; continue; }
+      if (c === "\\") {
+        frame.buf += src.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
       if (src.startsWith(frame.delim, i)) {
         // Kotlin: """" closes with the last three quotes.
         push("string", frame.buf + frame.delim);
@@ -138,7 +257,7 @@ export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
         continue;
       }
       if (src.startsWith("${", i)) {
-        push("string", frame.buf + "${");
+        push("string", `${frame.buf}\${`);
         frame.buf = "";
         stack.push({ kind: "code", depth: 0, interp: true });
         i += 2;
@@ -182,7 +301,10 @@ export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
       i = j;
       continue;
     }
-    if (spec.blockComment && src.startsWith("/*", i)) { i = blockComment(i, false); continue; }
+    if (spec.blockComment && src.startsWith("/*", i)) {
+      i = blockComment(i, false);
+      continue;
+    }
     if (spec.blockComment && src.startsWith("*/", i)) {
       unmatchedCloser = true;
       push("code", "*/");
@@ -197,24 +319,41 @@ export function lex(src: string, lang: CodeLang, start: StartState): LexResult {
       continue;
     }
     const ml = spec.multilineDelims.find((d) => src.startsWith(d, i));
-    if (ml) { i = simpleString(i, ml, false); continue; }
-    if (spec.quotes.includes(c)) { i = simpleString(i, c, false); continue; }
+    if (ml) {
+      i = simpleString(i, ml, false);
+      continue;
+    }
+    if (spec.quotes.includes(c)) {
+      i = simpleString(i, c, false);
+      continue;
+    }
 
     if (spec.regexLiterals && c === "/") {
       const prev = lastSignificant();
       // JSX `</tag>` and `/>` are not regex literals.
       const jsxSlash = lang === "jsx" && (prev?.text === "<" || src[i + 1] === ">");
-      const regexAllowed = !jsxSlash && (!prev || (prev.kind === "code" && (REGEX_KEYWORDS.has(prev.text) || (!WORD_RE.test(prev.text[0]!) && ![")", "]", "}"].includes(prev.text)))));
+      const regexAllowed =
+        !jsxSlash &&
+        (!prev ||
+          (prev.kind === "code" &&
+            (REGEX_KEYWORDS.has(prev.text) || (!WORD_RE.test(prev.text[0]!) && ![")", "]", "}"].includes(prev.text)))));
       if (regexAllowed) {
         let j = i + 1;
         let inClass = false;
         let closed = false;
         while (j < src.length && src[j] !== "\n") {
           const ch = src[j]!;
-          if (ch === "\\") { j += 2; continue; }
+          if (ch === "\\") {
+            j += 2;
+            continue;
+          }
           if (ch === "[") inClass = true;
           else if (ch === "]") inClass = false;
-          else if (ch === "/" && !inClass) { closed = true; j++; break; }
+          else if (ch === "/" && !inClass) {
+            closed = true;
+            j++;
+            break;
+          }
           j++;
         }
         if (!closed) ambiguous ??= "unterminated regex literal";

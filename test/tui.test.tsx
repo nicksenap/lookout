@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
 import { App, windowLines } from "../src/tui/App.tsx";
-import { fit, wrap } from "../src/tui/Card.tsx";
 import type { Line } from "../src/tui/Card.tsx";
+import { fit, wrap } from "../src/tui/Card.tsx";
 import { FixtureSession, loadReview } from "../stories/fixture-session.ts";
 
 /** Frame → lines with ANSI stripped; the frame is the whole fixed-height screen. */
@@ -138,21 +138,17 @@ describe("stack contents", () => {
     const { app, session, screen } = await mount("review-c", 60, 30);
     const card = session.snapshot().cards[0]!;
     {
-
       const before = app.lastFrame();
 
       session.setParagraph(card.id, "Adds a conversation tick rail so a reader can jump between messages. ".repeat(3));
 
       await painted(app, before);
-
     }
     const s = screen();
     expect(s.some((l) => l.includes("Adds a conversation tick rail"))).toBe(true);
     expect(widest(s)).toBeLessThanOrEqual(60);
     void app;
   });
-
-
 
   test("the header shows the model; claim glyphs, questions and findings never render; one-way shows on its card", async () => {
     const review = await loadReview("review-c");
@@ -170,8 +166,6 @@ describe("stack contents", () => {
     await press(app, "c");
     expect(lines(app.lastFrame())).toEqual(s);
   });
-
-
 
   test("one card in a tiny terminal still renders within bounds", async () => {
     const { screen } = await mount("review-c", 40, 10);
@@ -256,26 +250,22 @@ describe("ask and progress", () => {
     const { app, session, screen } = await mount("review-c", 100, 30);
     const before = screen();
     {
-
       const before = app.lastFrame();
 
       session.setProgress({ phase: "writing", done: 3, total: 10 });
 
       await painted(app, before);
-
     }
     const s = screen();
     expect(s.length).toBe(before.length);
     expect(s[1]).toContain("▰▰▰▱▱▱▱▱▱▱");
     expect(s[1]).toContain("writing 3/10");
     {
-
       const before = app.lastFrame();
 
       session.setProgress(undefined);
 
       await painted(app, before);
-
     }
     expect(screen()[1]).not.toContain("▰");
     void app;

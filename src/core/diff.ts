@@ -83,11 +83,22 @@ export function parseDiff(text: string): FileChange[] {
       const h = lines[i]!;
       if (h.startsWith("new file mode")) status = "added";
       else if (h.startsWith("deleted file mode")) status = "deleted";
-      else if (h.startsWith("rename from ")) { oldPath = unquoteGitPath(h.slice(12)); renamed = true; }
-      else if (h.startsWith("rename to ")) { newPath = unquoteGitPath(h.slice(10)); renamed = true; }
-      else if (h.startsWith("Binary files ") || h === "GIT binary patch") binary = true;
-      else if (h.startsWith("--- ")) { const p = stripPrefix(h.slice(4)); if (p === "/dev/null") status = "added"; else oldPath = p; }
-      else if (h.startsWith("+++ ")) { const p = stripPrefix(h.slice(4)); if (p === "/dev/null") status = "deleted"; else newPath = p; }
+      else if (h.startsWith("rename from ")) {
+        oldPath = unquoteGitPath(h.slice(12));
+        renamed = true;
+      } else if (h.startsWith("rename to ")) {
+        newPath = unquoteGitPath(h.slice(10));
+        renamed = true;
+      } else if (h.startsWith("Binary files ") || h === "GIT binary patch") binary = true;
+      else if (h.startsWith("--- ")) {
+        const p = stripPrefix(h.slice(4));
+        if (p === "/dev/null") status = "added";
+        else oldPath = p;
+      } else if (h.startsWith("+++ ")) {
+        const p = stripPrefix(h.slice(4));
+        if (p === "/dev/null") status = "deleted";
+        else newPath = p;
+      }
       i++;
     }
     if (renamed && status === "modified") status = "renamed";

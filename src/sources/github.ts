@@ -67,7 +67,20 @@ interface PrListRow {
 export async function listOpenPullRequests(cwd: string = process.cwd(), limit = 40): Promise<Result<{ repo: string; prs: PrSummary[] }>> {
   const [repoJson, listJson, statusJson] = await Promise.all([
     run(["gh", "repo", "view", "--json", "nameWithOwner"], cwd),
-    run(["gh", "pr", "list", "--state", "open", "--limit", String(limit), "--json", "number,title,author,headRefName,isDraft,changedFiles,additions,deletions,reviewDecision,updatedAt,statusCheckRollup"], cwd),
+    run(
+      [
+        "gh",
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        String(limit),
+        "--json",
+        "number,title,author,headRefName,isDraft,changedFiles,additions,deletions,reviewDecision,updatedAt,statusCheckRollup",
+      ],
+      cwd,
+    ),
     // `--json` names fields of each PR; the needsReview bucket is addressed in jq.
     run(["gh", "pr", "status", "--json", "number", "--jq", "[.needsReview[].number]"], cwd),
   ]);
@@ -81,21 +94,30 @@ export async function listOpenPullRequests(cwd: string = process.cwd(), limit = 
   const requestedList = statusJson.ok ? attempt(() => JSON.parse(statusJson.value) as number[]) : undefined;
   const requested = new Set(requestedList?.ok ? requestedList.value : []);
   const prs = rows.value
-    .map((r): PrSummary => ({
-      number: r.number,
-      title: r.title,
-      author: r.author?.login ?? "?",
-      branch: r.headRefName,
-      draft: r.isDraft,
-      files: r.changedFiles,
-      additions: r.additions,
-      deletions: r.deletions,
-      checks: checksOf(r.statusCheckRollup),
-      review: r.reviewDecision === "APPROVED" ? "approved" : r.reviewDecision === "CHANGES_REQUESTED" ? "changes" : r.reviewDecision === "REVIEW_REQUIRED" ? "required" : "none",
-      requested: requested.has(r.number),
-      updatedAt: r.updatedAt,
-      target: `${repo.value}#${r.number}`,
-    }))
+    .map(
+      (r): PrSummary => ({
+        number: r.number,
+        title: r.title,
+        author: r.author?.login ?? "?",
+        branch: r.headRefName,
+        draft: r.isDraft,
+        files: r.changedFiles,
+        additions: r.additions,
+        deletions: r.deletions,
+        checks: checksOf(r.statusCheckRollup),
+        review:
+          r.reviewDecision === "APPROVED"
+            ? "approved"
+            : r.reviewDecision === "CHANGES_REQUESTED"
+              ? "changes"
+              : r.reviewDecision === "REVIEW_REQUIRED"
+                ? "required"
+                : "none",
+        requested: requested.has(r.number),
+        updatedAt: r.updatedAt,
+        target: `${repo.value}#${r.number}`,
+      }),
+    )
     .sort((a, b) => Number(b.requested) - Number(a.requested) || b.updatedAt.localeCompare(a.updatedAt));
   return ok({ repo: repo.value, prs });
 }

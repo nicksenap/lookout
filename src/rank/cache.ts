@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { attempt } from "../core/result.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { attempt } from "../core/result.ts";
 
 export const DEFAULT_CACHE_DIR = join(homedir(), ".cache", "lookout");
 

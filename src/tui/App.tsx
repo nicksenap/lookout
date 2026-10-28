@@ -2,12 +2,24 @@ import { Box, useApp, useInput, useStdout } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewSession } from "../core/session.ts";
 import type { Card, Review } from "../core/types.ts";
-import { type CardContext, cardLines, changeExchanges, exchangeLines, expandedLines, fit, type Line, plural, progressLine, Row, sides } from "./Card.tsx";
+import {
+  type CardContext,
+  cardLines,
+  changeExchanges,
+  exchangeLines,
+  expandedLines,
+  fit,
+  type Line,
+  plural,
+  progressLine,
+  Row,
+  sides,
+} from "./Card.tsx";
 import { type Composer, composerKey, composerLines, openComposer } from "./Composer.tsx";
-import { helpBox, helpKey, type HelpState, overlay } from "./Help.tsx";
+import { type HelpState, helpBox, helpKey, overlay } from "./Help.tsx";
 import { jumpTarget, keyAction, keyHelp, type Mode } from "./keys.ts";
-import { runFullscreen } from "./screen.ts";
 import { highlight, nextHit, openSearch, type Search, searchFooter, searchHits, searchKey } from "./Search.tsx";
+import { runFullscreen } from "./screen.ts";
 import { theme } from "./theme.ts";
 
 export interface Size {
@@ -56,6 +68,7 @@ function useSize(override?: Size): Size {
     const onResize = () => setSize(read());
     stdout.on("resize", onResize);
     return () => void stdout.off("resize", onResize);
+    // `read` is rebuilt every render; the effect only needs to re-subscribe when the stream or the override changes.
   }, [stdout, override]);
   return size;
 }
@@ -132,21 +145,33 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     // Questions about the whole change sit above the cards, in the accent colour, like a conversation lane.
     const about = changeExchanges(review);
     if (about.length > 0) {
-      for (const e of about) for (const segs of exchangeLines(e, w - 2, frame, "")) out.push({ segments: [{ text: "┃ ", color: theme.accent }, ...segs] });
+      for (const e of about)
+        for (const segs of exchangeLines(e, w - 2, frame, "")) out.push({ segments: [{ text: "┃ ", color: theme.accent }, ...segs] });
       out.push({ segments: [{ text: "" }] });
     }
     cards.forEach((c, k) => {
       out.push(...cardLines(c, k, k === sel, w, ctx));
       out.push({ segments: [{ text: "" }], card: k });
     });
-    if (review.untouched.length > 0) out.push({ segments: [{ text: "┃ ", color: theme.faint }, { text: "UNTOUCHED", color: theme.faint, bold: true }, { text: `  ${fit(review.untouched.join(" · "), w - 13)}`, dim: true }] });
+    if (review.untouched.length > 0)
+      out.push({
+        segments: [
+          { text: "┃ ", color: theme.faint },
+          { text: "UNTOUCHED", color: theme.faint, bold: true },
+          { text: `  ${fit(review.untouched.join(" · "), w - 13)}`, dim: true },
+        ],
+      });
     if (cards.length === 0) out.push({ segments: [{ text: "No edits in this change.", dim: true }] });
     return out;
+    // Everything the rows read is derived from these; `ctx` and `cards` are themselves derived from `review`.
   }, [review, sel, w, frame, pending]);
 
   const bodyLines = useMemo(
-    () => (mode === "expanded" && card ? [...cardLines(card, sel, true, w, ctx), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctx)] : stackLines),
-    [mode, card, stackLines, w, frame],
+    () =>
+      mode === "expanded" && card
+        ? [...cardLines(card, sel, true, w, ctx), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctx)]
+        : stackLines,
+    [mode, card, stackLines, w, sel, ctx],
   );
   const hits = search ? searchHits(bodyLines, search.query) : [];
   // In the stack a hit is a card; the selection follows the search. In the expanded view hits are rows and the scroll follows.
@@ -167,7 +192,11 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   };
   const jumpToHit = (direction: 1 | -1) => {
     if (mode === "stack") {
-      const to = nextHit(hitCards.sort((a, b) => a - b), sel, direction);
+      const to = nextHit(
+        hitCards.sort((a, b) => a - b),
+        sel,
+        direction,
+      );
       if (to !== undefined) setSelected(to);
       return;
     }
@@ -217,7 +246,12 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
         }
         return;
       case "jump": {
-        const to = jumpTarget(cards.map((c) => c.color), sel, action.delta, action.what);
+        const to = jumpTarget(
+          cards.map((c) => c.color),
+          sel,
+          action.delta,
+          action.what,
+        );
         if (to !== undefined) setSelected(to);
         return;
       }
@@ -226,7 +260,12 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       case "hit":
         return jumpToHit(action.delta);
       case "ask":
-        return setAsking(openComposer(card && card.fixed !== "clean" ? "card" : "change", review.exchanges.map((e) => e.question)));
+        return setAsking(
+          openComposer(
+            card && card.fixed !== "clean" ? "card" : "change",
+            review.exchanges.map((e) => e.question),
+          ),
+        );
       case "expand":
         if (card && card.fixed !== "clean") {
           setScroll(0);
@@ -243,7 +282,8 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
           const to = action.type === "edge" ? (action.to === "top" ? 0 : bodyLines.length) : scroll + step;
           return setScroll(Math.max(0, Math.min(to, Math.max(0, bodyLines.length - bodyH))));
         }
-        const step = action.type === "move" ? action.delta : action.type === "page" ? Math.round(action.delta * 3) || Math.sign(action.delta) : 0;
+        const step =
+          action.type === "move" ? action.delta : action.type === "page" ? Math.round(action.delta * 3) || Math.sign(action.delta) : 0;
         const to = action.type === "edge" ? (action.to === "top" ? 0 : cards.length - 1) : sel + step;
         return setSelected(Math.max(0, Math.min(to, cards.length - 1)));
       }
@@ -251,13 +291,19 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   });
 
   // The body is always bodyH rows; the help popup is painted over them rather than replacing them.
-  const padded: Line[] = [...visible, ...Array.from({ length: Math.max(0, bodyH - visible.length) }, (): Line => ({ segments: [{ text: "" }] }))];
+  const padded: Line[] = [
+    ...visible,
+    ...Array.from({ length: Math.max(0, bodyH - visible.length) }, (): Line => ({ segments: [{ text: "" }] })),
+  ];
   const body = help ? (({ lines, left, top }) => overlay(padded, lines, left, top, w))(helpBox(help, w, bodyH)) : padded;
 
   const v = review.verdict;
   const title = review.changeSet.intent?.title ? `${review.changeSet.target} · ${review.changeSet.intent.title}` : review.changeSet.target;
   // Model name without its provider, and how long the pipeline has run; the stack is readable while that counter still moves.
-  const model = review.rankedBy.replace(/^rules\+?/, "").split(":").pop();
+  const model = review.rankedBy
+    .replace(/^rules\+?/, "")
+    .split(":")
+    .pop();
   const headerRight = [
     v.tier.toUpperCase(),
     plural(v.requiredHumans, "human"),
@@ -268,12 +314,28 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   ]
     .filter(Boolean)
     .join(" · ");
-  const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
-  const footerText = review.warning ?? keyHelp(mode).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
+  const header: Line = {
+    segments: sides(
+      [{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }],
+      headerRight,
+      w,
+      theme.tier[v.tier],
+    ),
+  };
+  const footerText =
+    review.warning ??
+    keyHelp(mode)
+      .map((h) => `${h.keys} ${h.label}`)
+      .join("  ·  ");
   const hitAt = search && !search.open ? (mode === "stack" ? hitCards.indexOf(sel) : hits.findIndex((h) => h >= windowTop)) : -1;
   const footer: Line = search
     ? { segments: searchFooter(search, mode === "stack" ? hitCards.length : hits.length, hitAt >= 0 ? hitAt : undefined) }
-    : { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning }] };
+    : {
+        segments: [
+          { text: " " },
+          { text: fit(footerText, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning },
+        ],
+      };
 
   return (
     <Box flexDirection="column" width={w} height={size.rows - 1}>

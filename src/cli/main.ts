@@ -1,12 +1,12 @@
 import pkg from "../../package.json" with { type: "json" };
-import { loadUserEnv } from "./env.ts";
+import { ok, type Result } from "../core/result.ts";
 import { LocalSession } from "../core/session.ts";
 import { loadConfig } from "../dispatch/config.ts";
 import { DispatchRunner } from "../dispatch/runner.ts";
-import { ok, type Result } from "../core/result.ts";
 import { repoRoot, worktreeDirty } from "../sources/git.ts";
 import { listOpenPullRequests } from "../sources/github.ts";
 import { loadChangeSet, resolveTarget } from "../sources/resolve.ts";
+import { loadUserEnv } from "./env.ts";
 
 const HELP = `lookout ${pkg.version} — rank hunks that deserve attention, dispatch review agents
 
@@ -82,7 +82,7 @@ async function main(): Promise<number> {
     await session.ready();
     const review = session.snapshot();
     if (review.warning) console.error(`lookout: ${review.warning}`);
-    process.stdout.write(JSON.stringify(review, null, 2) + "\n");
+    process.stdout.write(`${JSON.stringify(review, null, 2)}\n`);
     return 0;
   }
   const { runTui } = await import("../tui/App.tsx");

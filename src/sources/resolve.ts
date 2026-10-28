@@ -13,7 +13,9 @@ export function resolveTarget(arg: string | undefined): Result<SourceSpec> {
   const pr = parsePrRef(arg);
   if (pr) return ok({ kind: "pr", ...pr, target: arg });
   if (arg.includes("..")) return ok({ kind: "range", range: arg });
-  return err(`Unrecognised target "${arg}". Use: (nothing) for working tree vs HEAD, A..B / A...B / main.. for a range, or a PR URL / owner/repo#N.`);
+  return err(
+    `Unrecognised target "${arg}". Use: (nothing) for working tree vs HEAD, A..B / A...B / main.. for a range, or a PR URL / owner/repo#N.`,
+  );
 }
 
 export function loadChangeSet(spec: SourceSpec, cwd: string = process.cwd()): Promise<Result<ChangeSet>> {

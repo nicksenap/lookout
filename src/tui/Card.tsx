@@ -26,7 +26,7 @@ export function fit(s: string, w: number): string {
     if (width(out + ch) > w - 1) break;
     out += ch;
   }
-  return out + "…";
+  return `${out}…`;
 }
 
 export function wrap(text: string, w: number): string[] {
@@ -89,7 +89,11 @@ export function progressLine(p: Progress, elapsedMs: number, w: number): Segment
   const filled = p.total > 0 ? Math.round((p.done / p.total) * cells) : 0;
   const bar = "▰".repeat(filled) + "▱".repeat(cells - filled);
   const label = p.total > 0 ? `${p.phase} ${p.done}/${p.total}` : p.phase;
-  return [{ text: " " }, { text: bar, color: theme.accent }, { text: fit(` ${label} · ${Math.round(elapsedMs / 1000)}s`, Math.max(0, w - cells - 2)), dim: true }];
+  return [
+    { text: " " },
+    { text: bar, color: theme.accent },
+    { text: fit(` ${label} · ${Math.round(elapsedMs / 1000)}s`, Math.max(0, w - cells - 2)), dim: true },
+  ];
 }
 
 export function filesOf(review: Review, card: Card): string[] {
@@ -101,7 +105,8 @@ export function filesOf(review: Review, card: Card): string[] {
 export function evidenceBadges(review: Review, card: Card): string[] {
   const out: string[] = [];
   if (card.doorSignals?.length) out.push(`one-way · ${card.doorSignals[0]!.kind}`);
-  if (card.covers?.length) out.push(`covers ${card.covers.map((id) => `card ${review.cards.findIndex((c) => c.id === id) + 1}`).join(", ")}`);
+  if (card.covers?.length)
+    out.push(`covers ${card.covers.map((id) => `card ${review.cards.findIndex((c) => c.id === id) + 1}`).join(", ")}`);
   else if (card.testsTouched) out.push("tests touched");
   return out;
 }
@@ -115,10 +120,18 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   const row = (segs: Segment[]): Line => ({ segments: [bar, ...segs], card: index });
 
   const files = filesOf(ctx.review, card);
-  const badges = [COLOR_LABEL[card.color], card.kind, ...card.labels.filter((l) => l !== "test" || card.kind !== "test"), ...card.areas.map((a) => `${a}/*`)];
+  const badges = [
+    COLOR_LABEL[card.color],
+    card.kind,
+    ...card.labels.filter((l) => l !== "test" || card.kind !== "test"),
+    ...card.areas.map((a) => `${a}/*`),
+  ];
   const evidence = card.fixed ? [] : evidenceBadges(ctx.review, card);
   const right = [plural(card.blockIds.length, "edit"), plural(files.length, "file")].join(" · ");
-  const badgeSegs: Segment[] = [{ text: badges[0]!, color, bold: true }, { text: badges.length > 1 ? `  ${badges.slice(1).join(" · ")}` : "", dim: true }];
+  const badgeSegs: Segment[] = [
+    { text: badges[0]!, color, bold: true },
+    { text: badges.length > 1 ? `  ${badges.slice(1).join(" · ")}` : "", dim: true },
+  ];
   if (evidence.length) badgeSegs.push({ text: `  ${evidence.join(" · ")}`, color: theme.accent });
   const lines: Line[] = [row(sides(badgeSegs, right, inner, color))];
 
@@ -160,7 +173,10 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
 
   for (const l of evidenceLines(card, w, ctx.review)) push(l);
 
-  push([{ text: `diff · ${plural(card.blockIds.length, "edit")}`, color, bold: true }, { text: "   other cards' edits in these hunks are faded", dim: true }]);
+  push([
+    { text: `diff · ${plural(card.blockIds.length, "edit")}`, color, bold: true },
+    { text: "   other cards' edits in these hunks are faded", dim: true },
+  ]);
   for (const file of ctx.review.changeSet.files) {
     const hunks = file.hunks.filter((h) => h.blocks.some((b) => ids.has(b.id)));
     if (hunks.length === 0) continue;
@@ -184,12 +200,19 @@ export function evidenceLines(card: Card, w: number, review: Review): Segment[][
       ? `tests  covers ${card.covers.map((id) => titleOf(review, id)).join(", ")}`
       : "tests  exercises no other card in this change"
     : card.testsTouched
-      ? `tests  touched by ${review.cards.filter((c) => c.covers?.includes(card.id)).map((c) => c.title).join(", ")}`
+      ? `tests  touched by ${review.cards
+          .filter((c) => c.covers?.includes(card.id))
+          .map((c) => c.title)
+          .join(", ")}`
       : "tests  none in this change touch these files";
   out.push([{ text: fit(tests, w), color: card.testsTouched || card.covers ? theme.card.green : theme.card.amber }]);
   if (card.doorSignals?.length) {
     out.push([{ text: "door   one-way", color: theme.card.red, bold: true }]);
-    for (const s of card.doorSignals) out.push([{ text: `  ${s.kind}  `, color: theme.card.red }, { text: fit(`${s.text}  ${s.path.split("/").pop()}${s.line ? `:${s.line}` : ""}`, Math.max(0, w - 20)), dim: true }]);
+    for (const s of card.doorSignals)
+      out.push([
+        { text: `  ${s.kind}  `, color: theme.card.red },
+        { text: fit(`${s.text}  ${s.path.split("/").pop()}${s.line ? `:${s.line}` : ""}`, Math.max(0, w - 20)), dim: true },
+      ]);
   }
   out.push([{ text: "" }]);
   return out;

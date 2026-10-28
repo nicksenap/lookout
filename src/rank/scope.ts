@@ -1,5 +1,5 @@
-import type { ChangeSet, EditBlock, FileChange } from "../core/types.ts";
 import { attemptAsync, ok, type Result } from "../core/result.ts";
+import type { ChangeSet, EditBlock, FileChange } from "../core/types.ts";
 import { run } from "../sources/exec.ts";
 
 /**
@@ -26,7 +26,11 @@ export function enclosingPath(source: string, line: number): string[] {
     // A multi-line signature (`export const X: Partial<` … `> = {`, `function f(` … `) {`) puts the opener
     // lines below its name: walk up through same-indent lines until one names the scope.
     let name = scopeName(text);
-    for (let j = k - 1; name === undefined && j >= 0 && OPENER.test(text) && !isClosedStatement(lines[j]!) && indentOf(lines[j]!) >= i; j--) {
+    for (
+      let j = k - 1;
+      name === undefined && j >= 0 && OPENER.test(text) && !isClosedStatement(lines[j]!) && indentOf(lines[j]!) >= i;
+      j--
+    ) {
       name = indentOf(lines[j]!) === i ? scopeName(lines[j]!, true) : undefined;
     }
     if (name) path.unshift(name);
@@ -42,7 +46,10 @@ const OPENER = /[{[(]\s*(?:\/\/.*|#.*)?$|:\s*(?:#.*)?$/;
 function scopeName(text: string, partOfSignature = false): string | undefined {
   if (!partOfSignature && !OPENER.test(text)) return undefined;
   const t = text.trim();
-  const def = /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:const|let|var|function\*?|class|def|type|interface|enum|describe|test|it)\s*\(?\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z_$][\w$]*))/.exec(t);
+  const def =
+    /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:const|let|var|function\*?|class|def|type|interface|enum|describe|test|it)\s*\(?\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z_$][\w$]*))/.exec(
+      t,
+    );
   if (def) return def[1] ?? def[2] ?? def[3];
   const key = /^(?:"([^"]+)"|'([^']+)'|`([^`]+)`|([A-Za-z_$][\w$.]*))\s*(?:\??:|=)/.exec(t);
   if (key) return key[1] ?? key[2] ?? key[3] ?? key[4];
@@ -62,8 +69,14 @@ export async function readAtHead(changeSet: ChangeSet, file: FileChange, repo: s
   const m = /^([\w.-]+)\/([\w.-]+)#\d+$/.exec(changeSet.target) ?? /github\.com\/([^/\s]+)\/([^/\s]+)\/pull\//.exec(changeSet.target);
   if (!m) return local ?? ok("");
   // The PR head may not be in any local checkout; gh fetches the blob read-only.
-  const res = await run(["gh", "api", `repos/${m[1]}/${m[2]}/contents/${file.path}?ref=${changeSet.head}`, "-H", "Accept: application/vnd.github.raw+json"]);
-  return res.ok ? res : local ?? res;
+  const res = await run([
+    "gh",
+    "api",
+    `repos/${m[1]}/${m[2]}/contents/${file.path}?ref=${changeSet.head}`,
+    "-H",
+    "Accept: application/vnd.github.raw+json",
+  ]);
+  return res.ok ? res : (local ?? res);
 }
 
 /**

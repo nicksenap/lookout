@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { Glob } from "bun";
 import { existsSync } from "node:fs";
+import { Glob } from "bun";
 
 const SRC = `${import.meta.dir}/../src`;
 const files = async (dir: string) => {
@@ -16,7 +16,8 @@ test("nothing below tui imports react or ink; experimental_* only in rank/model.
     for (const f of await files(dir)) {
       const text = await Bun.file(`${SRC}/${dir}/${f}`).text();
       if (/from\s+["'](react|ink)(\/[^"']*)?["']|import\(\s*["'](react|ink)/.test(text)) offenders.push(`${dir}/${f}`);
-      if (!(dir === "rank" && f === "model.ts") && /experimental_|Experimental_/.test(text)) offenders.push(`${dir}/${f} (experimental_* outside rank/model.ts)`);
+      if (!(dir === "rank" && f === "model.ts") && /experimental_|Experimental_/.test(text))
+        offenders.push(`${dir}/${f} (experimental_* outside rank/model.ts)`);
     }
   }
   expect(offenders).toEqual([]);

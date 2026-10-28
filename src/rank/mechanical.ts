@@ -42,22 +42,42 @@ export function confirmMechanical(hunk: Hunk, block: EditBlock, kind: BlockKind,
     case "typing-refactor":
       if (del.length === 0 || add.length === 0) return typeOnly(del.length ? del : add);
       // Narrowing a type (`string | undefined` → `string`, `x?:` → `x:`) or declaring another return type changes the contract callers meet.
-      return squash(stripTypes(oldText)) === squash(stripTypes(newText)) && !narrows(oldText, newText) && !returnTypeChanged(oldText, newText);
+      return (
+        squash(stripTypes(oldText)) === squash(stripTypes(newText)) && !narrows(oldText, newText) && !returnTypeChanged(oldText, newText)
+      );
     case "move":
-      return (del.length > 0 && del.every((d) => elsewhere.added.has(squash(d)))) || (add.length > 0 && add.every((a) => elsewhere.removed.has(squash(a))));
+      return (
+        (del.length > 0 && del.every((d) => elsewhere.added.has(squash(d)))) ||
+        (add.length > 0 && add.every((a) => elsewhere.removed.has(squash(a))))
+      );
     // A contiguous run that deletes a member and adds a doc comment above its replacement is one block;
     // the model sees mostly prose and says `docs`. Only all-comment edits (or documentation files) are docs,
     // and only type-only edits are `types`; anything else is behaviour, so the deletion lands on a real card.
     case "docs":
-      return /\.(md|mdx|rst|txt|adoc)$/i.test(block.path) || [...del, ...add].every((l) => /^\s*(\/\/|\/\*|\*|#|"""|\x27\x27\x27|<!--)/.test(l) || /^\s*\*\/\s*$/.test(l));
+      return (
+        /\.(md|mdx|rst|txt|adoc)$/i.test(block.path) ||
+        [...del, ...add].every((l) => /^\s*(\/\/|\/\*|\*|#|"""|\x27\x27\x27|<!--)/.test(l) || /^\s*\*\/\s*$/.test(l))
+      );
     case "types":
-      return typeOnly([...del, ...add]) || [...del, ...add].every((l) => isImport(l) || /^\s*(export\s+)?(type|interface)\b/.test(l) || /^\s*(readonly\s+)?[A-Za-z_$][\w$]*\??:\s*[^=()]+[;,]?\s*$/.test(l) || /^\s*[}\]|,;]*\s*$/.test(l));
+      return (
+        typeOnly([...del, ...add]) ||
+        [...del, ...add].every(
+          (l) =>
+            isImport(l) ||
+            /^\s*(export\s+)?(type|interface)\b/.test(l) ||
+            /^\s*(readonly\s+)?[A-Za-z_$][\w$]*\??:\s*[^=()]+[;,]?\s*$/.test(l) ||
+            /^\s*[}\]|,;]*\s*$/.test(l),
+        )
+      );
     default:
       return true;
   }
 }
 
-export const isImport = (line: string) => /^\s*(import\b|from\s+\S+\s+import\b|export\s+(type\s+)?\{[^}]*\}\s*from\b|\}\s*from\s+['"]|[A-Za-z_$][\w$]*,?\s*$|\)\s*$|\{\s*$)/.test(line);
+export const isImport = (line: string) =>
+  /^\s*(import\b|from\s+\S+\s+import\b|export\s+(type\s+)?\{[^}]*\}\s*from\b|\}\s*from\s+['"]|[A-Za-z_$][\w$]*,?\s*$|\)\s*$|\{\s*$)/.test(
+    line,
+  );
 
 /** Apply the guard to every block of a ranked change set: unconfirmed mechanical kinds become `behavior`. */
 export function guardKinds(changeSet: ChangeSet): ChangeSet {
@@ -68,7 +88,13 @@ export function guardKinds(changeSet: ChangeSet): ChangeSet {
     hunks.flatMap((hunk) =>
       hunk.blocks
         .filter((b) => b.kind === "rename" && confirmMechanical(hunk, b, "rename", elsewhere))
-        .flatMap((b) => declarations(blockLines(hunk, b).filter((l) => l.kind === "add").map((l) => l.text))),
+        .flatMap((b) =>
+          declarations(
+            blockLines(hunk, b)
+              .filter((l) => l.kind === "add")
+              .map((l) => l.text),
+          ),
+        ),
     ),
   );
   elsewhere.renamedDecls = renamedDecls;
@@ -80,17 +106,61 @@ export function guardKinds(changeSet: ChangeSet): ChangeSet {
 
 /** Added and removed line texts across a whole change, for the `move` check. */
 export function lineSets(hunks: Hunk[]): Elsewhere {
-  const texts = (kind: DiffLine["kind"]) => hunks.flatMap((h) => h.lines.filter((l) => l.kind === kind && l.text.trim() !== "").map((l) => l.text));
-  const behavioural = hunks.filter((h) => h.blocks.some((b) => b.kind !== undefined && !["rename", "typing-refactor", "move", "docs", "test"].includes(b.kind)));
-  const touched = behavioural.flatMap((h) => [h.header.replace(/^@@[^@]*@@\s*/, ""), ...h.lines.filter((l) => l.kind !== "del").map((l) => l.text)]);
-  return { added: new Set(texts("add").map(squash)), removed: new Set(texts("del").map(squash)), touchedDecls: new Set(declarations(touched)) };
+  const texts = (kind: DiffLine["kind"]) =>
+    hunks.flatMap((h) => h.lines.filter((l) => l.kind === kind && l.text.trim() !== "").map((l) => l.text));
+  const behavioural = hunks.filter((h) =>
+    h.blocks.some((b) => b.kind !== undefined && !["rename", "typing-refactor", "move", "docs", "test"].includes(b.kind)),
+  );
+  const touched = behavioural.flatMap((h) => [
+    h.header.replace(/^@@[^@]*@@\s*/, ""),
+    ...h.lines.filter((l) => l.kind !== "del").map((l) => l.text),
+  ]);
+  return {
+    added: new Set(texts("add").map(squash)),
+    removed: new Set(texts("del").map(squash)),
+    touchedDecls: new Set(declarations(touched)),
+  };
 }
 
-const DECLARATION = /^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:const|let|var|function\*?|class|def|type|interface|enum)\s+([A-Za-z_$][\w$]*)/;
+const DECLARATION =
+  /^\s*(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:const|let|var|function\*?|class|def|type|interface|enum)\s+([A-Za-z_$][\w$]*)/;
 /** An object or class member that is a function: `dependenciesByField: (ws, id) =>`, `async run(` */
-const MEMBER = /^\s*(?:readonly\s+|static\s+|async\s+|public\s+|private\s+)*([A-Za-z_$][\w$]*)\s*(?::\s*(?:async\s+)?\(|\(|=\s*(?:async\s+)?\()/;
-const declarations = (lines: string[]) => lines.map((l) => DECLARATION.exec(l)?.[1] ?? MEMBER.exec(l)?.[1]).filter((n): n is string => n !== undefined && !KEYWORDS.has(n));
-const KEYWORDS = new Set(["if", "for", "while", "switch", "return", "await", "catch", "function", "const", "let", "var", "new", "typeof", "else", "do", "try", "import", "export", "default", "case", "throw", "yield", "delete", "void", "with", "elif", "def", "print", "assert", "raise"]);
+const MEMBER =
+  /^\s*(?:readonly\s+|static\s+|async\s+|public\s+|private\s+)*([A-Za-z_$][\w$]*)\s*(?::\s*(?:async\s+)?\(|\(|=\s*(?:async\s+)?\()/;
+const declarations = (lines: string[]) =>
+  lines.map((l) => DECLARATION.exec(l)?.[1] ?? MEMBER.exec(l)?.[1]).filter((n): n is string => n !== undefined && !KEYWORDS.has(n));
+const KEYWORDS = new Set([
+  "if",
+  "for",
+  "while",
+  "switch",
+  "return",
+  "await",
+  "catch",
+  "function",
+  "const",
+  "let",
+  "var",
+  "new",
+  "typeof",
+  "else",
+  "do",
+  "try",
+  "import",
+  "export",
+  "default",
+  "case",
+  "throw",
+  "yield",
+  "delete",
+  "void",
+  "with",
+  "elif",
+  "def",
+  "print",
+  "assert",
+  "raise",
+]);
 
 // A function that declares a different return type returns something different; the body change sits elsewhere.
 const RETURN_TYPE = /\)\s*(?::|->)\s*([^={;]+?)(?=\s*(?:=>|\{|;|:|$))/m;
@@ -151,5 +221,8 @@ export function stripTypes(line: string): string {
 function typeOnly(lines: string[]): boolean {
   const first = lines[0]!.trim();
   if (lines.every((l) => /^\s*import\s+type\b/.test(l))) return true;
-  return /^(export\s+)?(declare\s+)?(type|interface)\b/.test(first) && lines.slice(1).every((l) => !/\b(return|await|throw|console|new\s+\w+\s*\(|=\s*[^=>])/.test(l));
+  return (
+    /^(export\s+)?(declare\s+)?(type|interface)\b/.test(first) &&
+    lines.slice(1).every((l) => !/\b(return|await|throw|console|new\s+\w+\s*\(|=\s*[^=>])/.test(l))
+  );
 }

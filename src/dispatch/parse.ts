@@ -1,5 +1,5 @@
-import type { ChangeSet, Finding, Severity } from "../core/types.ts";
 import { attempt } from "../core/result.ts";
+import type { ChangeSet, Finding, Severity } from "../core/types.ts";
 
 export interface ParsedOutput {
   findings: Finding[];
@@ -53,7 +53,9 @@ export function lineKind(changeSet: ChangeSet, path: string, line: number): "con
 export function lastJsonBlock(rawOutput: string): { data: unknown; freeform: string } | { error: string; freeform: string } {
   const output = stripAnsi(rawOutput);
   const lines = output.split("\n");
-  const block = fences(lines).filter((f) => f.info === "json").at(-1);
+  const block = fences(lines)
+    .filter((f) => f.info === "json")
+    .at(-1);
   if (!block) return { error: "no ```json block in output", freeform: output.trim() };
   const freeform = [...lines.slice(0, block.start), ...lines.slice(block.end + 1)].join("\n").trim();
   const data = attempt((): unknown => JSON.parse(block.body));
@@ -68,11 +70,16 @@ const SEVERITIES: Severity[] = ["p0", "p1", "p2"];
  * (`{"findings": [...]}` or a bare array). Anchors outside the diff are dropped; an anchor on
  * a context line marks the finding pre-existing.
  */
-export function parseDispatchOutput(rawOutput: string, opts: { dispatcher: string; dispatchId: string; changeSet: ChangeSet }): ParsedOutput {
+export function parseDispatchOutput(
+  rawOutput: string,
+  opts: { dispatcher: string; dispatchId: string; changeSet: ChangeSet },
+): ParsedOutput {
   const block = lastJsonBlock(rawOutput);
-  if ("error" in block) return { findings: [], freeform: block.freeform, notes: [block.error.replace("```json block", "```json findings block")] };
+  if ("error" in block)
+    return { findings: [], freeform: block.freeform, notes: [block.error.replace("```json block", "```json findings block")] };
   const list = Array.isArray(block.data) ? block.data : (block.data as { findings?: unknown } | null)?.findings;
-  if (!Array.isArray(list)) return { findings: [], freeform: stripAnsi(rawOutput).trim(), notes: ['last ```json block has no "findings" array'] };
+  if (!Array.isArray(list))
+    return { findings: [], freeform: stripAnsi(rawOutput).trim(), notes: ['last ```json block has no "findings" array'] };
 
   const notes: string[] = [];
   const findings: Finding[] = [];

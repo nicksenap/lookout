@@ -1,5 +1,5 @@
-import type { ReviewCommand, ReviewEvent, ReviewSession } from "../src/core/session.ts";
 import { err, ok, type Result } from "../src/core/result.ts";
+import type { ReviewCommand, ReviewEvent, ReviewSession } from "../src/core/session.ts";
 import type { Card, Dispatch, Exchange, Finding, Review } from "../src/core/types.ts";
 
 export interface FixtureOptions {
@@ -25,7 +25,10 @@ export class FixtureSession implements ReviewSession {
   private doneEmitted = false;
   readonly timers: ReturnType<typeof setTimeout>[] = [];
 
-  constructor(review: Review, private readonly opts: FixtureOptions = {}) {
+  constructor(
+    review: Review,
+    private readonly opts: FixtureOptions = {},
+  ) {
     this.review = structuredClone(review);
   }
 
@@ -48,11 +51,21 @@ export class FixtureSession implements ReviewSession {
     switch (c.type) {
       case "ask": {
         if (c.text.trim() === "") return err("ask something");
-        const exchange: Exchange = { id: `q${++this.seq}`, question: c.text.trim(), status: "pending", ...(c.cardId ? { cardId: c.cardId } : {}) };
+        const exchange: Exchange = {
+          id: `q${++this.seq}`,
+          question: c.text.trim(),
+          status: "pending",
+          ...(c.cardId ? { cardId: c.cardId } : {}),
+        };
         this.review = { ...this.review, exchanges: [...this.review.exchanges, exchange] };
         this.emit({ type: "exchange.added", exchange });
         const land = () => {
-          const patch: Partial<Exchange> = { status: "answered", answer: `Fixture answer to "${exchange.question}": the diff changes retry(1) to retry(3).`, check: this.opts.unverified ? 0.4 : 0.95, ...(this.opts.unverified ? { unverified: true } : {}) };
+          const patch: Partial<Exchange> = {
+            status: "answered",
+            answer: `Fixture answer to "${exchange.question}": the diff changes retry(1) to retry(3).`,
+            check: this.opts.unverified ? 0.4 : 0.95,
+            ...(this.opts.unverified ? { unverified: true } : {}),
+          };
           this.review = { ...this.review, exchanges: this.review.exchanges.map((e) => (e.id === exchange.id ? { ...e, ...patch } : e)) };
           this.emit({ type: "exchange.updated", id: exchange.id, patch });
         };
@@ -107,7 +120,17 @@ export class FixtureSession implements ReviewSession {
 
   private fakeDispatch(card: Card): void {
     const id = `d${++this.seq}`;
-    const dispatch: Dispatch = { id, dispatcher: "fixture", role: "proposer", scope: "card", cardId: card.id, cmd: "fixture-agent {prompt_file}", status: "running", output: "", findings: [] };
+    const dispatch: Dispatch = {
+      id,
+      dispatcher: "fixture",
+      role: "proposer",
+      scope: "card",
+      cardId: card.id,
+      cmd: "fixture-agent {prompt_file}",
+      status: "running",
+      output: "",
+      findings: [],
+    };
     this.review = { ...this.review, dispatches: [...this.review.dispatches, dispatch] };
     this.emit({ type: "dispatch.started", dispatch });
     const ms = this.opts.dispatchMs ?? 0;
@@ -136,7 +159,18 @@ export class FixtureSession implements ReviewSession {
   /** The verifier pass that follows a proposer: confirms the one finding with a note. */
   private fakeVerify(card: Card, proposalId: string, finding: Finding, ms: number): void {
     const id = `d${++this.seq}`;
-    const dispatch: Dispatch = { id, dispatcher: "fixture", role: "verifier", scope: "card", cardId: card.id, cmd: "fixture-agent {prompt_file}", status: "running", output: "", findings: [], verifies: [finding.id] };
+    const dispatch: Dispatch = {
+      id,
+      dispatcher: "fixture",
+      role: "verifier",
+      scope: "card",
+      cardId: card.id,
+      cmd: "fixture-agent {prompt_file}",
+      status: "running",
+      output: "",
+      findings: [],
+      verifies: [finding.id],
+    };
     this.review = { ...this.review, dispatches: [...this.review.dispatches, dispatch] };
     this.emit({ type: "dispatch.started", dispatch });
     this.timers.push(setTimeout(() => this.append(id, "Tracing the retry loop…\n"), ms / 2));
@@ -145,7 +179,12 @@ export class FixtureSession implements ReviewSession {
         const note = "retry() returns the last caught error's `undefined` result on line +3; the two callers never check for it";
         this.finish(id, { status: "done", verdicts: [{ findingId: finding.id, verdict: "confirmed", note }] });
         const patch: Partial<Finding> = { status: "confirmed", verifiedBy: "fixture", verifierNote: note, confidence: 0.92 };
-        this.review = { ...this.review, dispatches: this.review.dispatches.map((d) => (d.id === proposalId ? { ...d, findings: d.findings.map((f) => (f.id === finding.id ? { ...f, ...patch } : f)) } : d)) };
+        this.review = {
+          ...this.review,
+          dispatches: this.review.dispatches.map((d) =>
+            d.id === proposalId ? { ...d, findings: d.findings.map((f) => (f.id === finding.id ? { ...f, ...patch } : f)) } : d,
+          ),
+        };
         this.emit({ type: "finding.updated", dispatchId: proposalId, id: finding.id, patch });
       }, ms),
     );
@@ -153,7 +192,7 @@ export class FixtureSession implements ReviewSession {
 
   private append(id: string, chunk: string): void {
     const d = this.review.dispatches.find((x) => x.id === id);
-    if (!d || d.status !== "running") return;
+    if (d?.status !== "running") return;
     this.review = { ...this.review, dispatches: this.review.dispatches.map((x) => (x.id === id ? { ...x, output: x.output + chunk } : x)) };
     this.emit({ type: "dispatch.output", id, chunk });
   }

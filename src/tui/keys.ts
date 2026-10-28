@@ -77,7 +77,18 @@ export interface KeyHelp {
 }
 
 export function keyHelp(mode: Mode): KeyHelp[] {
-  const nav = mode === "stack" ? [{ keys: "j/k", label: "card" }, { keys: "enter", label: "expand" }, { keys: "{/}", label: "next hot" }] : [{ keys: "j/k", label: "scroll" }, { keys: "ctrl-d/u", label: "half page" }, { keys: "esc", label: "back" }];
+  const nav =
+    mode === "stack"
+      ? [
+          { keys: "j/k", label: "card" },
+          { keys: "enter", label: "expand" },
+          { keys: "{/}", label: "next hot" },
+        ]
+      : [
+          { keys: "j/k", label: "scroll" },
+          { keys: "ctrl-d/u", label: "half page" },
+          { keys: "esc", label: "back" },
+        ];
   return [...nav, { keys: "/", label: "search" }, { keys: "a", label: "ask" }, { keys: "?", label: "help" }, { keys: "q", label: "quit" }];
 }
 

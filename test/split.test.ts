@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { buildCards, cardId } from "../src/cards/build.ts";
 import { isBlob, parseSplit, proposeSplits, splitPrompt } from "../src/cards/split.ts";
 import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
@@ -7,14 +10,22 @@ import type { BlockKind, ChangeSet } from "../src/core/types.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { RankCache } from "../src/rank/cache.ts";
 import { applyRules } from "../src/rank/rules.ts";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 /** `n` behaviour blocks in `file`, each its own hunk, all sharing the identifier `shared` so grouping fuses them. */
 const file = (path: string, n: number, start = 1) =>
-  [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, ...Array.from({ length: n }, (_, k) => [`@@ -${start + k * 10},2 +${start + k * 10},3 @@`, " a", `+  shared.step${k}(${path.length});`, " b"]).flat()].join("\n") + "\n";
-const cs = (text: string, kind: BlockKind = "behavior"): ChangeSet => mapBlocks(applyRules({ target: "t", base: "", head: "", files: parseDiff(text) }), ({ block }) => ({ ...block, kind }));
+  `${[
+    `diff --git a/${path} b/${path}`,
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    ...Array.from({ length: n }, (_, k) => [
+      `@@ -${start + k * 10},2 +${start + k * 10},3 @@`,
+      " a",
+      `+  shared.step${k}(${path.length});`,
+      " b",
+    ]).flat(),
+  ].join("\n")}\n`;
+const cs = (text: string, kind: BlockKind = "behavior"): ChangeSet =>
+  mapBlocks(applyRules({ target: "t", base: "", head: "", files: parseDiff(text) }), ({ block }) => ({ ...block, kind }));
 
 describe("blob splitting", () => {
   const changeSet = cs(file("src/a.ts", 6) + file("src/b.ts", 6));
@@ -36,7 +47,13 @@ describe("blob splitting", () => {
 
   test("parseSplit repairs the model's partition: foreign ids dropped, duplicates kept once, unplaced ids homed by file, singletons merged", () => {
     const refs = allBlocks(changeSet);
-    const answer = JSON.stringify({ concerns: [{ title: "a", blockIds: [...a.slice(0, 4), "nope"] }, { title: "b", blockIds: [...b.slice(0, 5), a[0]] }, { title: "lonely", blockIds: [a[4]] }] });
+    const answer = JSON.stringify({
+      concerns: [
+        { title: "a", blockIds: [...a.slice(0, 4), "nope"] },
+        { title: "b", blockIds: [...b.slice(0, 5), a[0]] },
+        { title: "lonely", blockIds: [a[4]] },
+      ],
+    });
     const got = parseSplit(`Sure:\n${answer}`, blob, refs)!;
     expect(got.length).toBe(2);
     expect(got.flatMap((c) => c.blockIds).sort()).toEqual(ids.slice().sort());
@@ -54,7 +71,12 @@ describe("blob splitting", () => {
     const prompts: string[] = [];
     const write = async (prompt: string) => {
       prompts.push(prompt);
-      return JSON.stringify({ concerns: [{ title: "a", blockIds: a }, { title: "b", blockIds: b }] });
+      return JSON.stringify({
+        concerns: [
+          { title: "a", blockIds: a },
+          { title: "b", blockIds: b },
+        ],
+      });
     };
     const res = await proposeSplits(changeSet, whole, { modelSpec: "fake:m", cache, write });
     expect(res.warning).toBeUndefined();

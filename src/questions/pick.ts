@@ -1,6 +1,14 @@
 import { attemptAsync } from "../core/result.ts";
 import type { Card, Question, Review } from "../core/types.ts";
-import { type Env, pickQuestionBatch, pickQuestionId, type QuestionCandidate, type QuestionCard, resolveAttentionModel, type ResolvedModel } from "../rank/model.ts";
+import {
+  type Env,
+  pickQuestionBatch,
+  pickQuestionId,
+  type QuestionCandidate,
+  type QuestionCard,
+  type ResolvedModel,
+  resolveAttentionModel,
+} from "../rank/model.ts";
 import { candidatesFor } from "./bank.ts";
 
 export const MIN_QUESTIONS = 2;
@@ -22,13 +30,33 @@ export interface PickOptions {
 export async function pickQuestions(review: Review, opts: PickOptions): Promise<{ questions: Map<string, Question[]>; warning?: string }> {
   const cards = review.cards.filter((c) => !c.fixed && !c.questions.some((q) => q.answer));
   const candidates = new Map(cards.map((c) => [c.id, candidatesFor(c, review)] as const));
-  const fallback = () => new Map(cards.map((c) => [c.id, candidates.get(c.id)!.slice(0, MAX_QUESTIONS - 1).map(asQuestion)]));
-  const flat: QuestionCandidate[] = cards.flatMap((c) => candidates.get(c.id)!.map((q) => ({ cardId: c.id, questionId: q.id, text: q.text })));
+  const fallback = () =>
+    new Map(
+      cards.map((c) => [
+        c.id,
+        candidates
+          .get(c.id)!
+          .slice(0, MAX_QUESTIONS - 1)
+          .map(asQuestion),
+      ]),
+    );
+  const flat: QuestionCandidate[] = cards.flatMap((c) =>
+    candidates.get(c.id)!.map((q) => ({ cardId: c.id, questionId: q.id, text: q.text })),
+  );
   if (flat.length === 0) return { questions: fallback() };
 
   const resolved = (opts.resolveModel ?? resolveAttentionModel)(opts.modelSpec, opts.env ?? process.env);
   if (!resolved.ok) return { questions: fallback(), warning: `Questions picked by rules only: ${resolved.reason}.` };
-  const qcards: QuestionCard[] = cards.map((c) => ({ id: c.id, title: c.title, ...(c.paragraph ? { paragraph: c.paragraph } : {}), color: c.color, kind: c.blockKind ?? c.kind, unmentioned: c.unmentioned, testsTouched: c.testsTouched, files: filesOf(review, c) }));
+  const qcards: QuestionCard[] = cards.map((c) => ({
+    id: c.id,
+    title: c.title,
+    ...(c.paragraph ? { paragraph: c.paragraph } : {}),
+    color: c.color,
+    kind: c.blockKind ?? c.kind,
+    unmentioned: c.unmentioned,
+    testsTouched: c.testsTouched,
+    files: filesOf(review, c),
+  }));
   const res = await attemptAsync(() => pickQuestionBatch(resolved.model, flat, qcards, review.changeSet.intent));
   if (!res.ok) return { questions: fallback(), warning: `Questions picked by rules only: ${opts.modelSpec} failed (${res.error}).` };
 
@@ -40,7 +68,10 @@ export async function pickQuestions(review: Review, opts: PickOptions): Promise<
       .sort((a, b) => b.p - a.p);
     const wanted = ranked.filter((x) => x.p >= ASK_MIN).slice(0, MAX_QUESTIONS);
     const picked = wanted.length >= MIN_QUESTIONS ? wanted : ranked.slice(0, MIN_QUESTIONS);
-    questions.set(c.id, picked.map((x) => asQuestion(x.q)));
+    questions.set(
+      c.id,
+      picked.map((x) => asQuestion(x.q)),
+    );
   }
   return { questions };
 }

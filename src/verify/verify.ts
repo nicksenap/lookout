@@ -1,12 +1,19 @@
 import { attemptAsync } from "../core/result.ts";
 import type { Card, ChangeSet, Finding, FindingVerdict } from "../core/types.ts";
 import { lastJsonBlock } from "../dispatch/parse.ts";
-import { type Env, resolveAttentionModel, type ResolvedModel, scoreVerdictBatch, type VerdictCase } from "../rank/model.ts";
 import { cardHunks, renderDiff } from "../dispatch/prompt.ts";
+import { type Env, type ResolvedModel, resolveAttentionModel, scoreVerdictBatch, type VerdictCase } from "../rank/model.ts";
 
 // ---------------------------------------------------------------- dedupe
 
-const words = (title: string): Set<string> => new Set(title.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2));
+const words = (title: string): Set<string> =>
+  new Set(
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2),
+  );
 
 /** Same anchor (or both unanchored) and titles that share at least half their words. */
 export function sameFinding(a: Finding, b: Finding): boolean {
@@ -51,7 +58,8 @@ const VERDICTS = ["confirmed", "rejected", "unsure"] as const;
  */
 export function parseVerdicts(rawOutput: string, expected: string[]): ParsedVerdicts {
   const block = lastJsonBlock(rawOutput);
-  if ("error" in block) return { verdicts: [], freeform: block.freeform, notes: [block.error.replace("```json block", "```json verdicts block")] };
+  if ("error" in block)
+    return { verdicts: [], freeform: block.freeform, notes: [block.error.replace("```json block", "```json verdicts block")] };
   const list = Array.isArray(block.data) ? block.data : (block.data as { verdicts?: unknown } | null)?.verdicts;
   if (!Array.isArray(list)) return { verdicts: [], freeform: block.freeform, notes: ['last ```json block has no "verdicts" array'] };
   const notes: string[] = [];
@@ -72,10 +80,21 @@ export function parseVerdicts(rawOutput: string, expected: string[]): ParsedVerd
       verdicts.push({ findingId: v.id, verdict: "unsure" });
       return;
     }
-    const note = typeof v.note === "string" ? v.note.trim() : typeof v.evidence === "string" ? v.evidence.trim() : typeof v.reason === "string" ? v.reason.trim() : "";
+    const note =
+      typeof v.note === "string"
+        ? v.note.trim()
+        : typeof v.evidence === "string"
+          ? v.evidence.trim()
+          : typeof v.reason === "string"
+            ? v.reason.trim()
+            : "";
     if (verdict !== "unsure" && note === "") {
       notes.push(`verdict ${k + 1} (${v.id}): ${verdict} without ${verdict === "confirmed" ? "evidence" : "a reason"}; using unsure`);
-      verdicts.push({ findingId: v.id, verdict: "unsure", note: `verifier said ${verdict} but gave no ${verdict === "confirmed" ? "evidence" : "reason"}` });
+      verdicts.push({
+        findingId: v.id,
+        verdict: "unsure",
+        note: `verifier said ${verdict} but gave no ${verdict === "confirmed" ? "evidence" : "reason"}`,
+      });
       return;
     }
     const out: FindingVerdict = { findingId: v.id, verdict: verdict as FindingVerdict["verdict"] };
@@ -103,7 +122,14 @@ export interface JudgeOptions {
  * shown as unsure. Without a model (or when the call fails, with a warning) the verifier's word
  * stands. Never throws.
  */
-export async function judgeVerdicts(changeSet: ChangeSet, card: Card, findings: Finding[], verdicts: FindingVerdict[], verifier: string, opts: JudgeOptions): Promise<{ patches: Map<string, Partial<Finding>>; warning?: string }> {
+export async function judgeVerdicts(
+  changeSet: ChangeSet,
+  card: Card,
+  findings: Finding[],
+  verdicts: FindingVerdict[],
+  verifier: string,
+  opts: JudgeOptions,
+): Promise<{ patches: Map<string, Partial<Finding>>; warning?: string }> {
   const patches = new Map<string, Partial<Finding>>();
   const argued = verdicts.filter((v) => v.verdict !== "unsure" && findings.some((f) => f.id === v.findingId));
   for (const v of verdicts) {
@@ -115,7 +141,11 @@ export async function judgeVerdicts(changeSet: ChangeSet, card: Card, findings: 
 
   const resolved = (opts.resolveModel ?? resolveAttentionModel)(opts.modelSpec, opts.env ?? process.env);
   if (!resolved.ok) return { patches, warning: `Verdicts not scored: ${resolved.reason}.` };
-  const cases: VerdictCase[] = argued.map((v) => ({ finding: findings.find((f) => f.id === v.findingId)!, verdict: v.verdict as "confirmed" | "rejected", note: v.note ?? "" }));
+  const cases: VerdictCase[] = argued.map((v) => ({
+    finding: findings.find((f) => f.id === v.findingId)!,
+    verdict: v.verdict as "confirmed" | "rejected",
+    note: v.note ?? "",
+  }));
   const diff = renderDiff(cardHunks(changeSet, card));
   const scored = await attemptAsync(() => scoreVerdictBatch(resolved.model, cases, { diff, title: card.title }));
   if (!scored.ok) return { patches, warning: `Verdicts not scored: ${opts.modelSpec} failed (${scored.error}).` };

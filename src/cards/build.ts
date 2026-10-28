@@ -25,24 +25,33 @@ export function buildCards(changeSet: ChangeSet, policy: Policy, splits: Splits 
 
   const haveKinds = live.length > 0 && live.every((r) => r.block.kind !== undefined);
   const cards = haveKinds
-    ? groupBlocks(live).flatMap((g) => applySplit(g, splits)).map((g) => {
-        const card = makeCard(cardId(g.refs.map((r) => r.block.id)), g.hint ?? titleFor(g.refs, g.topIdentifiers), g.refs, policy);
-        if (g.kind) card.blockKind = g.kind;
-        if (g.hint) card.hint = g.hint;
-        if (isMechanical(g.kind)) {
-          const text = mechanicalText(g);
-          card.title = text.title;
-          card.paragraph = text.paragraph;
-          card.mechanical = true;
-        }
-        // The floor depends on the kind the model gave the group, so it is set once that is known.
-        card.color = colorFloor(card);
-        return card;
-      })
-    : [...live.reduce((m, r) => m.set(r.file.path, [...(m.get(r.file.path) ?? []), r]), new Map<string, BlockRef[]>())].map(([path, group]) => makeCard(cardId(group.map((r) => r.block.id)), path, group, policy));
+    ? groupBlocks(live)
+        .flatMap((g) => applySplit(g, splits))
+        .map((g) => {
+          const card = makeCard(cardId(g.refs.map((r) => r.block.id)), g.hint ?? titleFor(g.refs, g.topIdentifiers), g.refs, policy);
+          if (g.kind) card.blockKind = g.kind;
+          if (g.hint) card.hint = g.hint;
+          if (isMechanical(g.kind)) {
+            const text = mechanicalText(g);
+            card.title = text.title;
+            card.paragraph = text.paragraph;
+            card.mechanical = true;
+          }
+          // The floor depends on the kind the model gave the group, so it is set once that is known.
+          card.color = colorFloor(card);
+          return card;
+        })
+    : [...live.reduce((m, r) => m.set(r.file.path, [...(m.get(r.file.path) ?? []), r]), new Map<string, BlockRef[]>())].map(
+        ([path, group]) => makeCard(cardId(group.map((r) => r.block.id)), path, group, policy),
+      );
   cards.sort(compareCards);
 
-  if (inert.length > 0) cards.push({ ...makeCard("clean", `verified clean · ${inert.length} edit${inert.length === 1 ? "" : "s"}`, inert, policy), color: "grey", fixed: "clean" });
+  if (inert.length > 0)
+    cards.push({
+      ...makeCard("clean", `verified clean · ${inert.length} edit${inert.length === 1 ? "" : "s"}`, inert, policy),
+      color: "grey",
+      fixed: "clean",
+    });
   return cards;
 }
 
@@ -55,7 +64,10 @@ function applySplit(group: Group, splits: Splits): Group[] {
     const refs = concern.blockIds.map((id) => byId.get(id)).filter((r): r is BlockRef => r !== undefined);
     const counts = new Map<string, number>();
     for (const r of refs) for (const w of changedIdentifiers(r)) counts.set(w, (counts.get(w) ?? 0) + 1);
-    const topIdentifiers = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(([w]) => w);
+    const topIdentifiers = [...counts]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 4)
+      .map(([w]) => w);
     const split: Group = { refs, topIdentifiers, hint: concern.title || undefined };
     return group.kind ? { ...split, kind: group.kind } : split;
   });
@@ -86,7 +98,22 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
   );
   const attention = group.reduce<Attention>((top, r) => (rank(r.block.attention) > rank(top) ? r.block.attention : top), "inert");
   const score = Math.max(0, ...group.map((r) => r.block.score));
-  const card: Card = { id, title, color: "grey", kind, areas, labels, blockIds: group.map((r) => r.block.id), files: [...new Set(group.map((r) => r.block.path))], attention, score, claimIds: [], unmentioned: false, testsTouched: false, questions: [] };
+  const card: Card = {
+    id,
+    title,
+    color: "grey",
+    kind,
+    areas,
+    labels,
+    blockIds: group.map((r) => r.block.id),
+    files: [...new Set(group.map((r) => r.block.path))],
+    attention,
+    score,
+    claimIds: [],
+    unmentioned: false,
+    testsTouched: false,
+    questions: [],
+  };
   card.color = colorFloor(card);
   return card;
 }
@@ -101,7 +128,9 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
  * and 3 of those were a test card, a rename and a type import. The tier floors in
  * `policy/evaluate.ts` are untouched: a touched area still means more humans.
  */
-export function colorFloor(card: Pick<Card, "attention" | "areas" | "labels" | "kind"> & Partial<Pick<Card, "blockKind" | "mechanical">>): CardColor {
+export function colorFloor(
+  card: Pick<Card, "attention" | "areas" | "labels" | "kind"> & Partial<Pick<Card, "blockKind" | "mechanical">>,
+): CardColor {
   if (card.attention === "inert") return "grey";
   if (card.attention === "suspicious") return "red";
   const sensitive = card.areas.length > 0 || card.labels.includes("sensitive");
@@ -124,7 +153,14 @@ export function compareCards(a: Card, b: Card): number {
   const skim = (c: Card) => (c.mechanical || c.kind === "docs" || c.blockKind === "docs" ? 1 : 0);
   // A configuration switch is one line that decides whether the rest ships; it reads first among its colour.
   const toggle = (c: Card) => (c.kind === "config" || c.kind === "ci" || c.kind === "deps" ? 0 : 1);
-  return COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) || skim(a) - skim(b) || toggle(a) - toggle(b) || rank(b.attention) - rank(a.attention) || b.blockIds.length - a.blockIds.length || b.score - a.score;
+  return (
+    COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) ||
+    skim(a) - skim(b) ||
+    toggle(a) - toggle(b) ||
+    rank(b.attention) - rank(a.attention) ||
+    b.blockIds.length - a.blockIds.length ||
+    b.score - a.score
+  );
 }
 
 /** Policy areas that no file of the change touches at all. */

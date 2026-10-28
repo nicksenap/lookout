@@ -11,8 +11,15 @@ const sh = (args: string[]) => Bun.spawnSync(args, { cwd: repo, stdout: "pipe", 
 
 let total = 0;
 let inert = 0;
-for (const sha of sh(["git", "log", `-${n}`, "--no-merges", "--format=%h"]).trim().split("\n")) {
-  const files = applyRules({ target: sha, base: "", head: "", files: parseDiff(sh(["git", "diff", ...DIFF_FLAGS, `${sha}^`, sha, "--"])) }).files;
+for (const sha of sh(["git", "log", `-${n}`, "--no-merges", "--format=%h"])
+  .trim()
+  .split("\n")) {
+  const files = applyRules({
+    target: sha,
+    base: "",
+    head: "",
+    files: parseDiff(sh(["git", "diff", ...DIFF_FLAGS, `${sha}^`, sha, "--"])),
+  }).files;
   for (const f of files) {
     for (const h of f.hunks) {
       for (const b of h.blocks) {

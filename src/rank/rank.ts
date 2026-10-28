@@ -1,9 +1,18 @@
 import { allBlocks, type BlockRef, mapBlocks } from "../core/blocks.ts";
-import { ATTENTION_ORDER, type Attention, type ChangeSet, type EditBlock } from "../core/types.ts";
 import { attempt, attemptAsync } from "../core/result.ts";
+import { ATTENTION_ORDER, type Attention, type ChangeSet, type EditBlock } from "../core/types.ts";
 import { RankCache } from "./cache.ts";
-import { type AttentionModel, type BlockJudgement, type Env, resolveAttentionModel, type ResolvedModel, scoreBlockBatch, ATTENTION_LEVELS, BLOCK_KINDS } from "./model.ts";
 import { guardKinds } from "./mechanical.ts";
+import {
+  ATTENTION_LEVELS,
+  type AttentionModel,
+  BLOCK_KINDS,
+  type BlockJudgement,
+  type Env,
+  type ResolvedModel,
+  resolveAttentionModel,
+  scoreBlockBatch,
+} from "./model.ts";
 import { applyRules } from "./rules.ts";
 
 export interface RankResult {
@@ -24,7 +33,6 @@ export interface ModelRankOptions {
   /** Called after each batch lands: batches done of total. */
   onProgress?: (done: number, total: number) => void;
 }
-
 
 const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
 

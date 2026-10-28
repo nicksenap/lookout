@@ -19,7 +19,8 @@ export function searchKey(s: Search, input: string, key: Key): SearchResult {
   if (key.return) return s.query.trim() === "" ? { close: true } : { commit: { query: s.query, open: false } };
   if (key.backspace || key.delete) return { search: { ...s, query: [...s.query].slice(0, -1).join("") } };
   if (key.ctrl && input === "u") return { search: { ...s, query: "" } };
-  if (input && !key.ctrl && !key.meta && !key.tab && !key.upArrow && !key.downArrow) return { search: { ...s, query: s.query + input.replace(/\r?\n/g, " ") } };
+  if (input && !key.ctrl && !key.meta && !key.tab && !key.upArrow && !key.downArrow)
+    return { search: { ...s, query: s.query + input.replace(/\r?\n/g, " ") } };
   return { search: s };
 }
 
@@ -59,7 +60,20 @@ export function highlight(line: Line, query: string): Line {
 
 /** Footer segments for the bar: the query with a cursor while open, `/query  3/12` when committed. */
 export function searchFooter(s: Search, hits: number, at: number | undefined): Segment[] {
-  if (s.open) return [{ text: " /", color: theme.accent, bold: true }, { text: s.query }, { text: "▏", color: theme.accent }, { text: hits ? `  ${hits} match${hits === 1 ? "" : "es"}` : s.query ? "  no match" : "  type to search · enter keep · esc clear", dim: true }];
+  if (s.open)
+    return [
+      { text: " /", color: theme.accent, bold: true },
+      { text: s.query },
+      { text: "▏", color: theme.accent },
+      {
+        text: hits ? `  ${hits} match${hits === 1 ? "" : "es"}` : s.query ? "  no match" : "  type to search · enter keep · esc clear",
+        dim: true,
+      },
+    ];
   const where = at === undefined ? `${hits} match${hits === 1 ? "" : "es"}` : `${at + 1}/${hits}`;
-  return [{ text: ` /${s.query}`, color: theme.accent }, { text: `  ${where}`, dim: true }, { text: "  n/N next/prev · esc clear", dim: true }];
+  return [
+    { text: ` /${s.query}`, color: theme.accent },
+    { text: `  ${where}`, dim: true },
+    { text: "  n/N next/prev · esc clear", dim: true },
+  ];
 }

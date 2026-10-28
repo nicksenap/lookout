@@ -30,13 +30,21 @@ For each finding, try to refute it: read the surrounding code, trace callers and
 export function describeFindings(findings: Finding[]): string {
   return findings
     .map((f) => {
-      const where = f.anchor ? ` (${f.anchor.path}:${f.anchor.line}${f.preExisting ? ", a context line the change did not touch" : ""})` : "";
+      const where = f.anchor
+        ? ` (${f.anchor.path}:${f.anchor.line}${f.preExisting ? ", a context line the change did not touch" : ""})`
+        : "";
       return `- ${f.id} [${f.severity.toUpperCase()}] ${f.title}${where}\n  ${f.body.trim() || "(no body)"}`;
     })
     .join("\n");
 }
 
-export function buildVerifyPrompt(opts: { changeSet: ChangeSet; card: Card; findings: Finding[]; repo: string; template?: string }): string {
+export function buildVerifyPrompt(opts: {
+  changeSet: ChangeSet;
+  card: Card;
+  findings: Finding[];
+  repo: string;
+  template?: string;
+}): string {
   const intent = opts.changeSet.intent;
   return fillTemplate(opts.template ?? DEFAULT_VERIFY_PROMPT, {
     repo: opts.repo,

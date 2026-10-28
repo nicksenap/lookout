@@ -2,17 +2,17 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadUserEnv } from "../src/cli/env.ts";
+import type { Result } from "../src/core/result.ts";
 import { loadRange, loadWorktree } from "../src/sources/git.ts";
 import { parsePrRef } from "../src/sources/github.ts";
 import { resolveTarget } from "../src/sources/resolve.ts";
-import type { Result } from "../src/core/result.ts";
-import { loadUserEnv } from "../src/cli/env.ts";
+
 /** Unwrap a Result in tests; a failure is a test failure with the message. */
 function must<T>(r: Result<T>): T {
   if (!r.ok) throw new Error(String(r.error));
   return r.value;
 }
-
 
 let dir: string;
 const git = (...args: string[]) => {

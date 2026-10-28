@@ -1,5 +1,14 @@
 import { allBlocks } from "../core/blocks.ts";
-import { ATTENTION_ORDER, type Attention, type ChangeKind, type ChangeSet, type Classification, TIER_ORDER, type Tier, type Verdict } from "../core/types.ts";
+import {
+  ATTENTION_ORDER,
+  type Attention,
+  type ChangeKind,
+  type ChangeSet,
+  type Classification,
+  TIER_ORDER,
+  type Tier,
+  type Verdict,
+} from "../core/types.ts";
 import { globToRegExp } from "../rank/rules.ts";
 import type { Policy } from "./schema.ts";
 
@@ -8,7 +17,8 @@ const tierRank = (t: Tier) => TIER_ORDER.indexOf(t);
 const maxTier = (a: Tier, b: Tier): Tier => (tierRank(a) >= tierRank(b) ? a : b);
 
 const CONFIG_RE = /(^|\/)(\.env[^/]*|[^/]+\.(toml|ya?ml|json|json5|ini|cfg|conf|properties|env))$/i;
-const DEPS_RE = /(^|\/)(package\.json|pyproject\.toml|requirements[^/]*\.txt|go\.mod|Cargo\.toml|build\.gradle(\.kts)?|pom\.xml|Gemfile|composer\.json)$/;
+const DEPS_RE =
+  /(^|\/)(package\.json|pyproject\.toml|requirements[^/]*\.txt|go\.mod|Cargo\.toml|build\.gradle(\.kts)?|pom\.xml|Gemfile|composer\.json)$/;
 
 export function areasOf(policy: Policy, path: string): string[] {
   const out: string[] = [];
@@ -74,10 +84,17 @@ export function evaluate(c: Classification, policy: Policy): Verdict {
     if (rule.kind && c.kind !== rule.kind) continue;
     if (rule.attention && rank(c.maxAttention) < rank(rule.attention)) continue;
     if (rule.unless && c.kind === rule.unless.kind && (rule.unless.oneWay === undefined || c.oneWay === false)) {
-      reasons.push({ tier: "low", text: `${rule.reason ?? `touches ${rule.area}`} → ${rule.tier}, but the change is ${c.kind}${rule.unless.oneWay === false ? " and two-way" : ""}: rule stands down` });
+      reasons.push({
+        tier: "low",
+        text: `${rule.reason ?? `touches ${rule.area}`} → ${rule.tier}, but the change is ${c.kind}${rule.unless.oneWay === false ? " and two-way" : ""}: rule stands down`,
+      });
       continue;
     }
-    const what = rule.reason ?? [rule.area && `touches ${rule.area}`, rule.kind && `${rule.kind} change`, rule.attention && `a block is ${rule.attention}`].filter(Boolean).join(", ");
+    const what =
+      rule.reason ??
+      [rule.area && `touches ${rule.area}`, rule.kind && `${rule.kind} change`, rule.attention && `a block is ${rule.attention}`]
+        .filter(Boolean)
+        .join(", ");
     reasons.push({ tier: rule.tier, text: `${what} → ${rule.tier}` });
     tier = maxTier(tier, rule.tier);
   }
@@ -92,7 +109,10 @@ export function evaluate(c: Classification, policy: Policy): Verdict {
   }
   if (c.sensitivePaths.length > 0 && tier === "low") {
     tier = "medium";
-    reasons.push({ tier, text: `sensitive path ${c.sensitivePaths[0]}${c.sensitivePaths.length > 1 ? ` (+${c.sensitivePaths.length - 1})` : ""}: never low` });
+    reasons.push({
+      tier,
+      text: `sensitive path ${c.sensitivePaths[0]}${c.sensitivePaths.length > 1 ? ` (+${c.sensitivePaths.length - 1})` : ""}: never low`,
+    });
   }
 
   reasons.sort((a, b) => tierRank(b.tier) - tierRank(a.tier));

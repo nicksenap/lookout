@@ -10,10 +10,10 @@
 // fragment cards (a card of ≤ 2 blocks whose blocks the judge put in a larger concern).
 import { buildCards } from "../src/cards/build.ts";
 import { isFragment } from "../src/cards/group.ts";
-import { allBlocks } from "../src/core/blocks.ts";
-import type { Review } from "../src/core/types.ts";
 import { proposeSplits } from "../src/cards/split.ts";
 import { loadUserEnv } from "../src/cli/env.ts";
+import { allBlocks } from "../src/core/blocks.ts";
+import type { Review } from "../src/core/types.ts";
 import { loadConfig } from "../src/dispatch/config.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { guardKinds } from "../src/rank/mechanical.ts";
@@ -65,15 +65,27 @@ export function score(review: Review, target: Target) {
     for (const id of c.blockIds) counts.set(judged.get(id)!, (counts.get(judged.get(id)!) ?? 0) + 1);
     return sum + Math.max(0, ...counts.values());
   }, 0);
-  const ari = adjustedRand(live.map((id) => judged.get(id)!), live.map((id) => byCard.get(id) ?? -1));
+  const ari = adjustedRand(
+    live.map((id) => judged.get(id)!),
+    live.map((id) => byCard.get(id) ?? -1),
+  );
   const judgedMechanical = new Set(target.mechanical);
-  const leaks = cards.filter((c) => c.mechanical).flatMap((c) => c.blockIds.filter((id) => !judgedMechanical.has(id)).map((id) => ({ card: c.title, blockId: id })));
+  const leaks = cards
+    .filter((c) => c.mechanical)
+    .flatMap((c) => c.blockIds.filter((id) => !judgedMechanical.has(id)).map((id) => ({ card: c.title, blockId: id })));
   // A fragment (import, re-export, lone type) that joined its owner card is also "skipped" by the reader.
-  const skipped = new Set([...cards.filter((c) => c.mechanical).flatMap((c) => c.blockIds), ...allBlocks(review.changeSet).filter(isFragment).map((r) => r.block.id)]);
+  const skipped = new Set([
+    ...cards.filter((c) => c.mechanical).flatMap((c) => c.blockIds),
+    ...allBlocks(review.changeSet)
+      .filter(isFragment)
+      .map((r) => r.block.id),
+  ]);
   const kept = target.mechanical.filter((id) => skipped.has(id)).length;
   const concernSize = new Map<number, number>();
   for (const k of judged.values()) concernSize.set(k, (concernSize.get(k) ?? 0) + 1);
-  const fragments = cards.filter((c) => c.blockIds.length <= 2 && c.blockIds.some((id) => (concernSize.get(judged.get(id)!) ?? 0) > 2)).map((c) => c.title);
+  const fragments = cards
+    .filter((c) => c.blockIds.length <= 2 && c.blockIds.some((id) => (concernSize.get(judged.get(id)!) ?? 0) > 2))
+    .map((c) => c.title);
   const unplaced = live.filter((id) => !target.concerns.some((c) => c.blockIds.includes(id)));
   return {
     target: review.changeSet.target,

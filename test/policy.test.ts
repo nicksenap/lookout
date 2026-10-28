@@ -3,13 +3,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseDiff } from "../src/core/diff.ts";
-import type { ChangeKind, Classification, Tier } from "../src/core/types.ts";
 import type { Result } from "../src/core/result.ts";
+import type { ChangeKind, Classification, Tier } from "../src/core/types.ts";
 import { loadConfig } from "../src/dispatch/config.ts";
 import { areasOf, classify, evaluate, kindOf } from "../src/policy/evaluate.ts";
 import { DEFAULT_POLICY, validatePolicy } from "../src/policy/schema.ts";
 import { applyRules } from "../src/rank/rules.ts";
-
 
 /** Unwrap a Result in tests; a failure is a test failure with the message. */
 function must<T>(r: Result<T>): T {
@@ -17,11 +16,21 @@ function must<T>(r: Result<T>): T {
   return r.value;
 }
 
-const c = (over: Partial<Classification>): Classification => ({ kind: "logic", areas: [], maxAttention: "routine", sensitivePaths: [], oneWay: false, counts: { files: 1, blocks: 1, inert: 0 }, ...over });
+const c = (over: Partial<Classification>): Classification => ({
+  kind: "logic",
+  areas: [],
+  maxAttention: "routine",
+  sensitivePaths: [],
+  oneWay: false,
+  counts: { files: 1, blocks: 1, inert: 0 },
+  ...over,
+});
 
 describe("evaluate: tier table", () => {
   test("a rule with `unless` stands down for a two-way additive change and holds for a one-way one or a logic change", () => {
-    const rules = [{ area: "infra", tier: "high" as const, reason: "touches infra", unless: { kind: "additive" as const, oneWay: false as const } }];
+    const rules = [
+      { area: "infra", tier: "high" as const, reason: "touches infra", unless: { kind: "additive" as const, oneWay: false as const } },
+    ];
     const policy = { ...DEFAULT_POLICY, rules };
     const additive = evaluate(c({ kind: "additive", areas: ["infra"], maxAttention: "needs-eyes" }), policy);
     expect(additive.tier).toBe("medium");
@@ -31,9 +40,15 @@ describe("evaluate: tier table", () => {
   });
 
   test("validatePolicy accepts unless and names bad keys", () => {
-    expect(must(validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "additive", oneWay: false } }] } }, "t")).rules.at(-1)!.unless).toEqual({ kind: "additive", oneWay: false });
+    expect(
+      must(
+        validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "additive", oneWay: false } }] } }, "t"),
+      ).rules.at(-1)!.unless,
+    ).toEqual({ kind: "additive", oneWay: false });
     expect(validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "nope" } }] } }, "t").ok).toBe(false);
-    expect(validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "additive", oneWay: true } }] } }, "t").ok).toBe(false);
+    expect(
+      validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "additive", oneWay: true } }] } }, "t").ok,
+    ).toBe(false);
   });
 
   const table: [Partial<Classification>, Tier, 0 | 1 | 2][] = [
@@ -76,7 +91,17 @@ describe("evaluate: tier table", () => {
   });
 
   test("user rule by attention and by kind", () => {
-    const policy = validatePolicy({ policy: { rules: [{ attention: "needs-eyes", tier: "high", reason: "we are careful" }, { kind: "deps", tier: "high" }] } }, "t");
+    const policy = validatePolicy(
+      {
+        policy: {
+          rules: [
+            { attention: "needs-eyes", tier: "high", reason: "we are careful" },
+            { kind: "deps", tier: "high" },
+          ],
+        },
+      },
+      "t",
+    );
     if (!policy.ok) throw new Error(policy.error);
     expect(evaluate(c({ maxAttention: "needs-eyes" }), policy.value).tier).toBe("high");
     expect(evaluate(c({ maxAttention: "routine" }), policy.value).tier).toBe("medium");
@@ -104,7 +129,8 @@ describe("kindOf", () => {
     [[b("src/a.ts", [], true), b("README.md", ["docs"])], "logic"],
     [[], "docs"],
   ];
-  for (const [blocks, kind] of cases) test(`${blocks.map((x) => x.path).join(", ") || "(none)"} → ${kind}`, () => expect(kindOf(blocks)).toBe(kind));
+  for (const [blocks, kind] of cases)
+    test(`${blocks.map((x) => x.path).join(", ") || "(none)"} → ${kind}`, () => expect(kindOf(blocks)).toBe(kind));
 });
 
 describe("areas", () => {
@@ -134,7 +160,15 @@ describe("classify from a real diff", () => {
     expect(k.areas).toEqual([]);
   });
   test("inert blocks do not contribute: a comment-only change under auth/ is docs-kind with no area", () => {
-    const diff = ["diff --git a/src/auth/a.ts b/src/auth/a.ts", "--- a/src/auth/a.ts", "+++ b/src/auth/a.ts", "@@ -1,2 +1,2 @@", "-// old comment", "+// new comment", " const a = 1;"].join("\n") + "\n";
+    const diff = `${[
+      "diff --git a/src/auth/a.ts b/src/auth/a.ts",
+      "--- a/src/auth/a.ts",
+      "+++ b/src/auth/a.ts",
+      "@@ -1,2 +1,2 @@",
+      "-// old comment",
+      "+// new comment",
+      " const a = 1;",
+    ].join("\n")}\n`;
     const cs = applyRules({ target: "t", base: "", head: "", files: parseDiff(diff) });
     // auth paths carry the sensitive label, so rules never mark them inert; the block stays live.
     const k = classify(cs, DEFAULT_POLICY);
@@ -168,9 +202,15 @@ describe("config layering", () => {
   const tmp = mkdtempSync(join(tmpdir(), "lookout-policy-"));
   const repo = join(tmp, "repo");
   const g = join(tmp, "global.toml");
-  writeFileSync(g, `[rank]\nmodel = "openai:gpt-6-luna"\n\n[dispatch.pi]\ncmd = "pi -p @{prompt_file}"\n\n[areas]\nbilling = ["money/**"]\n`);
+  writeFileSync(
+    g,
+    `[rank]\nmodel = "openai:gpt-6-luna"\n\n[dispatch.pi]\ncmd = "pi -p @{prompt_file}"\n\n[areas]\nbilling = ["money/**"]\n`,
+  );
   Bun.spawnSync(["mkdir", "-p", repo]);
-  writeFileSync(join(repo, ".lookout.toml"), `[areas]\nauth = ["identity/**"]\n\n[[policy.rules]]\narea = "auth"\ntier = "medium"\nreason = "identity is well-tested here"\n\n[policy.humans]\nhigh = 1\n`);
+  writeFileSync(
+    join(repo, ".lookout.toml"),
+    `[areas]\nauth = ["identity/**"]\n\n[[policy.rules]]\narea = "auth"\ntier = "medium"\nreason = "identity is well-tested here"\n\n[policy.humans]\nhigh = 1\n`,
+  );
   const cleanup = () => rmSync(tmp, { recursive: true, force: true });
 
   test("repo .lookout.toml layers over the global file; dispatch/rank come from global", () => {
@@ -198,4 +238,3 @@ describe("config layering", () => {
     cleanup();
   });
 });
-
