@@ -2,9 +2,9 @@ import { Box, render, Text, useApp, useInput, useStdout } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewSession } from "../core/session.ts";
 import type { Card, Review } from "../core/types.ts";
-import { type CardContext, cardLines, changeExchanges, exchangeLines, expandedLines, fit, type Line, plural, progressLine, Row, sides } from "./Card.tsx";
+import { type CardContext, cardLines, changeExchanges, exchangeLines, expandedLines, fit, type Line, plural, progressLine, Row, type Segment, sides, width, wrap } from "./Card.tsx";
 import { type Composer, composerKey, composerLines, openComposer } from "./Composer.tsx";
-import { HELP_LINES, keyAction, keyHelp, type Mode } from "./keys.ts";
+import { HELP_GLOSSARY, HELP_KEYS, keyAction, keyHelp, type Mode } from "./keys.ts";
 import { theme } from "./theme.ts";
 
 export interface Size {
@@ -86,7 +86,10 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const frame = useFrame(pending, frameOverride);
   const [selected, setSelected] = useState(0);
   const [mode, setMode] = useState<Mode>("stack");
-  const [help, setHelp] = useState(false);
+  /** The help popup: which page and how far it is scrolled. */
+  const [help, setHelp] = useState<{ page: "keys" | "glossary"; scroll: number }>();
+  /** A pending vim prefix (`g`), kept across key events. */
+  const prefix = useRef<string | undefined>(undefined);
   const [scroll, setScroll] = useState(0);
   const [top, setTop] = useState(0);
   /** The ask composer, while open. A ref mirrors it because several keys can arrive in one tick. */
@@ -143,7 +146,10 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
 
   useInput((input, key) => {
     if (help) {
-      if (key.escape || input === "?" || input === "q" || key.return) setHelp(false);
+      if (key.escape || input === "?" || input === "q" || key.return) return setHelp(undefined);
+      if (key.tab || input === "h" || input === "l" || key.leftArrow || key.rightArrow) return setHelp({ page: help.page === "keys" ? "glossary" : "keys", scroll: 0 });
+      if (input === "j" || key.downArrow) return setHelp({ ...help, scroll: help.scroll + 1 });
+      if (input === "k" || key.upArrow) return setHelp({ ...help, scroll: Math.max(0, help.scroll - 1) });
       return;
     }
     const open = askingRef.current;
@@ -153,13 +159,32 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       if ("send" in result) send(result.scope, result.send);
       return setAsking(undefined);
     }
-    const action = keyAction(input, key);
+    const next = keyAction(input, key, prefix.current);
+    prefix.current = next.pending;
+    const action = next.action;
     if (!action) return;
     switch (action.type) {
       case "quit":
         return exit();
       case "help":
-        return setHelp(true);
+        return setHelp({ page: "keys", scroll: 0 });
+      case "toggle":
+        if (mode === "expanded") return setMode("stack");
+        if (card && card.fixed !== "clean") {
+          setScroll(0);
+          setMode("expanded");
+        }
+        return;
+      case "jump": {
+        // Bands are runs of one colour in the (already sorted) stack; hot cards are red or amber.
+        const hot = (c: Card) => c.color === "red" || c.color === "amber";
+        const matches = (k: number) => (action.what === "hot" ? hot(cards[k]!) : cards[k]!.color !== cards[sel]!.color);
+        let k = sel + action.delta;
+        while (k >= 0 && k < cards.length && !matches(k)) k += action.delta;
+        if (action.what === "band" && k >= 0 && k < cards.length && action.delta < 0) while (k > 0 && cards[k - 1]!.color === cards[k]!.color) k--;
+        if (k >= 0 && k < cards.length) setSelected(k);
+        return;
+      }
       case "ask":
         return setAsking(openComposer(card && card.fixed !== "clean" ? "card" : "change", review.exchanges.map((e) => e.question)));
       case "expand":
@@ -174,11 +199,11 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       case "page":
       case "edge": {
         if (mode !== "stack") {
-          const step = action.type === "move" ? action.delta : action.type === "page" ? action.delta * (bodyH - 1) : 0;
+          const step = action.type === "move" ? action.delta : action.type === "page" ? Math.round(action.delta * (bodyH - 1)) : 0;
           const to = action.type === "edge" ? (action.to === "top" ? 0 : bodyLines.length) : scroll + step;
           return setScroll(Math.max(0, Math.min(to, Math.max(0, bodyLines.length - bodyH))));
         }
-        const step = action.type === "move" ? action.delta : action.type === "page" ? action.delta * 3 : 0;
+        const step = action.type === "move" ? action.delta : action.type === "page" ? Math.round(action.delta * 3) || Math.sign(action.delta) : 0;
         const to = action.type === "edge" ? (action.to === "top" ? 0 : cards.length - 1) : sel + step;
         return setSelected(Math.max(0, Math.min(to, cards.length - 1)));
       }
@@ -209,7 +234,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       {review.progress ? <Row line={{ segments: progressLine(review.progress, Date.now() - openedAt.current, w) }} w={w} /> : null}
       <Box flexDirection="column" height={bodyH}>
         {help
-          ? HELP_LINES.slice(0, bodyH).map((l, k) => <Row key={k} line={{ segments: [{ text: ` ${fit(l, w - 1)}` }] }} w={w} />)
+          ? helpLines(help, w, bodyH).map((l, k) => <Row key={k} line={l} w={w} />)
           : visible.map((l, k) => <Row key={k} line={l} w={w} selected={mode === "stack" && l.card === sel && l.segments.length > 1} />)}
         {!help && visible.length < bodyH ? Array.from({ length: bodyH - visible.length }, (_, k) => <Text key={`pad${k}`}> </Text>) : null}
       </Box>
@@ -219,6 +244,35 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       <Row line={footer} w={w} />
     </Box>
   );
+}
+
+/**
+ * The help popup: a bordered box centred in the body with two pages, keys and glossary, a tab
+ * strip in the top border and a scroll hint in the bottom one. Drawn as plain rows so the same
+ * code paints it in tests.
+ */
+function helpLines(help: { page: "keys" | "glossary"; scroll: number }, w: number, h: number): Line[] {
+  const boxW = Math.min(w - 2, 104);
+  const inner = boxW - 4;
+  const left = Math.max(0, Math.floor((w - boxW) / 2));
+  const pad = " ".repeat(left);
+  const source = help.page === "keys" ? HELP_KEYS : HELP_GLOSSARY;
+  // Rows keep their column spacing; only a row wider than the box wraps.
+  const rows = source.flatMap((l) => (width(l) <= inner ? [l] : wrap(l, inner)));
+  const bodyH = Math.max(1, Math.min(rows.length, h - 2));
+  const top = Math.max(0, Math.min(help.scroll, rows.length - bodyH));
+  const tabs = (page: "keys" | "glossary"): Segment => ({ text: ` ${page === "keys" ? "keys" : "glossary"} `, color: theme.accent, bold: help.page === page, inverse: help.page === page });
+  const title: Segment[] = [{ text: `${pad}┌─`, color: theme.accent }, tabs("keys"), { text: "─", color: theme.accent }, tabs("glossary"), { text: "─ tab switches ", color: theme.accent, dim: true }];
+  const titleW = width(title.map((s) => s.text).join(""));
+  title.push({ text: "─".repeat(Math.max(0, left + boxW - titleW - 1)) + "┐", color: theme.accent });
+  const more = rows.length > bodyH ? ` ${top + 1}–${top + bodyH} of ${rows.length} · j/k ` : "";
+  const bottom = ` esc closes ${more}`;
+  const foot: Segment[] = [{ text: `${pad}└`, color: theme.accent }, { text: bottom, color: theme.accent, dim: true }, { text: "─".repeat(Math.max(0, boxW - width(bottom) - 2)) + "┘", color: theme.accent }];
+  const body = rows.slice(top, top + bodyH).map((r): Line => {
+    const heading = /^[A-Z][a-z]+$/.test(r.trim()) && help.page === "keys";
+    return { segments: [{ text: `${pad}│ `, color: theme.accent }, { text: r, bold: heading, color: heading ? theme.accent : undefined }, { text: " ".repeat(Math.max(0, inner - width(r))) }, { text: " │", color: theme.accent }] };
+  });
+  return [{ segments: title }, ...body, { segments: foot }];
 }
 
 const ENTER_ALT = "\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l";

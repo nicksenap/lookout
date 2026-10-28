@@ -68,10 +68,22 @@ describe.each([
     const { app, screen } = await mount("review-b", columns, rows);
     app.stdin.write("?");
     await tick();
-    expect(screen().some((l) => l.includes("expand the card"))).toBe(true);
+    const popup = screen();
+    expect(popup.some((l) => l.includes("expand the card"))).toBe(true);
+    expect(popup.some((l) => l.includes("┌─") && l.includes("keys") && l.includes("glossary"))).toBe(true);
+    expect(widest(popup)).toBeLessThanOrEqual(columns);
+    app.stdin.write("\t");
+    await tick();
+    const glossary = screen();
+    expect(glossary.some((l) => l.includes("one logical change"))).toBe(true);
+    expect(glossary.some((l) => l.includes("expand the card"))).toBe(false);
+    app.stdin.write("j");
+    await tick();
+    // Scrolling only shows a position when the glossary overflows the box, which depends on the terminal height.
+    expect(screen().some((l) => (l.includes("of ") && l.includes("j/k")) || l.includes("esc closes"))).toBe(true);
     app.stdin.write("\x1b");
     await tick();
-    expect(screen().some((l) => l.includes("expand the card"))).toBe(false);
+    expect(screen().some((l) => l.includes("one logical change"))).toBe(false);
   });
 });
 
@@ -126,10 +138,10 @@ describe("stack contents", () => {
 });
 
 describe("ask and progress", () => {
-  test("/ opens a composer box above the keys about the selected card; typing, backspace and enter send it; the answer lands under the card", async () => {
+  test("a opens a composer box above the keys about the selected card; typing, backspace and enter send it; the answer lands under the card", async () => {
     const { app, session, screen } = await mount("review-c", 100, 30);
     const rows = screen().length;
-    app.stdin.write("/");
+    app.stdin.write("a");
     await tick();
     let s = screen();
     expect(s.length).toBe(rows);
@@ -162,7 +174,7 @@ describe("ask and progress", () => {
     sessions.push(session);
     const app = render(<App session={session} size={{ columns: 100, rows: 30 }} frame={0} throttleMs={0} />);
     await tick();
-    app.stdin.write("/");
+    app.stdin.write("a");
     app.stdin.write("\t");
     await tick();
     expect(lines(app.lastFrame()).some((l) => l.includes("ask · the whole change"))).toBe(true);
@@ -170,7 +182,7 @@ describe("ask and progress", () => {
     await tick();
     expect(lines(app.lastFrame()).some((l) => l.startsWith("┌"))).toBe(false);
     expect(session.snapshot().exchanges).toHaveLength(0);
-    app.stdin.write("/");
+    app.stdin.write("a");
     app.stdin.write("\t");
     app.stdin.write("safe?");
     const landed = until(session, "exchange.updated");
@@ -184,7 +196,7 @@ describe("ask and progress", () => {
     expect(q).toBeLessThan(firstCard);
     expect(s[q + 1]).toContain("answer unverified");
     expect(session.snapshot().exchanges[0]!.cardId).toBeUndefined();
-    app.stdin.write("/");
+    app.stdin.write("a");
     app.stdin.write("\x1b[A");
     await tick();
     expect(lines(app.lastFrame()).some((l) => l.startsWith("│ safe?▏"))).toBe(true);
@@ -193,7 +205,7 @@ describe("ask and progress", () => {
 
   test("composer editing: cursor keys, ctrl-w, ctrl-u, pasted newlines become spaces, long text wraps to at most three rows that follow the cursor", async () => {
     const { app, screen } = await mount("review-c", 60, 30);
-    app.stdin.write("/");
+    app.stdin.write("a");
     app.stdin.write("one two three");
     app.stdin.write("\x17"); // ctrl-w
     await tick();
@@ -230,6 +242,45 @@ describe("ask and progress", () => {
     session.setProgress(undefined);
     await tick();
     expect(screen()[1]).not.toContain("▰");
+    void app;
+  });
+});
+
+describe("vim keys", () => {
+  test("gg / G / ge jump to the edges; } and { jump between hot cards; ] and [ between colour bands; o toggles expanded", async () => {
+    const { app, session, screen } = await mount("review-a", 120, 50);
+    const colours = session.snapshot().cards.map((c) => c.color);
+    const selectedIndex = () => screen().findIndex((l) => l.startsWith("█ ")); // first row of the selected card
+    app.stdin.write("G");
+    await tick();
+    const lastRow = selectedIndex();
+    app.stdin.write("g");
+    app.stdin.write("g");
+    await tick();
+    expect(selectedIndex()).toBeLessThan(lastRow);
+    app.stdin.write("g");
+    app.stdin.write("e");
+    await tick();
+    expect(selectedIndex()).toBe(lastRow);
+    app.stdin.write("g");
+    app.stdin.write("g");
+    await tick();
+    app.stdin.write("]");
+    await tick();
+    const band = screen()[selectedIndex()]!.split(/\s+/)[1];
+    expect(band).toBe(colours.find((c) => c !== colours[0])!.toUpperCase());
+    app.stdin.write("}");
+    await tick();
+    expect(screen()[selectedIndex()]!.split(/\s+/)[1]).toBe(band); // no hotter card below amber
+    app.stdin.write("{");
+    await tick();
+    expect(screen()[selectedIndex()]!.split(/\s+/)[1]).toBe("RED");
+    app.stdin.write("o");
+    await tick();
+    expect(screen().some((l) => l.startsWith("diff ·"))).toBe(true);
+    app.stdin.write("o");
+    await tick();
+    expect(screen().some((l) => l.startsWith("diff ·"))).toBe(false);
     void app;
   });
 });

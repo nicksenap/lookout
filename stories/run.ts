@@ -1,6 +1,6 @@
 // Story runner: render the real App against a saved Review, no git, models or agents.
 // Usage: bun stories/run.ts [review-a|review-b|review-c] [--size 100x30] [--paragraphs] [--slow]
-//   / asks a question (answered by a canned sentence after 1.2s); --paragraphs fills in sample paragraphs after 1.5s;
+//   a asks a question (answered by a canned sentence after 1.2s); --paragraphs fills in sample paragraphs after 1.5s;
 //   while pending, a fake progress bar walks ranking → writing.
 import { runTui } from "../src/tui/App.tsx";
 import { FixtureSession, loadReview } from "./fixture-session.ts";

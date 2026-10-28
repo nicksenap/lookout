@@ -30,7 +30,9 @@
 
 **Question** — a yes/no prompt for the human reviewer, chosen per card from a tier-specific bank.
 
-**Exchange** — a free question the reviewer typed into the composer (`/`) about one card or the whole change, and the model's answer written from that scope's edits only. Decisions scores whether the answer is consistent with those edits; below 0.7 the answer is shown *unverified*. Stored on the Review, newest last.
+**Exchange** — a free question the reviewer typed into the composer (`a`) about one card or the whole change, and the model's answer written from that scope's edits only. Decisions scores whether the answer is consistent with those edits; below 0.7 the answer is shown *unverified*. Stored on the Review, newest last.
+
+**Scope** — the declarations and object keys that enclose an edit block's first changed line in the file at head, outermost first (`DEPLOYMENTS › stage › servedTools › web`). Rules read it from indentation; the writer, the splitter and the expanded card use it where the hunk header stops short.
 
 **Progress** — where the pipeline is while cards load: the phase (ranking, splitting, writing) and items done of total. Drawn as a ten-cell bar under the header; cleared on done.
 
