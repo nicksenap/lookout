@@ -7,6 +7,7 @@
 // mechanical leaks (blocks lookout calls mechanical that the judge calls behaviour) and
 // fragment cards (a card of ≤ 2 blocks whose blocks the judge put in a larger concern).
 import { buildCards } from "../src/cards/build.ts";
+import { isFragment } from "../src/cards/group.ts";
 import { allBlocks } from "../src/core/blocks.ts";
 import type { Review } from "../src/core/types.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
@@ -43,8 +44,9 @@ export function score(review: Review, target: Target) {
   const ari = adjustedRand(live.map((id) => judged.get(id)!), live.map((id) => byCard.get(id) ?? -1));
   const judgedMechanical = new Set(target.mechanical);
   const leaks = cards.filter((c) => c.mechanical).flatMap((c) => c.blockIds.filter((id) => !judgedMechanical.has(id)).map((id) => ({ card: c.title, blockId: id })));
-  const inMechanicalCard = new Set(cards.filter((c) => c.mechanical).flatMap((c) => c.blockIds));
-  const kept = target.mechanical.filter((id) => inMechanicalCard.has(id)).length;
+  // A fragment (import, re-export, lone type) that joined its owner card is also "skipped" by the reader.
+  const skipped = new Set([...cards.filter((c) => c.mechanical).flatMap((c) => c.blockIds), ...allBlocks(review.changeSet).filter(isFragment).map((r) => r.block.id)]);
+  const kept = target.mechanical.filter((id) => skipped.has(id)).length;
   const concernSize = new Map<number, number>();
   for (const k of judged.values()) concernSize.set(k, (concernSize.get(k) ?? 0) + 1);
   const fragments = cards.filter((c) => c.blockIds.length <= 2 && c.blockIds.some((id) => (concernSize.get(judged.get(id)!) ?? 0) > 2)).map((c) => c.title);
@@ -58,7 +60,7 @@ export function score(review: Review, target: Target) {
     largestCard: Math.max(0, ...cards.map((c) => c.blockIds.length)),
     largestConcern: Math.max(0, ...target.concerns.map((c) => c.blockIds.length)),
     mechanicalLeaks: leaks,
-    /** Share of the judge's mechanical blocks that lookout still shows as mechanical. */
+    /** Share of the judge's mechanical blocks that lookout shows as mechanical or folds into an owner card as a fragment. */
     mechanicalRecall: target.mechanical.length ? Number((kept / target.mechanical.length).toFixed(2)) : null,
     fragmentCards: fragments,
     unplacedByJudge: unplaced.length,

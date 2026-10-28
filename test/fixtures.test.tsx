@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import { render } from "ink-testing-library";
 import { buildCards, untouchedAreas } from "../src/cards/build.ts";
-import { isMechanical, isOrphan } from "../src/cards/group.ts";
+import { isMechanical, isFragment, isOrphan } from "../src/cards/group.ts";
 import { allBlocks } from "../src/core/blocks.ts";
 import type { Review } from "../src/core/types.ts";
 import { classify, evaluate } from "../src/policy/evaluate.ts";
@@ -35,10 +35,10 @@ describe.each(names)("fixture %s", (name) => {
     const review = await load(name);
     const refs = allBlocks(review.changeSet);
     const kindOf = new Map(refs.map((r) => [r.block.id, r.block.kind]));
-    const orphans = new Set(refs.filter(isOrphan).map((r) => r.block.id));
+    const orphans = new Set(refs.filter((r) => isOrphan(r) || isFragment(r)).map((r) => r.block.id));
     for (const c of review.cards) {
       if (c.fixed) continue;
-      // Orphans (a lone brace) sit with their neighbour whatever the model called them.
+      // Orphans (a lone brace) and fragments (an import) sit with their owner whatever the model called them.
       const kinds = new Set(c.blockIds.filter((id) => !orphans.has(id)).map((id) => kindOf.get(id)));
       if (c.mechanical) {
         expect([...kinds].every((k) => isMechanical(k))).toBe(true);

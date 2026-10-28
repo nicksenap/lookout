@@ -50,7 +50,7 @@ export function confirmMechanical(hunk: Hunk, block: EditBlock, kind: BlockKind,
   }
 }
 
-const isImport = (line: string) => /^\s*(import\b|from\s+\S+\s+import\b|export\s+(type\s+)?\{[^}]*\}\s*from\b|\}\s*from\s+['"]|[A-Za-z_$][\w$]*,?\s*$|\)\s*$|\{\s*$)/.test(line);
+export const isImport = (line: string) => /^\s*(import\b|from\s+\S+\s+import\b|export\s+(type\s+)?\{[^}]*\}\s*from\b|\}\s*from\s+['"]|[A-Za-z_$][\w$]*,?\s*$|\)\s*$|\{\s*$)/.test(line);
 
 /** Apply the guard to every block of a ranked change set: unconfirmed mechanical kinds become `behavior`. */
 export function guardKinds(changeSet: ChangeSet): ChangeSet {

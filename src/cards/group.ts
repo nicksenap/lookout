@@ -1,5 +1,6 @@
 import { blockLines, type BlockRef } from "../core/blocks.ts";
 import type { BlockKind } from "../core/types.ts";
+import { isImport } from "../rank/mechanical.ts";
 
 const MECHANICAL: readonly BlockKind[] = ["typing-refactor", "rename", "move"];
 export const isMechanical = (kind: BlockKind | undefined): boolean => kind !== undefined && MECHANICAL.includes(kind);
@@ -24,6 +25,25 @@ export function changedIdentifiers(r: BlockRef): Set<string> {
 
 /** A punctuation-only edit (a moved brace, a trailing comma): it belongs to whatever it sits next to. */
 export const isOrphan = (r: BlockRef): boolean => blockLines(r.hunk, r.block).map((l) => l.text).join("").replace(/[^A-Za-z]/g, "").length < 3;
+
+/**
+ * An edit that cannot stand alone as a logical change: imports, re-exports, a lone type or
+ * interface, a destructured prop. It belongs to the card that owns its file, whatever kind
+ * the model gave it. Measured on three production PRs where these formed cards of their
+ * own (a lone request model as a card, "Rename in the deployment file" for two `export` lines).
+ */
+export function isFragment(r: BlockRef): boolean {
+  const lines = blockLines(r.hunk, r.block)
+    .filter((l) => l.kind !== "context" && l.text.trim() !== "")
+    .map((l) => l.text);
+  if (lines.length === 0) return false;
+  if (lines.every(isImport)) return true;
+  if (lines.every((l) => /^\s*(export\s*\{[^}]*\}\s*;?\s*(from\s+['"][^'"]+['"]\s*;?)?|export\s+\*\s+from\s+['"][^'"]+['"]\s*;?|export\s*\{\s*|\}\s*;?|[A-Za-z_$][\w$]*,?)\s*$/.test(l))) return true;
+  // A whole type/interface declaration, or members of one (`  limit?: number;`), with no runtime statement.
+  if (/^\s*(export\s+)?(type|interface)\b/.test(lines[0]!) && lines.every((l) => !/[=(]\s*(?!>)|\breturn\b|\bawait\b/.test(l.replace(/=>/g, "").replace(/<[^<>]*>/g, "")))) return true;
+  // One destructured prop, as `onMoveToProject,` inside `({ taskId, onCommit })`.
+  return lines.length <= 2 && lines.every((l) => /^\s*[A-Za-z_$][\w$]*\??,?\s*$/.test(l));
+}
 
 export interface Group {
   refs: BlockRef[];
@@ -53,7 +73,8 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
   // 1. Orphans (punctuation-only edits such as a moved brace) join the nearest earlier block in
   //    the same hunk, else the next, and take no further part: otherwise a lone brace bridges
   //    two unrelated groups.
-  const orphan = refs.map(isOrphan);
+  const fragment = refs.map(isFragment);
+  const orphan = refs.map((r, k) => isOrphan(r) && !fragment[k]);
   refs.forEach((r, k) => {
     if (!orphan[k]) return;
     const prev = refs.findLastIndex((o, j) => j < k && o.hunk.id === r.hunk.id && !orphan[j]);
@@ -65,18 +86,18 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
   // 2. Mechanical kinds: one group per kind across the whole change. A rename or a typing
   //    sweep over sixty files is one thing to review, not sixty.
   refs.forEach((_, i) => {
-    if (orphan[i] || !isMechanical(kindOf(i))) return;
+    if (orphan[i] || fragment[i] || !isMechanical(kindOf(i))) return;
     refs.forEach((_, j) => {
-      if (j <= i || orphan[j] || kindOf(j) !== kindOf(i)) return;
+      if (j <= i || orphan[j] || fragment[j] || kindOf(j) !== kindOf(i)) return;
       union(i, j);
     });
   });
 
   // 3. Same kind, same file, close together.
   refs.forEach((a, i) => {
-    if (orphan[i]) return;
+    if (orphan[i] || fragment[i]) return;
     refs.forEach((b, j) => {
-      if (j <= i || orphan[j] || kindOf(j) !== kindOf(i) || b.file.path !== a.file.path || isMechanical(kindOf(i))) return;
+      if (j <= i || orphan[j] || fragment[j] || kindOf(j) !== kindOf(i) || b.file.path !== a.file.path || isMechanical(kindOf(i))) return;
       const aEnd = a.block.newRange?.end ?? a.block.oldRange?.end ?? 0;
       const bStart = b.block.newRange?.start ?? b.block.oldRange?.start ?? 0;
       if (a.hunk.id === b.hunk.id || Math.abs(bStart - aEnd) <= neighbourLines) union(i, j);
@@ -91,12 +112,28 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
   });
   const sameKindCount = (k: number) => refs.filter((_, j) => kindOf(j) === kindOf(k)).length;
   refs.forEach((_, i) => {
-    if (orphan[i]) return;
+    if (orphan[i] || fragment[i]) return;
     const cap = Math.max(2, Math.floor(sameKindCount(i) * rareShare));
     refs.forEach((_, j) => {
-      if (j <= i || orphan[j] || kindOf(j) !== kindOf(i) || isMechanical(kindOf(i))) return;
+      if (j <= i || orphan[j] || fragment[j] || kindOf(j) !== kindOf(i) || isMechanical(kindOf(i))) return;
       if ([...ids[i]!].some((w) => ids[j]!.has(w) && (freq.get(`${kindOf(i)}|${w}`) ?? 0) <= cap)) union(i, j);
     });
+  });
+
+  // 5. Fragments join the owner of their file: the non-mechanical group with most blocks there,
+  //    else any group there, else a group elsewhere that mentions one of the fragment's names.
+  //    A fragment with no owner stays its own group (a new file that is only a type).
+  refs.forEach((r, k) => {
+    if (!fragment[k]) return;
+    const candidates = refs.map((_, j) => j).filter((j) => j !== k && !fragment[j] && !orphan[j]);
+    const weight = (j: number) => refs.filter((o, m) => find(m) === find(j) && o.file.path === r.file.path && !fragment[m]).length;
+    const inFile = candidates.filter((j) => refs[j]!.file.path === r.file.path);
+    const owner =
+      inFile.filter((j) => !isMechanical(kindOf(j))).sort((a, b) => weight(b) - weight(a))[0] ??
+      inFile.sort((a, b) => weight(b) - weight(a))[0] ??
+      refs.findIndex((_, j) => j !== k && !orphan[j] && [...ids[k]!].some((w) => ids[j]!.has(w)));
+    if (owner === -1) return;
+    if (owner !== undefined) union(k, owner);
   });
 
   const byRoot = new Map<number, number[]>();
@@ -105,8 +142,8 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
     const counts = new Map<string, number>();
     for (const k of members) for (const w of ids[k]!) counts.set(w, (counts.get(w) ?? 0) + 1);
     const topIdentifiers = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4).map(([w]) => w);
-    // Orphans have no say in the group's kind.
-    const kinds = new Set(members.filter((k) => !orphan[k]).map(kindOf));
+    // Orphans and fragments have no say in the group's kind.
+    const kinds = new Set(members.filter((k) => !orphan[k] && !fragment[k]).map(kindOf));
     const group: Group = { refs: members.map((k) => refs[k]!), topIdentifiers };
     if (kinds.size === 1 && !kinds.has(undefined)) group.kind = [...kinds][0]!;
     return group;

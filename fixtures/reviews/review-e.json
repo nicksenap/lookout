@@ -1,1 +1,136 @@
-{"changeSet":{"target":"fa01ffd^..fa01ffd","base":"3ddc924c8da2e5968d8680370d54954e3dfefd24","head":"fa01ffd0ec52e48ea300147b76d345dea5189347","files":[{"path":".gitignore","status":"modified","binary":false,"hunks":[{"id":"6c47b842756e","path":".gitignore","header":"@@ -4,3 +4,6 @@ node_modules/","oldStart":4,"oldLines":3,"newStart":4,"newLines":6,"lines":[{"kind":"context","text":".DS_Store","oldLine":4,"newLine":4},{"kind":"context","text":"coverage/","oldLine":5,"newLine":5},{"kind":"context","text":"dist/","oldLine":6,"newLine":6},{"kind":"add","text":"","newLine":7},{"kind":"add","text":".env","newLine":8},{"kind":"add","text":".env.*","newLine":9}],"blocks":[{"id":"1ca6389e684c","hunkId":"6c47b842756e","path":".gitignore","from":3,"to":6,"labels":[],"attention":"routine","score":0.189,"newRange":{"start":7,"end":9},"kind":"config"}],"labels":[],"attention":"routine","score":0.189}]}]},"classification":{"kind":"additive","areas":[],"maxAttention":"routine","sensitivePaths":[],"counts":{"files":1,"blocks":1,"inert":0}},"verdict":{"tier":"low","requiredHumans":0,"reasons":["additive change → low"]},"cards":[{"id":"7b3b0b56563d","title":"Ignore Environment Files","color":"green","kind":"additive","areas":[],"labels":[],"blockIds":["1ca6389e684c"],"attention":"routine","score":0.189,"blockKind":"config","paragraph":"`.gitignore` now excludes `.env` and files matching `.env.*`, in addition to the existing ignored paths.","testsTouched":false,"claimIds":[],"unmentioned":false,"questions":[]}],"untouched":["auth","billing","data","infra","prompts"],"claims":[],"door":{"computed":"two-way","signals":[]},"radius":{"areas":[]},"dispatches":[],"rankedBy":"rules+openai:gpt-6-luna"}
+{
+  "changeSet": {
+    "target": "fa01ffd^..fa01ffd",
+    "base": "3ddc924c8da2e5968d8680370d54954e3dfefd24",
+    "head": "fa01ffd0ec52e48ea300147b76d345dea5189347",
+    "files": [
+      {
+        "path": ".gitignore",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "6c47b842756e",
+            "path": ".gitignore",
+            "header": "@@ -4,3 +4,6 @@ node_modules/",
+            "oldStart": 4,
+            "oldLines": 3,
+            "newStart": 4,
+            "newLines": 6,
+            "lines": [
+              {
+                "kind": "context",
+                "text": ".DS_Store",
+                "oldLine": 4,
+                "newLine": 4
+              },
+              {
+                "kind": "context",
+                "text": "coverage/",
+                "oldLine": 5,
+                "newLine": 5
+              },
+              {
+                "kind": "context",
+                "text": "dist/",
+                "oldLine": 6,
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": ".env",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": ".env.*",
+                "newLine": 9
+              }
+            ],
+            "blocks": [
+              {
+                "id": "1ca6389e684c",
+                "hunkId": "6c47b842756e",
+                "path": ".gitignore",
+                "from": 3,
+                "to": 6,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.189,
+                "newRange": {
+                  "start": 7,
+                  "end": 9
+                },
+                "kind": "config"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.189
+          }
+        ]
+      }
+    ]
+  },
+  "classification": {
+    "kind": "additive",
+    "areas": [],
+    "maxAttention": "routine",
+    "sensitivePaths": [],
+    "counts": {
+      "files": 1,
+      "blocks": 1,
+      "inert": 0
+    }
+  },
+  "verdict": {
+    "tier": "low",
+    "requiredHumans": 0,
+    "reasons": [
+      "additive change → low"
+    ]
+  },
+  "cards": [
+    {
+      "id": "7b3b0b56563d",
+      "title": "Ignore Environment Files",
+      "color": "green",
+      "kind": "additive",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "1ca6389e684c"
+      ],
+      "attention": "routine",
+      "score": 0.189,
+      "claimIds": [],
+      "unmentioned": false,
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "config",
+      "paragraph": "`.gitignore` now excludes `.env` and files matching `.env.*`, in addition to the existing ignored paths."
+    }
+  ],
+  "untouched": [
+    "auth",
+    "billing",
+    "data",
+    "infra",
+    "prompts"
+  ],
+  "claims": [],
+  "door": {
+    "computed": "two-way",
+    "signals": []
+  },
+  "radius": {
+    "areas": []
+  },
+  "dispatches": [],
+  "rankedBy": "rules+openai:gpt-6-luna"
+}

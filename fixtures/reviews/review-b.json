@@ -3865,8 +3865,8 @@
   },
   "cards": [
     {
-      "id": "bd36242c789a",
-      "title": "Add Policy-Based Review Verdicts",
+      "id": "ac15b74179e9",
+      "title": "tier-survey.ts +4 more · policy, base",
       "color": "amber",
       "kind": "logic",
       "areas": [],
@@ -3875,6 +3875,7 @@
       ],
       "blockIds": [
         "c37de64686c8",
+        "af9901c7a4e2",
         "b7697b4aa51c",
         "1c3033197f0c",
         "736fdd39e6f1",
@@ -3895,11 +3896,9 @@
       ],
       "attention": "needs-eyes",
       "score": 0.73,
-      "blockKind": "behavior",
-      "paragraph": "`loadConfig` now layers repository `.lookout.toml` settings over global configuration, including areas and policy rules. The CLI classifies each `ChangeSet`, evaluates its tier and required human count, and stores the classification and verdict both before and after model ranking; `tier-survey.ts` reports these classifications for recent non-merge commits.",
-      "testsTouched": true,
       "claimIds": [],
       "unmentioned": false,
+      "testsTouched": true,
       "questions": [
         {
           "id": "intent",
@@ -3909,7 +3908,8 @@
           "id": "error-path",
           "text": "Is the failure path of the new logic handled and tested?"
         }
-      ]
+      ],
+      "blockKind": "behavior"
     },
     {
       "id": "c209d915793d",
@@ -3925,12 +3925,12 @@
       ],
       "attention": "needs-eyes",
       "score": 0.442,
-      "blockKind": "types",
-      "paragraph": "`Review` now includes `classification: Classification` and `verdict: Verdict`; `Classification` records the change kind, areas, maximum attention, sensitive paths, and file/block/inert counts, while `Verdict` records a low/medium/high tier, required human count, and reasons. `Config` now requires a `policy: Policy` field.",
-      "testsTouched": true,
       "claimIds": [],
       "unmentioned": false,
-      "questions": []
+      "testsTouched": true,
+      "questions": [],
+      "blockKind": "types",
+      "paragraph": "`Review` now includes `classification: Classification` and `verdict: Verdict`; `Classification` records the change kind, areas, maximum attention, sensitive paths, and file/block/inert counts, while `Verdict` records a low/medium/high tier, required human count, and reasons. `Config` now requires a `policy: Policy` field."
     },
     {
       "id": "ba8519f20d6e",
@@ -3950,37 +3950,17 @@
       ],
       "attention": "routine",
       "score": 0.476,
-      "blockKind": "test",
-      "paragraph": "`dispatch.test.ts` now builds each `Review` with `classification` from `classify` and `verdict` from `evaluate`, and supplies `DEFAULT_POLICY` in test configs. New `policy.test.ts` cases cover tier and human-count evaluation, change-kind and area classification, diff classification, schema errors, and global/repository config layering.",
+      "claimIds": [],
+      "unmentioned": false,
       "testsTouched": false,
+      "questions": [],
+      "blockKind": "test",
       "covers": [
-        "bd36242c789a",
+        "ac15b74179e9",
         "c209d915793d",
         "b246e861bf19"
       ],
-      "claimIds": [],
-      "unmentioned": false,
-      "questions": []
-    },
-    {
-      "id": "6c7ed8d2c059",
-      "title": "Typing refactor in main.ts",
-      "color": "green",
-      "kind": "logic",
-      "areas": [],
-      "labels": [],
-      "blockIds": [
-        "af9901c7a4e2"
-      ],
-      "attention": "routine",
-      "score": 0.12,
-      "blockKind": "typing-refactor",
-      "paragraph": "1 edit change types, annotations or function form only (ChangeSet); runtime behaviour is unchanged.",
-      "mechanical": true,
-      "testsTouched": false,
-      "claimIds": [],
-      "unmentioned": false,
-      "questions": []
+      "paragraph": "`dispatch.test.ts` now builds each `Review` with `classification` from `classify` and `verdict` from `evaluate`, and supplies `DEFAULT_POLICY` in test configs. New `policy.test.ts` cases cover tier and human-count evaluation, change-kind and area classification, diff classification, schema errors, and global/repository config layering."
     },
     {
       "id": "b246e861bf19",
@@ -3994,12 +3974,12 @@
       ],
       "attention": "routine",
       "score": 0.118,
-      "blockKind": "config",
-      "paragraph": "Exports `REPO_CONFIG_NAME` with the value `.lookout.toml` from `src/dispatch/config.ts`.",
-      "testsTouched": true,
       "claimIds": [],
       "unmentioned": false,
-      "questions": []
+      "testsTouched": true,
+      "questions": [],
+      "blockKind": "config",
+      "paragraph": "Exports `REPO_CONFIG_NAME` with the value `.lookout.toml` from `src/dispatch/config.ts`."
     }
   ],
   "untouched": [

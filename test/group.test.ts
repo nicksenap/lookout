@@ -25,6 +25,20 @@ const cs = (text: string, kinds: (BlockKind | undefined)[]): ChangeSet => {
 };
 
 describe("groupBlocks", () => {
+  test("fragments (imports, re-exports, a lone type, a destructured prop) join the card that owns their file, whatever their kind", () => {
+    const text =
+      diff("src/a.ts", "@@ -1,3 +1,4 @@", [" x", "+import { Foo } from './foo';", " y", " z", "@@ -20,2 +21,5 @@", " a", "+export interface Args {", "+  ids: string[];", "+}", " b", "@@ -40,3 +44,4 @@", " p", "+  const total = ids.length * 2;", " q", " r"]) +
+      diff("src/index.ts", "@@ -1,3 +1,4 @@", [" m", "+export { Foo } from './a';", " n", " o"]);
+    const groups = groupBlocks(allBlocks(cs(text, ["rename", "types", "behavior", "rename"])));
+    expect(groups.length).toBe(1);
+    expect(groups[0]!.kind).toBe("behavior");
+  });
+
+  test("a fragment with no owner stays its own group", () => {
+    const text = diff("src/types.ts", "@@ -1,2 +1,5 @@", [" x", "+export type Id = string;", "+export interface Row {", "+  id: Id;", "+}", " y"]);
+    expect(groupBlocks(allBlocks(cs(text, ["types"]))).length).toBe(1);
+  });
+
   test("blocks sharing a changed identifier merge within a kind; a different kind stays apart", () => {
     const text =
       diff("src/a.ts", "@@ -1,3 +1,3 @@", [" x", "-const budget = 1;", "+const budgetPeriod = 1;", " y"]) +

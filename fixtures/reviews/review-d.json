@@ -1253,7 +1253,8 @@
                   "start": 133,
                   "end": 133
                 },
-                "kind": "typing-refactor"
+                "kind": "behavior",
+                "suggestedKind": "typing-refactor"
               },
               {
                 "id": "90afb76d678c",
@@ -1272,7 +1273,8 @@
                   "start": 135,
                   "end": 135
                 },
-                "kind": "typing-refactor"
+                "kind": "behavior",
+                "suggestedKind": "typing-refactor"
               }
             ],
             "labels": [],
@@ -2117,7 +2119,8 @@
                   "start": 63,
                   "end": 63
                 },
-                "kind": "rename"
+                "kind": "behavior",
+                "suggestedKind": "rename"
               },
               {
                 "id": "a7fc25338ef7",
@@ -2174,7 +2177,8 @@
                   "start": 75,
                   "end": 77
                 },
-                "kind": "typing-refactor"
+                "kind": "behavior",
+                "suggestedKind": "typing-refactor"
               },
               {
                 "id": "0702e47429d9",
@@ -2193,7 +2197,8 @@
                   "start": 79,
                   "end": 79
                 },
-                "kind": "typing-refactor"
+                "kind": "behavior",
+                "suggestedKind": "typing-refactor"
               },
               {
                 "id": "080ad8d92748",
@@ -2269,7 +2274,8 @@
                   "start": 91,
                   "end": 91
                 },
-                "kind": "rename"
+                "kind": "behavior",
+                "suggestedKind": "rename"
               }
             ],
             "labels": [],
@@ -2380,7 +2386,8 @@
                   "start": 100,
                   "end": 103
                 },
-                "kind": "rename"
+                "kind": "behavior",
+                "suggestedKind": "rename"
               }
             ],
             "labels": [],
@@ -2623,7 +2630,8 @@
                   "start": 36,
                   "end": 36
                 },
-                "kind": "typing-refactor"
+                "kind": "behavior",
+                "suggestedKind": "typing-refactor"
               }
             ],
             "labels": [],
@@ -2898,7 +2906,8 @@
                   "start": 68,
                   "end": 69
                 },
-                "kind": "rename"
+                "kind": "behavior",
+                "suggestedKind": "rename"
               },
               {
                 "id": "18aea5f77965",
@@ -2917,7 +2926,8 @@
                   "start": 71,
                   "end": 71
                 },
-                "kind": "rename"
+                "kind": "behavior",
+                "suggestedKind": "rename"
               },
               {
                 "id": "d75f81ccb191",
@@ -3166,7 +3176,8 @@
                   "start": 107,
                   "end": 113
                 },
-                "kind": "rename"
+                "kind": "behavior",
+                "suggestedKind": "rename"
               }
             ],
             "labels": [],
@@ -3303,7 +3314,8 @@
                   "start": 192,
                   "end": 192
                 },
-                "kind": "typing-refactor"
+                "kind": "behavior",
+                "suggestedKind": "typing-refactor"
               },
               {
                 "id": "1b0def1a370a",
@@ -3322,7 +3334,8 @@
                   "start": 195,
                   "end": 195
                 },
-                "kind": "typing-refactor"
+                "kind": "behavior",
+                "suggestedKind": "typing-refactor"
               },
               {
                 "id": "d80a7be97fdf",
@@ -4742,8 +4755,8 @@
   },
   "cards": [
     {
-      "id": "eec352001524",
-      "title": "Rank Changes by Edit Block",
+      "id": "254542720897",
+      "title": "inert-audit.ts +6 more · block, hunk",
       "color": "amber",
       "kind": "logic",
       "areas": [],
@@ -4755,18 +4768,34 @@
         "29a3b9333661",
         "af7fa5d91547",
         "433165ba29f7",
+        "83a889007bb8",
+        "90afb76d678c",
         "7102fde3e8a1",
         "ef774989deb5",
+        "df3ff9e8a12f",
+        "1615069dde8e",
         "a7fc25338ef7",
         "57531f94407c",
+        "3dd432d2d44f",
+        "0702e47429d9",
         "080ad8d92748",
         "c3fc830f99f6",
         "a3d3874b6a4f",
+        "5ae904c3bd18",
+        "06a4aa512f28",
+        "70a36e435953",
         "42bb310f39b2",
+        "9bdad580fb47",
+        "a794b969f2c9",
+        "18aea5f77965",
         "d75f81ccb191",
         "18a99e26f3ec",
         "33fbd393df23",
         "7324f11cad0b",
+        "1f42ba9a1b72",
+        "4eeca9b5df01",
+        "a7aa5908d380",
+        "1b0def1a370a",
         "1bd4838c3f8f",
         "7f0cfd53b5d1",
         "a40599d9c777",
@@ -4775,12 +4804,11 @@
       ],
       "attention": "needs-eyes",
       "score": 0.738,
-      "blockKind": "behavior",
-      "paragraph": "`parseDiff` now splits each hunk into contiguous changed-line blocks, and `applyRules` and model scoring rank blocks individually before `deriveHunk` aggregates their labels, attention, and score. `inert-audit.ts` reports inert edit blocks instead of hunks, while `rankWithModel` uses `Result` helpers to capture scoring failures and cache-save errors.",
-      "testsTouched": true,
       "claimIds": [],
       "unmentioned": false,
-      "questions": []
+      "testsTouched": true,
+      "questions": [],
+      "blockKind": "behavior"
     },
     {
       "id": "a4430321ec76",
@@ -4794,40 +4822,12 @@
       ],
       "attention": "needs-eyes",
       "score": 0.611,
+      "claimIds": [],
+      "unmentioned": false,
+      "testsTouched": true,
+      "questions": [],
       "blockKind": "types",
-      "paragraph": "`Hunk` now includes derived `blocks`, `labels`, `attention`, and `score` fields. The new `EditBlock` type records each contiguous run of changed lines by ID, hunk ID, path, line-index bounds, optional old/new line ranges, labels, attention, and score.",
-      "testsTouched": true,
-      "claimIds": [],
-      "unmentioned": false,
-      "questions": []
-    },
-    {
-      "id": "ebaa2960cd7e",
-      "title": "Typing refactor across 4 files",
-      "color": "green",
-      "kind": "logic",
-      "areas": [],
-      "labels": [],
-      "blockIds": [
-        "83a889007bb8",
-        "90afb76d678c",
-        "df3ff9e8a12f",
-        "3dd432d2d44f",
-        "0702e47429d9",
-        "9bdad580fb47",
-        "1f42ba9a1b72",
-        "a7aa5908d380",
-        "1b0def1a370a"
-      ],
-      "attention": "routine",
-      "score": 0.444,
-      "blockKind": "typing-refactor",
-      "paragraph": "9 edits change types, annotations or function form only (Hunk, blocks, hunk); runtime behaviour is unchanged.",
-      "mechanical": true,
-      "testsTouched": true,
-      "claimIds": [],
-      "unmentioned": false,
-      "questions": []
+      "paragraph": "`Hunk` now includes derived `blocks`, `labels`, `attention`, and `score` fields. The new `EditBlock` type records each contiguous run of changed lines by ID, hunk ID, path, line-index bounds, optional old/new line ranges, labels, attention, and score."
     },
     {
       "id": "5644666f2732",
@@ -4849,44 +4849,16 @@
       ],
       "attention": "routine",
       "score": 0.425,
-      "blockKind": "test",
-      "paragraph": "Tests verify that hunks split into edit blocks with correct ranges and stable IDs, and that `isolateBlock`, `blockText`, and `deriveHunk` handle block content and aggregate rankings. Model-ranking tests now expect questions and attention scores per edit block, while checking that each hunk inherits its highest-ranked block.",
+      "claimIds": [],
+      "unmentioned": false,
       "testsTouched": false,
+      "questions": [],
+      "blockKind": "test",
       "covers": [
-        "eec352001524",
-        "a4430321ec76",
-        "ebaa2960cd7e",
-        "96af4f057c13"
+        "254542720897",
+        "a4430321ec76"
       ],
-      "claimIds": [],
-      "unmentioned": false,
-      "questions": []
-    },
-    {
-      "id": "96af4f057c13",
-      "title": "Rename across 3 files",
-      "color": "green",
-      "kind": "logic",
-      "areas": [],
-      "labels": [],
-      "blockIds": [
-        "1615069dde8e",
-        "5ae904c3bd18",
-        "06a4aa512f28",
-        "70a36e435953",
-        "a794b969f2c9",
-        "18aea5f77965",
-        "4eeca9b5df01"
-      ],
-      "attention": "routine",
-      "score": 0.413,
-      "blockKind": "rename",
-      "paragraph": "7 edits rename identifiers (block, hunks, refs); behaviour is unchanged.",
-      "mechanical": true,
-      "testsTouched": true,
-      "claimIds": [],
-      "unmentioned": false,
-      "questions": []
+      "paragraph": "Tests verify that hunks split into edit blocks with correct ranges and stable IDs, and that `isolateBlock`, `blockText`, and `deriveHunk` handle block content and aggregate rankings. Model-ranking tests now expect questions and attention scores per edit block, while checking that each hunk inherits its highest-ranked block."
     },
     {
       "id": "c8af32f3d31b",
@@ -4902,12 +4874,12 @@
       ],
       "attention": "routine",
       "score": 0.254,
-      "blockKind": "docs",
-      "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes.",
-      "testsTouched": false,
       "claimIds": [],
       "unmentioned": false,
-      "questions": []
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "docs",
+      "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes."
     },
     {
       "id": "7bc35c9c049f",
@@ -4924,12 +4896,12 @@
       ],
       "attention": "routine",
       "score": 0.14,
-      "blockKind": "docs",
-      "paragraph": "The data model now places `EditBlock`s on `Hunk.blocks`, with `from` and `to` indexing `hunk.lines` and optional `oldRange` and `newRange`; hunk labels, attention, and score derive from its blocks. `Review` no longer includes a separate `blocks` field.",
-      "testsTouched": false,
       "claimIds": [],
       "unmentioned": false,
-      "questions": []
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "docs",
+      "paragraph": "The data model now places `EditBlock`s on `Hunk.blocks`, with `from` and `to` indexing `hunk.lines` and optional `oldRange` and `newRange`; hunk labels, attention, and score derive from its blocks. `Review` no longer includes a separate `blocks` field."
     },
     {
       "id": "clean",
@@ -4945,11 +4917,11 @@
       ],
       "attention": "inert",
       "score": 0.175,
-      "fixed": "clean",
-      "testsTouched": false,
       "claimIds": [],
       "unmentioned": false,
-      "questions": []
+      "testsTouched": false,
+      "questions": [],
+      "fixed": "clean"
     }
   ],
   "untouched": [

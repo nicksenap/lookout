@@ -1,1 +1,638 @@
-{"changeSet":{"target":"9408ce9^..9408ce9","base":"3d7844e2d391700a977411e1ccaf2c33233e8138","head":"9408ce91cab6f23f9081da54ca0ca8c8a0e0804a","files":[{"path":"src/cli/env.ts","status":"added","binary":false,"hunks":[{"id":"8b332955f27d","path":"src/cli/env.ts","header":"@@ -0,0 +1,18 @@","oldStart":0,"oldLines":0,"newStart":1,"newLines":18,"lines":[{"kind":"add","text":"import { existsSync, readFileSync } from \"node:fs\";","newLine":1},{"kind":"add","text":"import { homedir } from \"node:os\";","newLine":2},{"kind":"add","text":"import { join } from \"node:path\";","newLine":3},{"kind":"add","text":"","newLine":4},{"kind":"add","text":"export const USER_ENV_PATH = join(homedir(), \".config\", \"lookout\", \".env\");","newLine":5},{"kind":"add","text":"","newLine":6},{"kind":"add","text":"/**","newLine":7},{"kind":"add","text":" * Keys live in ~/.config/lookout/.env (KEY=value lines), so lookout works from any repo","newLine":8},{"kind":"add","text":" * without putting secrets in shell dotfiles. Variables already set in the environment win.","newLine":9},{"kind":"add","text":" */","newLine":10},{"kind":"add","text":"export function loadUserEnv(path: string = USER_ENV_PATH, env: NodeJS.ProcessEnv = process.env): void {","newLine":11},{"kind":"add","text":"  if (!existsSync(path)) return;","newLine":12},{"kind":"add","text":"  for (const line of readFileSync(path, \"utf8\").split(\"\\n\")) {","newLine":13},{"kind":"add","text":"    const m = /^\\s*(?:export\\s+)?([A-Z][A-Z0-9_]*)\\s*=\\s*(.*?)\\s*$/.exec(line);","newLine":14},{"kind":"add","text":"    if (!m || line.trim().startsWith(\"#\")) continue;","newLine":15},{"kind":"add","text":"    if (env[m[1]!] === undefined) env[m[1]!] = m[2]!.replace(/^([\"'])(.*)\\1$/, \"$2\");","newLine":16},{"kind":"add","text":"  }","newLine":17},{"kind":"add","text":"}","newLine":18}],"blocks":[{"id":"1ce0399af91a","hunkId":"8b332955f27d","path":"src/cli/env.ts","from":0,"to":18,"labels":["sensitive","added"],"attention":"needs-eyes","score":0.739,"newRange":{"start":1,"end":18},"kind":"behavior"}],"labels":["sensitive","added"],"attention":"needs-eyes","score":0.739}]},{"path":"src/cli/main.ts","status":"modified","binary":false,"hunks":[{"id":"c2271f747127","path":"src/cli/main.ts","header":"@@ -1,4 +1,5 @@","oldStart":1,"oldLines":4,"newStart":1,"newLines":5,"lines":[{"kind":"context","text":"import pkg from \"../../package.json\" with { type: \"json\" };","oldLine":1,"newLine":1},{"kind":"add","text":"import { loadUserEnv } from \"./env.ts\";","newLine":2},{"kind":"context","text":"import { LocalSession } from \"../core/session.ts\";","oldLine":2,"newLine":3},{"kind":"context","text":"import { loadConfig } from \"../dispatch/config.ts\";","oldLine":3,"newLine":4},{"kind":"context","text":"import { DispatchRunner } from \"../dispatch/runner.ts\";","oldLine":4,"newLine":5}],"blocks":[{"id":"44f669c88415","hunkId":"c2271f747127","path":"src/cli/main.ts","from":1,"to":2,"labels":[],"attention":"routine","score":0.297,"newRange":{"start":2,"end":2},"kind":"behavior"}],"labels":[],"attention":"routine","score":0.297},{"id":"8753158ec3d9","path":"src/cli/main.ts","header":"@@ -42,6 +43,7 @@ function parseArgs(argv: string[]): CliArgs {","oldStart":42,"oldLines":6,"newStart":43,"newLines":7,"lines":[{"kind":"context","text":"","oldLine":42,"newLine":43},{"kind":"context","text":"/** The one place expected failures become exit codes. Returns the exit code. */","oldLine":43,"newLine":44},{"kind":"context","text":"async function main(): Promise<number> {","oldLine":44,"newLine":45},{"kind":"add","text":"  loadUserEnv();","newLine":46},{"kind":"context","text":"  const args = parseArgs(process.argv.slice(2));","oldLine":45,"newLine":47},{"kind":"context","text":"  const root = await repoRoot();","oldLine":46,"newLine":48},{"kind":"context","text":"  const config = loadConfig(undefined, root.ok ? root.value : undefined);","oldLine":47,"newLine":49}],"blocks":[{"id":"4ea110a6b496","hunkId":"8753158ec3d9","path":"src/cli/main.ts","from":3,"to":4,"labels":[],"attention":"routine","score":0.273,"newRange":{"start":46,"end":46},"kind":"behavior"}],"labels":[],"attention":"routine","score":0.273}]},{"path":"test/sources.test.ts","status":"modified","binary":false,"hunks":[{"id":"1a35e0adda38","path":"test/sources.test.ts","header":"@@ -6,6 +6,7 @@ import { loadRange, loadWorktree } from \"../src/sources/git.ts\";","oldStart":6,"oldLines":6,"newStart":6,"newLines":7,"lines":[{"kind":"context","text":"import { parsePrRef } from \"../src/sources/github.ts\";","oldLine":6,"newLine":6},{"kind":"context","text":"import { resolveTarget } from \"../src/sources/resolve.ts\";","oldLine":7,"newLine":7},{"kind":"context","text":"import type { Result } from \"../src/core/result.ts\";","oldLine":8,"newLine":8},{"kind":"add","text":"import { loadUserEnv } from \"../src/cli/env.ts\";","newLine":9},{"kind":"context","text":"/** Unwrap a Result in tests; a failure is a test failure with the message. */","oldLine":9,"newLine":10},{"kind":"context","text":"function must<T>(r: Result<T>): T {","oldLine":10,"newLine":11},{"kind":"context","text":"  if (!r.ok) throw new Error(String(r.error));","oldLine":11,"newLine":12}],"blocks":[{"id":"d3ed11406a2d","hunkId":"1a35e0adda38","path":"test/sources.test.ts","from":3,"to":4,"labels":["test"],"attention":"routine","score":0.182,"newRange":{"start":9,"end":9},"kind":"test"}],"labels":["test"],"attention":"routine","score":0.182},{"id":"9ce9c178dd49","path":"test/sources.test.ts","header":"@@ -89,3 +90,17 @@ describe(\"resolveTarget\", () => {","oldStart":89,"oldLines":3,"newStart":90,"newLines":17,"lines":[{"kind":"context","text":"    expect(parsePrRef(\"https://github.com/o/r/issues/1\")).toBeUndefined();","oldLine":89,"newLine":90},{"kind":"context","text":"  });","oldLine":90,"newLine":91},{"kind":"context","text":"});","oldLine":91,"newLine":92},{"kind":"add","text":"","newLine":93},{"kind":"add","text":"describe(\"user env file\", () => {","newLine":94},{"kind":"add","text":"  test(\"loads KEY=value lines into an env without overriding existing values\", async () => {","newLine":95},{"kind":"add","text":"    const dir = mkdtempSync(join(tmpdir(), \"lookout-env-\"));","newLine":96},{"kind":"add","text":"    const p = join(dir, \".env\");","newLine":97},{"kind":"add","text":"    writeFileSync(p, `# comment\\nOPENAI_API_KEY=\"sk-file\"\\nexport OTHER=plain\\nbad line\\n`);","newLine":98},{"kind":"add","text":"    const env: Record<string, string | undefined> = { OPENAI_API_KEY: \"sk-shell\" };","newLine":99},{"kind":"add","text":"    loadUserEnv(p, env);","newLine":100},{"kind":"add","text":"    expect(env.OPENAI_API_KEY).toBe(\"sk-shell\");","newLine":101},{"kind":"add","text":"    expect(env.OTHER).toBe(\"plain\");","newLine":102},{"kind":"add","text":"    loadUserEnv(join(dir, \"missing\"), env); // no throw","newLine":103},{"kind":"add","text":"    rmSync(dir, { recursive: true, force: true });","newLine":104},{"kind":"add","text":"  });","newLine":105},{"kind":"add","text":"});","newLine":106}],"blocks":[{"id":"a3dd63791f18","hunkId":"9ce9c178dd49","path":"test/sources.test.ts","from":3,"to":17,"labels":["test"],"attention":"routine","score":0.294,"newRange":{"start":93,"end":106},"kind":"test"}],"labels":["test"],"attention":"routine","score":0.294}]}],"intent":{"title":"Load the OpenAI key from ~/.config/lookout/.env","body":"## Summary\n\nLoads the API key from a user-level file so lookout works from any directory.\n\n- Reads `~/.config/lookout/.env` at startup, `KEY=value` lines, and never overrides variables already set in the shell\n- Shell variables are overridden by the file so the file is the single source of truth\n- Adds `lookout` to the PATH via `~/.zshrc`\n- src/cli/env.ts\n\n## Evidence\n\n- Test covers comments, quotes, `export` prefix and a missing file\n\n## Merge Danger\n\n**Door:** two-way\n\n**Blast Radius:** minimal\n"}},"classification":{"kind":"additive","areas":[],"maxAttention":"needs-eyes","sensitivePaths":["src/cli/env.ts"],"counts":{"files":4,"blocks":6,"inert":0}},"verdict":{"tier":"medium","requiredHumans":1,"reasons":["a block needs eyes: at least medium","additive change → low"]},"cards":[{"id":"6683392002b4","title":"Load User Environment Variables","color":"red","kind":"additive","areas":[],"labels":["added","sensitive"],"blockIds":["1ce0399af91a","44f669c88415","4ea110a6b496"],"attention":"needs-eyes","score":0.739,"blockKind":"behavior","paragraph":"`main()` now calls `loadUserEnv()` before parsing CLI arguments. `loadUserEnv()` reads `~/.config/lookout/.env`, accepts `KEY=value` and `export KEY=value` lines, and sets only variables not already present in the environment.","testsTouched":true,"claimIds":["77161da6d2b4","0aab16626f91"],"unmentioned":false,"questions":[]},{"id":"eb900294f33a","title":"Test user environment file loading","color":"green","kind":"test","areas":[],"labels":["test"],"blockIds":["d3ed11406a2d","a3dd63791f18"],"attention":"routine","score":0.294,"blockKind":"test","paragraph":"Adds a `user env file` test for `loadUserEnv`, verifying it parses quoted `KEY=value` lines and `export` assignments, ignores comments and malformed lines, preserves existing environment values, and does not throw when the file is missing.","testsTouched":false,"covers":["6683392002b4"],"claimIds":["66b5e8bfb819"],"unmentioned":false,"questions":[]}],"untouched":["auth","billing","data","infra","prompts"],"claims":[{"id":"77161da6d2b4","text":"Reads `~/.config/lookout/.env` at startup, `KEY=value` lines, and never overrides variables already set in the shell","section":"summary","status":"supported","confidence":0.93,"cardId":"6683392002b4"},{"id":"0aab16626f91","text":"Shell variables are overridden by the file so the file is the single source of truth","section":"summary","status":"contradicted","confidence":0.88,"cardId":"6683392002b4"},{"id":"33012bf9795c","text":"Adds `lookout` to the PATH via `~/.zshrc`","section":"summary","status":"not-in-diff","confidence":0.81},{"id":"66b5e8bfb819","text":"Test covers comments, quotes, `export` prefix and a missing file","section":"evidence","status":"supported","confidence":0.9,"cardId":"eb900294f33a"},{"id":"1c75950a7f18","text":"two-way","section":"door","status":"supported","confidence":1},{"id":"5c4821749cf6","text":"minimal","section":"radius","status":"supported","confidence":0.77}],"door":{"computed":"two-way","signals":[],"author":"two-way"},"radius":{"areas":[],"author":"minimal","importers":["scripts/inert-audit.ts","scripts/tier-survey.ts"]},"dispatches":[],"rankedBy":"rules+openai:gpt-6-luna"}
+{
+  "changeSet": {
+    "target": "9408ce9^..9408ce9",
+    "base": "3d7844e2d391700a977411e1ccaf2c33233e8138",
+    "head": "9408ce91cab6f23f9081da54ca0ca8c8a0e0804a",
+    "files": [
+      {
+        "path": "src/cli/env.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "8b332955f27d",
+            "path": "src/cli/env.ts",
+            "header": "@@ -0,0 +1,18 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 18,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import { existsSync, readFileSync } from \"node:fs\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { homedir } from \"node:os\";",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "import { join } from \"node:path\";",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "export const USER_ENV_PATH = join(homedir(), \".config\", \"lookout\", \".env\");",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": " * Keys live in ~/.config/lookout/.env (KEY=value lines), so lookout works from any repo",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": " * without putting secrets in shell dotfiles. Variables already set in the environment win.",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "export function loadUserEnv(path: string = USER_ENV_PATH, env: NodeJS.ProcessEnv = process.env): void {",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "  if (!existsSync(path)) return;",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "  for (const line of readFileSync(path, \"utf8\").split(\"\\n\")) {",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "    const m = /^\\s*(?:export\\s+)?([A-Z][A-Z0-9_]*)\\s*=\\s*(.*?)\\s*$/.exec(line);",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "    if (!m || line.trim().startsWith(\"#\")) continue;",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "    if (env[m[1]!] === undefined) env[m[1]!] = m[2]!.replace(/^([\"'])(.*)\\1$/, \"$2\");",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 18
+              }
+            ],
+            "blocks": [
+              {
+                "id": "1ce0399af91a",
+                "hunkId": "8b332955f27d",
+                "path": "src/cli/env.ts",
+                "from": 0,
+                "to": 18,
+                "labels": [
+                  "sensitive",
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.739,
+                "newRange": {
+                  "start": 1,
+                  "end": 18
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "sensitive",
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.739
+          }
+        ]
+      },
+      {
+        "path": "src/cli/main.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "c2271f747127",
+            "path": "src/cli/main.ts",
+            "header": "@@ -1,4 +1,5 @@",
+            "oldStart": 1,
+            "oldLines": 4,
+            "newStart": 1,
+            "newLines": 5,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "import pkg from \"../../package.json\" with { type: \"json\" };",
+                "oldLine": 1,
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { loadUserEnv } from \"./env.ts\";",
+                "newLine": 2
+              },
+              {
+                "kind": "context",
+                "text": "import { LocalSession } from \"../core/session.ts\";",
+                "oldLine": 2,
+                "newLine": 3
+              },
+              {
+                "kind": "context",
+                "text": "import { loadConfig } from \"../dispatch/config.ts\";",
+                "oldLine": 3,
+                "newLine": 4
+              },
+              {
+                "kind": "context",
+                "text": "import { DispatchRunner } from \"../dispatch/runner.ts\";",
+                "oldLine": 4,
+                "newLine": 5
+              }
+            ],
+            "blocks": [
+              {
+                "id": "44f669c88415",
+                "hunkId": "c2271f747127",
+                "path": "src/cli/main.ts",
+                "from": 1,
+                "to": 2,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.297,
+                "newRange": {
+                  "start": 2,
+                  "end": 2
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.297
+          },
+          {
+            "id": "8753158ec3d9",
+            "path": "src/cli/main.ts",
+            "header": "@@ -42,6 +43,7 @@ function parseArgs(argv: string[]): CliArgs {",
+            "oldStart": 42,
+            "oldLines": 6,
+            "newStart": 43,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 42,
+                "newLine": 43
+              },
+              {
+                "kind": "context",
+                "text": "/** The one place expected failures become exit codes. Returns the exit code. */",
+                "oldLine": 43,
+                "newLine": 44
+              },
+              {
+                "kind": "context",
+                "text": "async function main(): Promise<number> {",
+                "oldLine": 44,
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "  loadUserEnv();",
+                "newLine": 46
+              },
+              {
+                "kind": "context",
+                "text": "  const args = parseArgs(process.argv.slice(2));",
+                "oldLine": 45,
+                "newLine": 47
+              },
+              {
+                "kind": "context",
+                "text": "  const root = await repoRoot();",
+                "oldLine": 46,
+                "newLine": 48
+              },
+              {
+                "kind": "context",
+                "text": "  const config = loadConfig(undefined, root.ok ? root.value : undefined);",
+                "oldLine": 47,
+                "newLine": 49
+              }
+            ],
+            "blocks": [
+              {
+                "id": "4ea110a6b496",
+                "hunkId": "8753158ec3d9",
+                "path": "src/cli/main.ts",
+                "from": 3,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.273,
+                "newRange": {
+                  "start": 46,
+                  "end": 46
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.273
+          }
+        ]
+      },
+      {
+        "path": "test/sources.test.ts",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "1a35e0adda38",
+            "path": "test/sources.test.ts",
+            "header": "@@ -6,6 +6,7 @@ import { loadRange, loadWorktree } from \"../src/sources/git.ts\";",
+            "oldStart": 6,
+            "oldLines": 6,
+            "newStart": 6,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "import { parsePrRef } from \"../src/sources/github.ts\";",
+                "oldLine": 6,
+                "newLine": 6
+              },
+              {
+                "kind": "context",
+                "text": "import { resolveTarget } from \"../src/sources/resolve.ts\";",
+                "oldLine": 7,
+                "newLine": 7
+              },
+              {
+                "kind": "context",
+                "text": "import type { Result } from \"../src/core/result.ts\";",
+                "oldLine": 8,
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "import { loadUserEnv } from \"../src/cli/env.ts\";",
+                "newLine": 9
+              },
+              {
+                "kind": "context",
+                "text": "/** Unwrap a Result in tests; a failure is a test failure with the message. */",
+                "oldLine": 9,
+                "newLine": 10
+              },
+              {
+                "kind": "context",
+                "text": "function must<T>(r: Result<T>): T {",
+                "oldLine": 10,
+                "newLine": 11
+              },
+              {
+                "kind": "context",
+                "text": "  if (!r.ok) throw new Error(String(r.error));",
+                "oldLine": 11,
+                "newLine": 12
+              }
+            ],
+            "blocks": [
+              {
+                "id": "d3ed11406a2d",
+                "hunkId": "1a35e0adda38",
+                "path": "test/sources.test.ts",
+                "from": 3,
+                "to": 4,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.182,
+                "newRange": {
+                  "start": 9,
+                  "end": 9
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.182
+          },
+          {
+            "id": "9ce9c178dd49",
+            "path": "test/sources.test.ts",
+            "header": "@@ -89,3 +90,17 @@ describe(\"resolveTarget\", () => {",
+            "oldStart": 89,
+            "oldLines": 3,
+            "newStart": 90,
+            "newLines": 17,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "    expect(parsePrRef(\"https://github.com/o/r/issues/1\")).toBeUndefined();",
+                "oldLine": 89,
+                "newLine": 90
+              },
+              {
+                "kind": "context",
+                "text": "  });",
+                "oldLine": 90,
+                "newLine": 91
+              },
+              {
+                "kind": "context",
+                "text": "});",
+                "oldLine": 91,
+                "newLine": 92
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 93
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"user env file\", () => {",
+                "newLine": 94
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"loads KEY=value lines into an env without overriding existing values\", async () => {",
+                "newLine": 95
+              },
+              {
+                "kind": "add",
+                "text": "    const dir = mkdtempSync(join(tmpdir(), \"lookout-env-\"));",
+                "newLine": 96
+              },
+              {
+                "kind": "add",
+                "text": "    const p = join(dir, \".env\");",
+                "newLine": 97
+              },
+              {
+                "kind": "add",
+                "text": "    writeFileSync(p, `# comment\\nOPENAI_API_KEY=\"sk-file\"\\nexport OTHER=plain\\nbad line\\n`);",
+                "newLine": 98
+              },
+              {
+                "kind": "add",
+                "text": "    const env: Record<string, string | undefined> = { OPENAI_API_KEY: \"sk-shell\" };",
+                "newLine": 99
+              },
+              {
+                "kind": "add",
+                "text": "    loadUserEnv(p, env);",
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "    expect(env.OPENAI_API_KEY).toBe(\"sk-shell\");",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "    expect(env.OTHER).toBe(\"plain\");",
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "    loadUserEnv(join(dir, \"missing\"), env); // no throw",
+                "newLine": 103
+              },
+              {
+                "kind": "add",
+                "text": "    rmSync(dir, { recursive: true, force: true });",
+                "newLine": 104
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 105
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 106
+              }
+            ],
+            "blocks": [
+              {
+                "id": "a3dd63791f18",
+                "hunkId": "9ce9c178dd49",
+                "path": "test/sources.test.ts",
+                "from": 3,
+                "to": 17,
+                "labels": [
+                  "test"
+                ],
+                "attention": "routine",
+                "score": 0.294,
+                "newRange": {
+                  "start": 93,
+                  "end": 106
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test"
+            ],
+            "attention": "routine",
+            "score": 0.294
+          }
+        ]
+      }
+    ],
+    "intent": {
+      "title": "Load the OpenAI key from ~/.config/lookout/.env",
+      "body": "## Summary\n\nLoads the API key from a user-level file so lookout works from any directory.\n\n- Reads `~/.config/lookout/.env` at startup, `KEY=value` lines, and never overrides variables already set in the shell\n- Shell variables are overridden by the file so the file is the single source of truth\n- Adds `lookout` to the PATH via `~/.zshrc`\n- src/cli/env.ts\n\n## Evidence\n\n- Test covers comments, quotes, `export` prefix and a missing file\n\n## Merge Danger\n\n**Door:** two-way\n\n**Blast Radius:** minimal\n"
+    }
+  },
+  "classification": {
+    "kind": "additive",
+    "areas": [],
+    "maxAttention": "needs-eyes",
+    "sensitivePaths": [
+      "src/cli/env.ts"
+    ],
+    "counts": {
+      "files": 4,
+      "blocks": 6,
+      "inert": 0
+    }
+  },
+  "verdict": {
+    "tier": "medium",
+    "requiredHumans": 1,
+    "reasons": [
+      "a block needs eyes: at least medium",
+      "additive change → low"
+    ]
+  },
+  "cards": [
+    {
+      "id": "6683392002b4",
+      "title": "Load User Environment Variables",
+      "color": "red",
+      "kind": "additive",
+      "areas": [],
+      "labels": [
+        "added",
+        "sensitive"
+      ],
+      "blockIds": [
+        "1ce0399af91a",
+        "44f669c88415",
+        "4ea110a6b496"
+      ],
+      "attention": "needs-eyes",
+      "score": 0.739,
+      "claimIds": [
+        "77161da6d2b4",
+        "0aab16626f91"
+      ],
+      "unmentioned": false,
+      "testsTouched": true,
+      "questions": [],
+      "blockKind": "behavior",
+      "paragraph": "`main()` now calls `loadUserEnv()` before parsing CLI arguments. `loadUserEnv()` reads `~/.config/lookout/.env`, accepts `KEY=value` and `export KEY=value` lines, and sets only variables not already present in the environment."
+    },
+    {
+      "id": "eb900294f33a",
+      "title": "Test user environment file loading",
+      "color": "green",
+      "kind": "test",
+      "areas": [],
+      "labels": [
+        "test"
+      ],
+      "blockIds": [
+        "d3ed11406a2d",
+        "a3dd63791f18"
+      ],
+      "attention": "routine",
+      "score": 0.294,
+      "claimIds": [
+        "66b5e8bfb819"
+      ],
+      "unmentioned": false,
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "test",
+      "covers": [
+        "6683392002b4"
+      ],
+      "paragraph": "Adds a `user env file` test for `loadUserEnv`, verifying it parses quoted `KEY=value` lines and `export` assignments, ignores comments and malformed lines, preserves existing environment values, and does not throw when the file is missing."
+    }
+  ],
+  "untouched": [
+    "auth",
+    "billing",
+    "data",
+    "infra",
+    "prompts"
+  ],
+  "claims": [
+    {
+      "id": "77161da6d2b4",
+      "text": "Reads `~/.config/lookout/.env` at startup, `KEY=value` lines, and never overrides variables already set in the shell",
+      "section": "summary",
+      "status": "supported",
+      "confidence": 0.93,
+      "cardId": "6683392002b4"
+    },
+    {
+      "id": "0aab16626f91",
+      "text": "Shell variables are overridden by the file so the file is the single source of truth",
+      "section": "summary",
+      "status": "contradicted",
+      "confidence": 0.88,
+      "cardId": "6683392002b4"
+    },
+    {
+      "id": "33012bf9795c",
+      "text": "Adds `lookout` to the PATH via `~/.zshrc`",
+      "section": "summary",
+      "status": "not-in-diff",
+      "confidence": 0.81
+    },
+    {
+      "id": "66b5e8bfb819",
+      "text": "Test covers comments, quotes, `export` prefix and a missing file",
+      "section": "evidence",
+      "status": "supported",
+      "confidence": 0.9,
+      "cardId": "eb900294f33a"
+    },
+    {
+      "id": "1c75950a7f18",
+      "text": "two-way",
+      "section": "door",
+      "status": "supported",
+      "confidence": 1
+    },
+    {
+      "id": "5c4821749cf6",
+      "text": "minimal",
+      "section": "radius",
+      "status": "supported",
+      "confidence": 0.77
+    }
+  ],
+  "door": {
+    "computed": "two-way",
+    "signals": [],
+    "author": "two-way"
+  },
+  "radius": {
+    "areas": [],
+    "author": "minimal",
+    "importers": [
+      "scripts/inert-audit.ts",
+      "scripts/tier-survey.ts"
+    ]
+  },
+  "dispatches": [],
+  "rankedBy": "rules+openai:gpt-6-luna"
+}
