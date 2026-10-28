@@ -30,7 +30,7 @@
 
 **Question** — a yes/no prompt for the human reviewer, chosen per card from a tier-specific bank.
 
-**Exchange** — a free question the reviewer typed (`/`) about one card or the whole change, and the model's answer written from that scope's edits only. Decisions scores whether the answer is consistent with those edits; below 0.7 the answer is shown *unverified*. Stored on the Review, newest last.
+**Exchange** — a free question the reviewer typed into the composer (`/`) about one card or the whole change, and the model's answer written from that scope's edits only. Decisions scores whether the answer is consistent with those edits; below 0.7 the answer is shown *unverified*. Stored on the Review, newest last.
 
 **Progress** — where the pipeline is while cards load: the phase (ranking, splitting, writing) and items done of total. Drawn as a ten-cell bar under the header; cleared on done.
 

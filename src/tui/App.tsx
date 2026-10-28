@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewSession } from "../core/session.ts";
 import type { Card, Review } from "../core/types.ts";
 import { type CardContext, cardLines, changeExchanges, exchangeLines, expandedLines, fit, type Line, plural, progressLine, Row, sides } from "./Card.tsx";
+import { type Composer, composerKey, composerLines, openComposer } from "./Composer.tsx";
 import { HELP_LINES, keyAction, keyHelp, type Mode } from "./keys.ts";
 import { theme } from "./theme.ts";
 
@@ -88,10 +89,10 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const [help, setHelp] = useState(false);
   const [scroll, setScroll] = useState(0);
   const [top, setTop] = useState(0);
-  /** The ask line, while open: what the question is about and what has been typed. A ref mirrors it because several keys can arrive in one tick. */
-  const [asking, setAskingState] = useState<{ scope: "card" | "change"; text: string }>();
+  /** The ask composer, while open. A ref mirrors it because several keys can arrive in one tick. */
+  const [asking, setAskingState] = useState<Composer>();
   const askingRef = useRef(asking);
-  const setAsking = (next: typeof asking) => {
+  const setAsking = (next: Composer | undefined) => {
     askingRef.current = next;
     setAskingState(next);
   };
@@ -101,8 +102,10 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const sel = Math.max(0, Math.min(selected, cards.length - 1));
   const card: Card | undefined = cards[sel];
   const w = size.columns;
-  // Header, footer, one row spare for Ink, and the progress row while the pipeline runs.
-  const bodyH = Math.max(3, size.rows - 1 - 2 - (review.progress ? 1 : 0));
+  const about = card ? `card ${sel + 1}` : "the change";
+  const composer = asking ? composerLines(asking, about, w) : [];
+  // Header, footer, one row spare for Ink, the progress row while the pipeline runs, and the composer while asking.
+  const bodyH = Math.max(3, size.rows - 1 - 2 - (review.progress ? 1 : 0) - composer.length);
 
   const ctx: CardContext = { review, pending, frame };
 
@@ -143,18 +146,12 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       if (key.escape || input === "?" || input === "q" || key.return) setHelp(false);
       return;
     }
-    const line = askingRef.current;
-    if (line) {
-      if (key.escape) return setAsking(undefined);
-      if (key.return) {
-        if (line.text.trim() !== "") send(line.scope, line.text.trim());
-        return setAsking(undefined);
-      }
-      if (key.backspace || key.delete) return setAsking({ ...line, text: line.text.slice(0, -1) });
-      // A second `/` on an empty line widens the question to the whole change.
-      if (input === "/" && line.text === "") return setAsking({ scope: line.scope === "card" ? "change" : "card", text: "" });
-      if (input && !key.ctrl && !key.meta) return setAsking({ ...line, text: line.text + input });
-      return;
+    const open = askingRef.current;
+    if (open) {
+      const result = composerKey(open, input, key);
+      if ("composer" in result) return setAsking(result.composer);
+      if ("send" in result) send(result.scope, result.send);
+      return setAsking(undefined);
     }
     const action = keyAction(input, key);
     if (!action) return;
@@ -164,7 +161,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       case "help":
         return setHelp(true);
       case "ask":
-        return setAsking({ scope: card && card.fixed !== "clean" ? "card" : "change", text: "" });
+        return setAsking(openComposer(card && card.fixed !== "clean" ? "card" : "change", review.exchanges.map((e) => e.question)));
       case "expand":
         if (card && card.fixed !== "clean") {
           setScroll(0);
@@ -203,16 +200,8 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     .filter(Boolean)
     .join(" · ");
   const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
-  const footer: Line = asking
-    ? (() => {
-        const about = asking.scope === "card" && card ? `card ${sel + 1}` : "the change";
-        const prompt = ` ask about ${about} › `;
-        return { segments: [{ text: prompt, color: theme.accent, bold: true }, { text: fit(asking.text, Math.max(0, w - prompt.length - 2)) }, { text: "▏", color: theme.accent }] };
-      })()
-    : (() => {
-        const text = review.warning ?? keyHelp(mode).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
-        return { segments: [{ text: " " }, { text: fit(text, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning }] };
-      })();
+  const footerText = review.warning ?? keyHelp(mode).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
+  const footer: Line = { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning }] };
 
   return (
     <Box flexDirection="column" width={w} height={size.rows - 1}>
@@ -224,6 +213,9 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
           : visible.map((l, k) => <Row key={k} line={l} w={w} selected={mode === "stack" && l.card === sel && l.segments.length > 1} />)}
         {!help && visible.length < bodyH ? Array.from({ length: bodyH - visible.length }, (_, k) => <Text key={`pad${k}`}> </Text>) : null}
       </Box>
+      {composer.map((l, k) => (
+        <Row key={`ask${k}`} line={l} w={w} />
+      ))}
       <Row line={footer} w={w} />
     </Box>
   );

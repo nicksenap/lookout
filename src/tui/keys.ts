@@ -43,8 +43,9 @@ export const HELP_LINES: readonly string[] = [
   "g/G          first / last",
   "enter l →    expand the card: its door signals and its diff",
   "esc h ←      back to the stack",
-  "/            ask about the selected card; press / again on an empty line to ask about the whole change",
-  "             enter sends, esc cancels; answers come from the diff and are checked, unverified ones say so",
+  "/            ask: a box opens above the keys, about the selected card; tab switches to the whole change",
+  "             enter sends · esc closes · ↑/↓ earlier questions · ←/→ ctrl-a/e move · ctrl-w/u delete word/line",
+  "             answers come from the diff and are checked; an unverified answer says so",
   "?            this list",
   "q            quit",
 ];

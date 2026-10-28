@@ -58,7 +58,7 @@ lookout <target> --json          # the same Review as JSON
 lookout <target> --json --evidence   # plus claims, grounding, unmentioned and questions (JSON only)
 ```
 
-Keys in the stack: `j/k` move, `enter` expands a card (tests, door signals, then its diff with other cards' edits faded), `/` asks a question about the selected card (`/` again on the empty line: about the whole change; `enter` sends, `esc` cancels), `?` lists the keys, `q` quits. Answers are written from that scope's edits only, checked by Decisions, and labelled *unverified* when the check fails. While cards load, a bar under the header shows the phase (ranking → splitting → writing) and the count.
+Keys in the stack: `j/k` move, `enter` expands a card (tests, door signals, then its diff with other cards' edits faded), `/` opens a composer box above the keys to ask about the selected card (`tab` switches to the whole change; `enter` sends, `esc` closes, `↑/↓` recall earlier questions, readline-style `←/→`, `ctrl-a/e`, `ctrl-w/u`), `?` lists the keys, `q` quits. Answers are written from that scope's edits only, checked by Decisions, and labelled *unverified* when the check fails. While cards load, a bar under the header shows the phase (ranking → splitting → writing) and the count.
 
 ## What you are looking at
 
