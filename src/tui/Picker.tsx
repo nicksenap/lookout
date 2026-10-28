@@ -1,7 +1,8 @@
-import { Box, render, useApp, useInput } from "ink";
+import { Box, useApp, useInput } from "ink";
 import { useRef, useState } from "react";
 import type { PrSummary } from "../core/types.ts";
 import { fit, type Line, plural, Row, type Segment, sides, width } from "./Card.tsx";
+import { runFullscreen } from "./screen.ts";
 import { theme } from "./theme.ts";
 
 export interface PickerProps {
@@ -22,7 +23,7 @@ const REVIEW: Record<PrSummary["review"], string> = { approved: "approved", chan
 
 /** Rows of the picker: a header, then one row per PR that matches the filter. `selected` is the index into `shown`. */
 export function pickerLines(repo: string, shown: PrSummary[], selected: number, filter: string, w: number): Line[] {
-  const header: Line = { segments: sides([{ text: " " }, { text: `${repo} · open pull requests`, bold: true }], filter ? `filter: ${filter}▏` : plural(shown.length, "PR"), w, theme.accent) };
+  const header: Line = { segments: sides([{ text: " " }, { text: `${repo} · open pull requests`, bold: true }], filter ? `/${filter.trimStart()}▏` : plural(shown.length, "PR"), w, theme.accent) };
   const rows = shown.map((pr, k): Line => {
     const on = k === selected;
     const bar: Segment = { text: `${on ? "█" : "┃"} `, color: pr.requested ? theme.accent : theme.faint, bold: on };
@@ -84,6 +85,8 @@ export function Picker({ repo, prs, onPick, size }: PickerProps) {
     }
     if (f === "" && input === "G") return set(f, visible.length - 1);
     if (f === "" && input === "g") return set(f, 0);
+    // `/` opens the filter explicitly, as in a pager; typing does the same without it.
+    if (f === "" && input === "/") return set(" ", 0);
     if (key.backspace || key.delete) return set([...f].slice(0, -1).join(""), 0);
     if (input && !key.ctrl && !key.meta) return set(f + input, 0);
   });
@@ -92,7 +95,7 @@ export function Picker({ repo, prs, onPick, size }: PickerProps) {
   const bodyH = Math.max(1, h - 3);
   const top = Math.max(0, Math.min(sel - Math.floor(bodyH / 2), lines.length - 1 - bodyH));
   const body = [lines[0]!, ...lines.slice(1 + top, 1 + top + bodyH)];
-  const hint = filter ? "enter review · ↑/↓ move · esc clear" : "j/k move · enter review · type to filter · q quit";
+  const hint = filter ? "enter review · ↑/↓ move · esc clear" : "j/k move · enter review · / or type to filter · q quit";
   return (
     <Box flexDirection="column" width={w} height={h - 1}>
       {body.map((l, k) => (
@@ -109,8 +112,6 @@ export function Picker({ repo, prs, onPick, size }: PickerProps) {
 /** Run the picker full-screen; resolves with the chosen PR, or undefined when the user left. */
 export async function runPicker(repo: string, prs: PrSummary[]): Promise<PrSummary | undefined> {
   let picked: PrSummary | undefined;
-  const instance = render(<Picker repo={repo} prs={prs} onPick={(pr) => (picked = pr)} />, { exitOnCtrlC: true });
-  await instance.waitUntilExit();
-  instance.cleanup();
+  await runFullscreen(<Picker repo={repo} prs={prs} onPick={(pr) => (picked = pr)} />);
   return picked;
 }

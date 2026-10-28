@@ -57,13 +57,17 @@ async function main(): Promise<number> {
   const root = await repoRoot();
   const config = loadConfig(undefined, root.ok ? root.value : undefined);
   if (!config.ok) return fail(config.error);
+  // Hold the alternate screen from the picker through loading to the stack, so the shell never flashes between them.
+  const interactive = !args.json && process.stdin.isTTY && process.stdout.isTTY;
+  const leave = interactive ? (await import("../tui/screen.ts")).enterFullscreen() : () => {};
   const target = await chooseTarget(args, root.ok ? root.value : process.cwd());
-  if (!target.ok) return fail(target.error);
-  if (target.value === "") return 0;
+  if (!target.ok) return failAfter(leave, target.error);
+  if (target.value === "") return leaveThen(leave, 0);
   const spec = resolveTarget(target.value);
-  if (!spec.ok) return fail(spec.error);
+  if (!spec.ok) return failAfter(leave, spec.error);
+  if (interactive) process.stdout.write(`\x1b[2J\x1b[H loading ${target.value ?? "working tree"}…`);
   const loaded = await loadChangeSet(spec.value);
-  if (!loaded.ok) return fail(loaded.error);
+  if (!loaded.ok) return failAfter(leave, loaded.error);
   const repo = root.ok ? root.value : process.cwd();
   let runner: DispatchRunner | undefined;
   const session = new LocalSession({
@@ -82,8 +86,23 @@ async function main(): Promise<number> {
     return 0;
   }
   const { runTui } = await import("../tui/App.tsx");
-  await runTui(session, async () => runner?.shutdown());
+  try {
+    await runTui(session, async () => runner?.shutdown());
+  } finally {
+    leave();
+  }
   return 0;
+}
+
+/** Leave the alternate screen before a message or exit code reaches the user's terminal. */
+function leaveThen(leave: () => void, code: number): number {
+  leave();
+  return code;
+}
+
+function failAfter(leave: () => void, message: string): number {
+  leave();
+  return fail(message);
 }
 
 /**

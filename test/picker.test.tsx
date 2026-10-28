@@ -40,7 +40,7 @@ describe("picker", () => {
     app.stdin.write("quer");
     await tick();
     const filtered = lines(app.lastFrame());
-    expect(filtered[0]).toContain("filter: quer");
+    expect(filtered[0]).toContain("/quer");
     expect(filtered.filter((l) => /^[█┃] #/.test(l)).length).toBe(1);
     expect(filtered[1]).toMatch(/^█ #822/);
     app.stdin.write("\r");

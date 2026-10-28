@@ -13,13 +13,16 @@ export type Action =
   | { type: "back" }
   | { type: "toggle" }
   | { type: "ask" }
+  | { type: "search" }
+  /** `n` / `N`: next or previous search hit. */
+  | { type: "hit"; delta: 1 | -1 }
   | { type: "help" }
   | { type: "quit" };
 
 /**
  * Vim and helix keys where they fit a list: j/k, J/K and ctrl-d/u for pages, gg/G, [ ] and { } to jump,
- * l/h or enter/esc in and out, o or space to toggle. `g` is a prefix (gg = top, ge = end as in helix);
- * the caller keeps the pending prefix between calls. `a` asks: `/` is left for search, as in every pager.
+ * l/h or enter/esc in and out, o or space to toggle, / n N search as in every pager. `g` is a prefix
+ * (gg = top, ge = end as in helix); the caller keeps the pending prefix between calls. `a` asks.
  */
 export function keyAction(input: string, key: Key, pending?: string): { action?: Action; pending?: string } {
   if (pending === "g") {
@@ -45,6 +48,9 @@ export function keyAction(input: string, key: Key, pending?: string): { action?:
   if (key.escape || input === "h" || key.leftArrow) return a({ type: "back" });
   if (input === "o" || input === " ") return a({ type: "toggle" });
   if (input === "a") return a({ type: "ask" });
+  if (input === "/") return a({ type: "search" });
+  if (input === "n") return a({ type: "hit", delta: 1 });
+  if (input === "N") return a({ type: "hit", delta: -1 });
   if (input === "?") return a({ type: "help" });
   if (input === "q") return a({ type: "quit" });
   return {};
@@ -57,7 +63,7 @@ export interface KeyHelp {
 
 export function keyHelp(mode: Mode): KeyHelp[] {
   const nav = mode === "stack" ? [{ keys: "j/k", label: "card" }, { keys: "enter", label: "expand" }, { keys: "{/}", label: "next hot" }] : [{ keys: "j/k", label: "scroll" }, { keys: "ctrl-d/u", label: "half page" }, { keys: "esc", label: "back" }];
-  return [...nav, { keys: "a", label: "ask" }, { keys: "?", label: "help" }, { keys: "q", label: "quit" }];
+  return [...nav, { keys: "/", label: "search" }, { keys: "a", label: "ask" }, { keys: "?", label: "help" }, { keys: "q", label: "quit" }];
 }
 
 /** The help popup: a keys page and a glossary page; `tab` switches, `j/k` scroll. */
@@ -73,6 +79,11 @@ export const HELP_KEYS: readonly string[] = [
   "  enter  l  →          expand the card: scope, tests, door signals, then its diff",
   "  o  space             toggle expanded / stack",
   "  esc  h  ←            back to the stack",
+  "",
+  "Search",
+  "  /                    search the stack (titles, paragraphs, files) or the expanded card's diff",
+  "    enter / esc        keep the query / clear it      n / N   next / previous match",
+  "  Matches are highlighted; the footer counts them.",
   "",
   "Ask",
   "  a                    a box opens above the keys, about the selected card",

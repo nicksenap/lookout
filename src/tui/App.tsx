@@ -1,11 +1,13 @@
-import { Box, render, useApp, useInput, useStdout } from "ink";
+import { Box, useApp, useInput, useStdout } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewSession } from "../core/session.ts";
 import type { Card, Review } from "../core/types.ts";
 import { type CardContext, cardLines, changeExchanges, exchangeLines, expandedLines, fit, type Line, plural, progressLine, Row, sides } from "./Card.tsx";
 import { type Composer, composerKey, composerLines, openComposer } from "./Composer.tsx";
-import { helpBox, type HelpState, overlay, scrollHelp } from "./Help.tsx";
+import { findInHelp, helpBox, type HelpState, overlay, scrollHelp } from "./Help.tsx";
 import { keyAction, keyHelp, type Mode } from "./keys.ts";
+import { runFullscreen } from "./screen.ts";
+import { highlight, nextHit, openSearch, type Search, searchFooter, searchHits, searchKey } from "./Search.tsx";
 import { theme } from "./theme.ts";
 
 export interface Size {
@@ -98,6 +100,13 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const prefix = useRef<string | undefined>(undefined);
   const [scroll, setScroll] = useState(0);
   const [top, setTop] = useState(0);
+  /** `/` search: typing or committed. Mirrored in a ref like the composer. */
+  const [search, setSearchState] = useState<Search>();
+  const searchRef = useRef(search);
+  const setSearch = (next: Search | undefined) => {
+    searchRef.current = next;
+    setSearchState(next);
+  };
   /** The ask composer, while open. A ref mirrors it because several keys can arrive in one tick. */
   const [asking, setAskingState] = useState<Composer>();
   const askingRef = useRef(asking);
@@ -139,11 +148,23 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     () => (mode === "expanded" && card ? [...cardLines(card, sel, true, w, ctx), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctx)] : stackLines),
     [mode, card, stackLines, w, frame],
   );
+  const hits = search ? searchHits(bodyLines, search.query) : [];
+  // In the stack a hit is a card; the selection follows the search. In the expanded view hits are rows and the scroll follows.
+  const hitCards = [...new Set(hits.map((h) => bodyLines[h]!.card).filter((c): c is number => c !== undefined))];
   const windowTop = mode === "stack" ? windowLines(bodyLines, sel, bodyH, top) : Math.max(0, Math.min(scroll, bodyLines.length - bodyH));
   useEffect(() => {
     if (mode === "stack" && windowTop !== top) setTop(windowTop);
   }, [windowTop, mode, top]);
-  const visible = bodyLines.slice(windowTop, windowTop + bodyH);
+  const visible = bodyLines.slice(windowTop, windowTop + bodyH).map((l) => (search ? highlight(l, search.query) : l));
+  const jumpToHit = (direction: 1 | -1) => {
+    if (mode === "stack") {
+      const to = nextHit(hitCards.sort((a, b) => a - b), sel, direction);
+      if (to !== undefined) setSelected(to);
+      return;
+    }
+    const to = nextHit(hits, direction > 0 ? scroll : scroll, direction);
+    if (to !== undefined) setScroll(Math.max(0, Math.min(to, Math.max(0, bodyLines.length - bodyH))));
+  };
 
   const send = (scope: "card" | "change", text: string) => {
     const cardId = scope === "card" && card && card.fixed !== "clean" ? card.id : undefined;
@@ -152,8 +173,15 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
 
   useInput((input, key) => {
     const shown = helpRef.current;
+    if (shown?.find !== undefined) {
+      if (key.escape) return setHelp({ ...shown, find: undefined });
+      if (key.return) return setHelp({ ...shown, find: undefined });
+      const find = key.backspace || key.delete ? [...shown.find].slice(0, -1).join("") : input && !key.ctrl && !key.meta ? shown.find + input : shown.find;
+      return setHelp(findInHelp({ ...shown, find }, w));
+    }
     if (shown) {
       if (key.escape || input === "?" || input === "q" || key.return) return setHelp(undefined);
+      if (input === "/") return setHelp({ ...shown, find: "" });
       if (key.tab || input === "h" || input === "l" || key.leftArrow || key.rightArrow) return setHelp({ page: shown.page === "keys" ? "glossary" : "keys", scroll: 0 });
       if (input === "j" || key.downArrow) return setHelp(scrollHelp(shown, 1, w));
       if (input === "k" || key.upArrow) return setHelp(scrollHelp(shown, -1, w));
@@ -168,6 +196,23 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       if ("send" in result) send(result.scope, result.send);
       return setAsking(undefined);
     }
+    const typing = searchRef.current;
+    if (typing?.open) {
+      const result = searchKey(typing, input, key);
+      if ("close" in result) return setSearch(undefined);
+      if ("commit" in result) return setSearch(result.commit);
+      setSearch(result.search);
+      // Live: the selection (or scroll) lands on the first match as the query grows.
+      const live = searchHits(bodyLines, result.search.query);
+      if (live.length === 0) return;
+      if (mode === "stack") {
+        const c = bodyLines[live[0]!]!.card;
+        if (c !== undefined) setSelected(c);
+      } else setScroll(Math.max(0, Math.min(live[0]!, Math.max(0, bodyLines.length - bodyH))));
+      return;
+    }
+    // A committed search: esc clears it before anything else sees the key.
+    if (typing && key.escape) return setSearch(undefined);
     const next = keyAction(input, key, prefix.current);
     prefix.current = next.pending;
     const action = next.action;
@@ -194,6 +239,10 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
         if (k >= 0 && k < cards.length) setSelected(k);
         return;
       }
+      case "search":
+        return setSearch(openSearch(searchRef.current));
+      case "hit":
+        return jumpToHit(action.delta);
       case "ask":
         return setAsking(openComposer(card && card.fixed !== "clean" ? "card" : "change", review.exchanges.map((e) => e.question)));
       case "expand":
@@ -239,7 +288,10 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     .join(" · ");
   const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
   const footerText = review.warning ?? keyHelp(mode).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
-  const footer: Line = { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning }] };
+  const hitAt = search && !search.open ? (mode === "stack" ? hitCards.indexOf(sel) : hits.findIndex((h) => h >= windowTop)) : -1;
+  const footer: Line = search
+    ? { segments: searchFooter(search, mode === "stack" ? hitCards.length : hits.length, hitAt >= 0 ? hitAt : undefined) }
+    : { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: review.warning ? theme.card.amber : undefined, dim: !review.warning }] };
 
   return (
     <Box flexDirection="column" width={w} height={size.rows - 1}>
@@ -258,37 +310,11 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   );
 }
 
-const ENTER_ALT = "\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l";
-const LEAVE_ALT = "\x1b[?25h\x1b[?1049l";
-
-/** Run the stack in the alternate screen; the terminal is restored on quit, signals and crashes. */
+/** Run the stack full-screen; `onExit` runs after the terminal is restored. */
 export async function runTui(session: ReviewSession, onExit: () => Promise<void>): Promise<void> {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("the TUI needs a terminal; use --json for non-interactive output");
-  process.stdout.write(ENTER_ALT);
-  let restored = false;
-  const restore = () => {
-    if (restored) return;
-    restored = true;
-    process.stdout.write(LEAVE_ALT);
-  };
-  process.once("exit", restore);
-  const onSignal = () => {
-    instance.unmount();
-    restore();
-    process.exit(130);
-  };
-  process.once("SIGTERM", onSignal);
-  process.once("SIGHUP", onSignal);
-  // No incrementalRendering: with a frame shorter than the terminal Ink 6.8's incremental
-  // writer drifts one row per frame. Full redraws are wrapped in synchronized output on TTYs.
-  const instance = render(<App session={session} />, { exitOnCtrlC: true, patchConsole: true });
   try {
-    await instance.waitUntilExit();
+    await runFullscreen(<App session={session} />);
   } finally {
-    instance.cleanup();
-    restore();
     await onExit();
-    process.off("SIGTERM", onSignal);
-    process.off("SIGHUP", onSignal);
   }
 }

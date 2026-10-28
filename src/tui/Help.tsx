@@ -5,6 +5,8 @@ import { theme } from "./theme.ts";
 export interface HelpState {
   page: "keys" | "glossary";
   scroll: number;
+  /** `/` inside the popup: a term filter, shown in the bottom border; the scroll lands on the first term that matches. */
+  find?: string;
 }
 
 /** One glossary entry per term: the term on its own line, the definition wrapped below it. */
@@ -38,6 +40,17 @@ function helpRows(page: HelpState["page"], inner: number): HelpRow[] {
   return GLOSSARY.flatMap((e, k) => [...(k ? [{ text: "" }] : []), { text: e.term, style: "term" as const }, ...wrap(e.text, inner - 2).map((t) => ({ text: `  ${t}` }))]);
 }
 
+/** Scroll to the first row whose text contains `find` (a glossary term first, then any row); unchanged when nothing matches. */
+export function findInHelp(help: HelpState, w: number): HelpState {
+  const q = (help.find ?? "").trim().toLowerCase();
+  if (q === "") return help;
+  const inner = Math.max(20, Math.min(w - 4, MAX_W)) - 4;
+  const rows = helpRows(help.page, inner);
+  const term = rows.findIndex((r) => r.style === "term" && r.text.toLowerCase().includes(q));
+  const any = term >= 0 ? term : rows.findIndex((r) => r.text.toLowerCase().includes(q));
+  return any >= 0 ? { ...help, scroll: any } : help;
+}
+
 /** Scroll by `delta` entries (glossary) or rows (keys), so an entry's title is never cut off at the top. */
 export function scrollHelp(help: HelpState, delta: number, w: number): HelpState {
   const inner = Math.max(20, Math.min(w - 4, MAX_W)) - 4;
@@ -60,7 +73,7 @@ export function helpBox(help: HelpState, w: number, h: number): { lines: Line[];
   const head: Segment[] = [{ text: "┌─", color: accent }, tab("keys"), { text: "─", color: accent }, tab("glossary"), { text: "─ tab switches ", color: accent, dim: true }];
   head.push({ text: `${"─".repeat(Math.max(0, boxW - width(head.map((s) => s.text).join("")) - 1))}┐`, color: accent });
   const where = rows.length > bodyH ? ` ${top + 1}–${top + bodyH} of ${rows.length} · j/k scroll ` : "";
-  const footText = ` esc closes ${where}`;
+  const footText = help.find !== undefined ? ` /${help.find}▏  enter keep · esc clear ` : ` esc closes ${where}· / find `;
   const foot: Segment[] = [{ text: "└", color: accent }, { text: footText, color: accent, dim: true }, { text: `${"─".repeat(Math.max(0, boxW - width(footText) - 2))}┘`, color: accent }];
   const body = rows.slice(top, top + bodyH).map(
     (r): Line => ({

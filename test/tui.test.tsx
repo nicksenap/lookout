@@ -256,6 +256,68 @@ describe("ask and progress", () => {
   });
 });
 
+describe("search", () => {
+  test("/ in the stack jumps the selection to the first matching card as you type, highlights the match, n/N cycle, esc clears", async () => {
+    const { app, session, screen } = await mount("review-a", 120, 50);
+    const cards = session.snapshot().cards;
+    const target = cards.findIndex((c) => c.color === "green");
+    const word = cards[target]!.title.split(" ").find((w) => w.length > 4)!;
+    app.stdin.write("/");
+    await tick();
+    expect(screen().at(-1)).toMatch(/^ \/▏/);
+    app.stdin.write(word.toLowerCase());
+    await tick();
+    const s = screen();
+    const selectedRow = s.findIndex((l) => l.startsWith("█ "));
+    expect(s.slice(selectedRow, selectedRow + 3).some((l) => l.includes(word))).toBe(true);
+    expect(s.at(-1)).toContain(`/${word.toLowerCase()}`);
+    expect(s.at(-1)).toMatch(/\d+ match/);
+    app.stdin.write("\r");
+    await tick();
+    expect(screen().at(-1)).toContain("n/N next/prev");
+    app.stdin.write("\x1b");
+    await tick();
+    expect(screen().at(-1)).toContain("j/k card");
+  });
+
+  test("/ in the expanded card scrolls the diff to the first matching row; the footer counts rows", async () => {
+    const { app, session, screen } = await mount("review-c", 100, 30);
+    app.stdin.write("\r");
+    await tick();
+    const file = session.snapshot().changeSet.files[0]!.path.split("/").pop()!;
+    app.stdin.write("/");
+    app.stdin.write(file.slice(0, 5));
+    await tick();
+    const s = screen();
+    expect(s.at(-1)).toMatch(/match/);
+    expect(s.some((l) => l.includes(file.slice(0, 5)))).toBe(true);
+    app.stdin.write("\x1b"); // clears the search
+    await tick();
+    expect(screen().at(-1)).toContain("esc back");
+    app.stdin.write("\x1b"); // back to the stack
+    await tick();
+    expect(screen().at(-1)).toContain("j/k card");
+  });
+
+  test("/ in the help popup finds a glossary term", async () => {
+    const { app, screen } = await mount("review-c", 100, 24);
+    app.stdin.write("?");
+    await tick();
+    app.stdin.write("\t");
+    await tick();
+    app.stdin.write("/");
+    await tick();
+    app.stdin.write("scope");
+    await tick();
+    const s = screen();
+    const firstBody = s.findIndex((l) => l.includes("┌─")) + 1;
+    expect(s[firstBody]).toContain("│ Scope");
+    expect(s.some((l) => l.includes("/scope▏"))).toBe(true);
+    app.stdin.write("\x1b");
+    app.stdin.write("\x1b");
+  });
+});
+
 describe("vim keys", () => {
   test("gg / G / ge jump to the edges; } and { jump between hot cards; ] and [ between colour bands; o toggles expanded", async () => {
     const { app, session, screen } = await mount("review-a", 120, 50);
