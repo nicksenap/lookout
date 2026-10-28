@@ -43,6 +43,7 @@
     "@types/bun": "^1.4.4",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
+    "@xterm/headless": "6.0.0",
     "ink-testing-library": "4.0.0",
     "knip": "^6.43.0",
     "typescript": "^7.0.2"
