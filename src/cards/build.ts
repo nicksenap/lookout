@@ -65,7 +65,7 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
   );
   const attention = group.reduce<Attention>((top, r) => (rank(r.block.attention) > rank(top) ? r.block.attention : top), "inert");
   const score = Math.max(0, ...group.map((r) => r.block.score));
-  const card: Card = { id, title, color: "grey", kind, areas, labels, blockIds: group.map((r) => r.block.id), attention, score, claimIds: [], unmentioned: false, testsTouched: false };
+  const card: Card = { id, title, color: "grey", kind, areas, labels, blockIds: group.map((r) => r.block.id), attention, score, claimIds: [], unmentioned: false, testsTouched: false, questions: [] };
   card.color = colorFloor(card);
   return card;
 }

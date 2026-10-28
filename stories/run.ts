@@ -25,5 +25,5 @@ if (args.includes("--paragraphs")) {
   setTimeout(() => review.cards.filter((c) => !c.fixed).forEach((c, k) => setTimeout(() => session.setParagraph(c.id, samples[k % samples.length]!), k * 400)), 1500);
 }
 
-await runTui(session, true, async () => session.dispose());
+await runTui(session, { dispatchable: true, showAll: args.includes("--all") }, async () => session.dispose());
 process.exit(0);

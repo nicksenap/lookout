@@ -1,6 +1,6 @@
 import { Box, render, Text, useApp, useInput, useStdout } from "ink";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cardDispatches, cardFindings, type ReviewSession } from "../core/session.ts";
+import { cardDispatches, cardFindings, type ReviewSession, visibleFindings } from "../core/session.ts";
 import type { Card, Dispatch, Review } from "../core/types.ts";
 import { type CardContext, cardLines, claimsLines, expandedLines, fit, type Line, plural, Row, sides } from "./Card.tsx";
 import { HELP_LINES, keyAction, keyHelp, type Mode } from "./keys.ts";
@@ -14,6 +14,8 @@ export interface Size {
 export interface AppProps {
   session: ReviewSession;
   dispatchable: boolean;
+  /** `--all`: show rejected and dropped findings with why. */
+  showAll?: boolean;
   /** Fixed size for tests; otherwise follows the terminal. */
   size?: Size;
   /** Fixed spinner frame for tests. */
@@ -79,7 +81,7 @@ export function windowLines(lines: Line[], selected: number, height: number, pre
   return Math.max(0, Math.min(top, Math.max(0, lines.length - height)));
 }
 
-export function App({ session, dispatchable, size: sizeOverride, frame: frameOverride, throttleMs = 100 }: AppProps) {
+export function App({ session, dispatchable, showAll = false, size: sizeOverride, frame: frameOverride, throttleMs = 100 }: AppProps) {
   const { exit } = useApp();
   const { review, pending } = useReview(session, throttleMs);
   const size = useSize(sizeOverride);
@@ -101,7 +103,11 @@ export function App({ session, dispatchable, size: sizeOverride, frame: frameOve
   const w = size.columns;
   const bodyH = Math.max(3, size.rows - 1 - 2); // header, footer; one row spare for Ink
 
-  const ctxFor = (c: Card): CardContext => ({ review, findings: cardFindings(review, c), dispatches: cardDispatches(review, c), pending, frame, elapsed });
+  const ctxFor = (c: Card): CardContext => {
+    const all = cardFindings(review, c);
+    const findings = visibleFindings(all, showAll);
+    return { review, findings, hidden: all.length - findings.length, dispatches: cardDispatches(review, c), pending, frame, elapsed };
+  };
 
   const stackLines = useMemo(() => {
     const out: Line[] = [];
@@ -135,7 +141,7 @@ export function App({ session, dispatchable, size: sizeOverride, frame: frameOve
       if (key.escape || input === "?" || input === "q" || key.return) setHelp(false);
       return;
     }
-    const action = keyAction(input, key);
+    const action = keyAction(input, key, mode);
     if (!action) return;
     setNotice(undefined);
     switch (action.type) {
@@ -143,6 +149,11 @@ export function App({ session, dispatchable, size: sizeOverride, frame: frameOve
         return exit();
       case "help":
         return setHelp(true);
+      case "answer": {
+        const open = card?.questions.find((q) => !q.answer);
+        if (!card || !open) return setNotice("no open question on this card");
+        return void session.command({ type: "answerQuestion", cardId: card.id, questionId: open.id, answer: action.answer }).then((r) => !r.ok && setNotice(r.error));
+      }
       case "expand":
         if (card && card.fixed !== "clean") {
           setScroll(0);
@@ -183,7 +194,7 @@ export function App({ session, dispatchable, size: sizeOverride, frame: frameOve
   const contradicted = review.claims.filter((c) => c.status === "contradicted").length;
   const headerRight = [v.tier.toUpperCase(), plural(v.requiredHumans, "human"), plural(cards.length, "card"), contradicted ? `${plural(contradicted, "claim")} ✗` : "", review.door.computed === "one-way" ? "one-way" : "", pending ? `${theme.spinner[frame % theme.spinner.length]} ranking` : ""].filter(Boolean).join(" · ");
   const header: Line = { segments: sides([{ text: " " }, { text: fit(title, Math.max(10, w - headerRight.length - 4)), bold: true }], headerRight, w, theme.tier[v.tier]) };
-  const footerText = notice ?? review.warning ?? keyHelp(mode, running !== undefined, dispatchable, review.claims.length > 0 || review.door.computed === "one-way").map((h) => `${h.keys} ${h.label}`).join("  ·  ");
+  const footerText = notice ?? review.warning ?? keyHelp(mode, running !== undefined, dispatchable, review.claims.length > 0 || review.door.computed === "one-way", (card?.questions.length ?? 0) > 0).map((h) => `${h.keys} ${h.label}`).join("  ·  ");
   const footer: Line = { segments: [{ text: " " }, { text: fit(footerText, w - 1), color: notice ? theme.card.amber : undefined, dim: !notice }] };
 
   return (
@@ -204,7 +215,7 @@ const ENTER_ALT = "\x1b[?1049h\x1b[2J\x1b[H\x1b[?25l";
 const LEAVE_ALT = "\x1b[?25h\x1b[?1049l";
 
 /** Run the stack in the alternate screen; the terminal is restored on quit, signals and crashes. */
-export async function runTui(session: ReviewSession, dispatchable: boolean, onExit: () => Promise<void>): Promise<void> {
+export async function runTui(session: ReviewSession, opts: { dispatchable: boolean; showAll: boolean }, onExit: () => Promise<void>): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("the TUI needs a terminal; use --json for non-interactive output");
   process.stdout.write(ENTER_ALT);
   let restored = false;
@@ -223,7 +234,7 @@ export async function runTui(session: ReviewSession, dispatchable: boolean, onEx
   process.once("SIGHUP", onSignal);
   // No incrementalRendering: with a frame shorter than the terminal Ink 6.8's incremental
   // writer drifts one row per frame. Full redraws are wrapped in synchronized output on TTYs.
-  const instance = render(<App session={session} dispatchable={dispatchable} />, { exitOnCtrlC: true, patchConsole: true });
+  const instance = render(<App session={session} dispatchable={opts.dispatchable} showAll={opts.showAll} />, { exitOnCtrlC: true, patchConsole: true });
   try {
     await instance.waitUntilExit();
   } finally {

@@ -4779,7 +4779,8 @@
       "paragraph": "`parseDiff` now splits each hunk into contiguous changed-line blocks, and `applyRules` and model scoring rank blocks individually before `deriveHunk` aggregates their labels, attention, and score. `inert-audit.ts` reports inert edit blocks instead of hunks, while `rankWithModel` uses `Result` helpers to capture scoring failures and cache-save errors.",
       "testsTouched": true,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "a4430321ec76",
@@ -4797,7 +4798,8 @@
       "paragraph": "`Hunk` now includes derived `blocks`, `labels`, `attention`, and `score` fields. The new `EditBlock` type records each contiguous run of changed lines by ID, hunk ID, path, line-index bounds, optional old/new line ranges, labels, attention, and score.",
       "testsTouched": true,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "ebaa2960cd7e",
@@ -4824,7 +4826,8 @@
       "mechanical": true,
       "testsTouched": true,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "5644666f2732",
@@ -4856,7 +4859,8 @@
         "96af4f057c13"
       ],
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "96af4f057c13",
@@ -4881,7 +4885,8 @@
       "mechanical": true,
       "testsTouched": true,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "c8af32f3d31b",
@@ -4901,7 +4906,8 @@
       "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes.",
       "testsTouched": false,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "7bc35c9c049f",
@@ -4922,7 +4928,8 @@
       "paragraph": "The data model now places `EditBlock`s on `Hunk.blocks`, with `from` and `to` indexing `hunk.lines` and optional `oldRange` and `newRange`; hunk labels, attention, and score derive from its blocks. `Review` no longer includes a separate `blocks` field.",
       "testsTouched": false,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "clean",
@@ -4941,7 +4948,8 @@
       "fixed": "clean",
       "testsTouched": false,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     }
   ],
   "untouched": [

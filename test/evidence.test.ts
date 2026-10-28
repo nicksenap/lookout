@@ -243,7 +243,7 @@ describe("groundClaims", () => {
   });
 
   test("applyClaims: cards get their claim ids; an uncovered card at needs-eyes or above is unmentioned, a routine or mechanical one is not", () => {
-    const card = (id: string, attention: Card["attention"], extra: Partial<Card> = {}): Card => ({ id, title: id, color: "green", kind: "logic", areas: [], labels: [], blockIds: [id], attention, score: 0, claimIds: [], unmentioned: false, testsTouched: false, ...extra });
+    const card = (id: string, attention: Card["attention"], extra: Partial<Card> = {}): Card => ({ id, title: id, color: "green", kind: "logic", areas: [], labels: [], blockIds: [id], attention, score: 0, claimIds: [], unmentioned: false, testsTouched: false, questions: [], ...extra });
     const cards = [card("a", "needs-eyes"), card("b", "needs-eyes"), card("c", "routine"), card("d", "suspicious", { mechanical: true }), card("clean", "inert", { fixed: "clean" })];
     const claims: Claim[] = [
       { id: "1", text: "x", section: "summary", status: "supported", cardId: "a" },

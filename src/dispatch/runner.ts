@@ -3,10 +3,17 @@ import { attempt, err, ok, type Result } from "../core/result.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewStore } from "../core/store.ts";
-import type { Dispatch } from "../core/types.ts";
+import type { Card, Dispatch, DispatchRole, Finding } from "../core/types.ts";
 import { type Config, PLACEHOLDERS } from "./config.ts";
 import { parseDispatchOutput } from "./parse.ts";
 import { buildPrompt, diffSlice, type DispatchScope, fillTemplate } from "./prompt.ts";
+
+/**
+ * What a dispatch does: propose findings over a scope, or verify a card's findings with a
+ * prompt built by `verify/`. The runner only records a verifier's raw output; the session
+ * parses it, so `dispatch/` never imports `verify/`.
+ */
+export type DispatchJob = DispatchScope | { kind: "verify"; card: Card; findings: Finding[]; prompt: string };
 
 /** POSIX single-quote a value so it reaches the command as one argument. */
 export function shellQuote(value: string): string {
@@ -53,7 +60,7 @@ export class DispatchRunner {
   }
 
   /** Start a dispatch; a running dispatch or an unknown dispatcher is an expected failure. */
-  start(dispatcherName: string, scope: DispatchScope): Result<Dispatch> {
+  start(dispatcherName: string, job: DispatchJob): Result<Dispatch> {
     if (this.current) return err("a dispatch is already running (x cancels it)");
     const dispatcher = this.opts.config.dispatchers.find((d) => d.name === dispatcherName);
     if (!dispatcher) return err(`unknown dispatcher "${dispatcherName}"`);
@@ -63,7 +70,9 @@ export class DispatchRunner {
     const dir = mkdtempSync(join(tmpdir(), "lookout-dispatch-"));
     const promptFile = join(dir, "prompt.md");
     const diffFile = join(dir, "slice.diff");
-    const prompt = buildPrompt({ changeSet: review.changeSet, scope, repo: this.opts.repo, template: this.opts.config.prompt });
+    const role: DispatchRole = job.kind === "verify" ? "verifier" : "proposer";
+    const scope: DispatchScope = job.kind === "verify" ? { kind: "card", card: job.card } : job;
+    const prompt = job.kind === "verify" ? job.prompt : buildPrompt({ changeSet: review.changeSet, scope, repo: this.opts.repo, template: this.opts.config.prompt });
     writeFileSync(promptFile, prompt);
     writeFileSync(diffFile, diffSlice(review.changeSet, scope) + "\n");
     const command = expandCommand(dispatcher.cmd, { prompt, prompt_file: promptFile, repo: this.opts.repo, diff_file: diffFile });
@@ -71,6 +80,7 @@ export class DispatchRunner {
     const dispatch: Dispatch = {
       id,
       dispatcher: dispatcher.name,
+      role,
       scope: scope.kind,
       // Shown in the UI; the full prompt is left as {prompt} to keep it short.
       cmd: fillTemplate(dispatcher.cmd, { prompt_file: shellQuote(promptFile), repo: shellQuote(this.opts.repo), diff_file: shellQuote(diffFile) }),
@@ -80,6 +90,7 @@ export class DispatchRunner {
     };
     if (scope.kind === "hunk") dispatch.hunkId = scope.hunk.id;
     if (scope.kind === "card") dispatch.cardId = scope.card.id;
+    if (job.kind === "verify") dispatch.verifies = job.findings.map((f) => f.id);
     this.store.startDispatch(dispatch);
 
     const spawned = attempt(() =>
@@ -116,14 +127,13 @@ export class DispatchRunner {
         this.store.finishDispatch(id, { status: "cancelled" });
         return;
       }
-      const parsed = parseDispatchOutput(output, { dispatcher: dispatcher.name, dispatchId: id, changeSet: this.store.getSnapshot().changeSet });
-      const notes = parsed.notes.map((n) => `lookout: ${n}`).join("\n");
-      const patch: Partial<Dispatch> = {
-        status: code === 0 ? "done" : "failed",
-        findings: parsed.findings,
-        freeform: [parsed.freeform, notes].filter(Boolean).join("\n\n"),
-      };
+      const patch: Partial<Dispatch> = { status: code === 0 ? "done" : "failed" };
       if (code !== 0) patch.error = `exited with code ${code}`;
+      if (job.kind !== "verify") {
+        const parsed = parseDispatchOutput(output, { dispatcher: dispatcher.name, dispatchId: id, changeSet: this.store.getSnapshot().changeSet });
+        patch.findings = parsed.findings;
+        patch.freeform = [parsed.freeform, parsed.notes.map((n) => `lookout: ${n}`).join("\n")].filter(Boolean).join("\n\n");
+      }
       this.store.finishDispatch(id, patch);
     })();
     this.current = running;

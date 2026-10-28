@@ -7,7 +7,7 @@ import { createTypeSafeAi } from "@ai-sdk/typesafe-ai";
 import { createProviderRegistry, experimental_decide, type Experimental_DecisionModel, type Experimental_DecisionQuestion, generateText, type LanguageModel } from "ai";
 import { blockText, type BlockRef } from "../core/blocks.ts";
 import { attempt } from "../core/result.ts";
-import type { Claim, Intent } from "../core/types.ts";
+import type { Claim, Finding, Intent } from "../core/types.ts";
 
 export type AttentionModel = Experimental_DecisionModel;
 export type Env = Record<string, string | undefined>;
@@ -226,6 +226,98 @@ export async function groundClaimBatch(model: AttentionModel, claims: Pick<Claim
     const card = answers[claimCardId(claim.id)];
     if (card?.type === "choice" && card.choice && card.choice !== "none" && card.choice in cardChoices) judgement.cardId = card.choice;
     out.set(claim.id, judgement);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- verifier verdicts (plan step 13)
+
+export interface VerdictCase {
+  finding: Finding;
+  verdict: "confirmed" | "rejected";
+  /** The verifier's evidence or reason. */
+  note: string;
+}
+
+export const verdictQuestionId = (findingId: string) => `verdict_${findingId}`;
+
+/**
+ * One `decide` call scoring a verifier's argued verdicts: for each, the probability that the
+ * note actually establishes the verdict against the card's diff. The gate (`verify/verify.ts`)
+ * turns a weak argument into `unsure`.
+ */
+export async function scoreVerdictBatch(model: AttentionModel, cases: VerdictCase[], card: { title: string; diff: string }): Promise<Map<string, number>> {
+  const questions: Record<string, Experimental_DecisionQuestion> = {};
+  for (const c of cases) {
+    questions[verdictQuestionId(c.finding.id)] = {
+      type: "boolean",
+      instructions:
+        c.verdict === "confirmed"
+          ? `Finding ${c.finding.id} was CONFIRMED. Does the verifier's note give concrete evidence (a reachable call path, a triggering input, a failing test) that the problem is real in this diff? A restatement of the finding is not evidence.`
+          : `Finding ${c.finding.id} was REJECTED. Does the verifier's reason actually show the finding is wrong or does not apply to this diff? A bare assertion is not a reason.`,
+    };
+  }
+  const state = {
+    task: "Check whether a verifier's verdicts on review findings are backed by their stated evidence or reasons.",
+    card: { title: card.title, diff: card.diff.length > 24_000 ? `${card.diff.slice(0, 24_000)}\n…` : card.diff },
+    findings: cases.map((c) => ({ id: c.finding.id, severity: c.finding.severity, title: c.finding.title, body: c.finding.body, anchor: c.finding.anchor ?? null, verdict: c.verdict, note: c.note })),
+  };
+  const result = await experimental_decide({ model, state, questions, abortSignal: AbortSignal.timeout(90_000) });
+  const answers = result.answers as Record<string, { type: string; probability?: number }>;
+  const out = new Map<string, number>();
+  for (const c of cases) {
+    const a = answers[verdictQuestionId(c.finding.id)];
+    if (a?.type !== "boolean" || typeof a.probability !== "number") throw new Error(`no verdict score for finding ${c.finding.id}`);
+    out.set(c.finding.id, a.probability);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- questions (plan step 13)
+
+export interface QuestionCandidate {
+  cardId: string;
+  questionId: string;
+  text: string;
+}
+export interface QuestionCard {
+  id: string;
+  title: string;
+  paragraph?: string;
+  color: string;
+  kind: string;
+  unmentioned: boolean;
+  testsTouched: boolean;
+  files: string[];
+}
+
+export const pickQuestionId = (cardId: string, questionId: string) => `ask_${cardId}_${questionId}`;
+
+/**
+ * One `decide` call over every (card, bank question) candidate the rules allowed: the
+ * probability that a reviewer of this card should be asked that question. The picker keeps
+ * the top 2–4 per card.
+ */
+export async function pickQuestionBatch(model: AttentionModel, candidates: QuestionCandidate[], cards: QuestionCard[], intent?: Intent): Promise<Map<string, number>> {
+  const questions: Record<string, Experimental_DecisionQuestion> = {};
+  for (const c of candidates) {
+    questions[pickQuestionId(c.cardId, c.questionId)] = {
+      type: "boolean",
+      instructions: `Should the human reviewing card ${c.cardId} be asked: "${c.text}"? Yes when the card's change makes the question worth a deliberate answer; no when the answer is obvious from the card or the question does not apply to it.`,
+    };
+  }
+  const state = {
+    task: "Pick the review questions a human should answer for each card of an agent-written code change.",
+    intent: intent ? { title: intent.title, body: intent.body.slice(0, 4000) } : null,
+    cards: cards.map((c) => ({ id: c.id, title: c.title, paragraph: c.paragraph ?? null, color: c.color, kind: c.kind, unmentioned: c.unmentioned, testsTouched: c.testsTouched, files: c.files })),
+  };
+  const result = await experimental_decide({ model, state, questions, abortSignal: AbortSignal.timeout(90_000) });
+  const answers = result.answers as Record<string, { type: string; probability?: number }>;
+  const out = new Map<string, number>();
+  for (const c of candidates) {
+    const a = answers[pickQuestionId(c.cardId, c.questionId)];
+    if (a?.type !== "boolean" || typeof a.probability !== "number") throw new Error(`no answer for question ${c.questionId} on card ${c.cardId}`);
+    out.set(pickQuestionId(c.cardId, c.questionId), a.probability);
   }
   return out;
 }

@@ -53,6 +53,14 @@ export class FixtureSession implements ReviewSession {
       }
       case "dispatchAll":
         return err("not in the fixture");
+      case "answerQuestion": {
+        const card = this.review.cards.find((x) => x.id === c.cardId);
+        if (!card) return err(`no card ${c.cardId}`);
+        const questions = card.questions.map((q) => (q.id === c.questionId ? { ...q, answer: c.answer } : q));
+        this.review = { ...this.review, cards: this.review.cards.map((x) => (x.id === card.id ? { ...x, questions } : x)) };
+        this.emit({ type: "card.updated", id: card.id, patch: { questions } });
+        return ok(undefined);
+      }
       case "cancel": {
         const running = this.review.dispatches.find((d) => d.status === "running");
         if (!running) return err("nothing to cancel");
@@ -76,7 +84,7 @@ export class FixtureSession implements ReviewSession {
 
   private fakeDispatch(card: Card): void {
     const id = `d${++this.seq}`;
-    const dispatch: Dispatch = { id, dispatcher: "fixture", scope: "card", cardId: card.id, cmd: "fixture-agent {prompt_file}", status: "running", output: "", findings: [] };
+    const dispatch: Dispatch = { id, dispatcher: "fixture", role: "proposer", scope: "card", cardId: card.id, cmd: "fixture-agent {prompt_file}", status: "running", output: "", findings: [] };
     this.review = { ...this.review, dispatches: [...this.review.dispatches, dispatch] };
     this.emit({ type: "dispatch.started", dispatch });
     const ms = this.opts.dispatchMs ?? 0;
@@ -92,9 +100,30 @@ export class FixtureSession implements ReviewSession {
           title: "error from the retried call is swallowed",
           body: "The final failure returns undefined instead of rethrowing, so callers see a success with no data.",
           dispatcher: "fixture",
+          status: "proposed",
+          preExisting: false,
         };
         if (file && block?.newRange) finding.anchor = { path: file.path, line: block.newRange.start };
         this.finish(id, { status: "done", findings: [finding] });
+        this.fakeVerify(card, id, finding, ms);
+      }, ms),
+    );
+  }
+
+  /** The verifier pass that follows a proposer: confirms the one finding with a note. */
+  private fakeVerify(card: Card, proposalId: string, finding: Finding, ms: number): void {
+    const id = `d${++this.seq}`;
+    const dispatch: Dispatch = { id, dispatcher: "fixture", role: "verifier", scope: "card", cardId: card.id, cmd: "fixture-agent {prompt_file}", status: "running", output: "", findings: [], verifies: [finding.id] };
+    this.review = { ...this.review, dispatches: [...this.review.dispatches, dispatch] };
+    this.emit({ type: "dispatch.started", dispatch });
+    this.timers.push(setTimeout(() => this.append(id, "Tracing the retry loop…\n"), ms / 2));
+    this.timers.push(
+      setTimeout(() => {
+        const note = "retry() returns the last caught error's `undefined` result on line +3; the two callers never check for it";
+        this.finish(id, { status: "done", verdicts: [{ findingId: finding.id, verdict: "confirmed", note }] });
+        const patch: Partial<Finding> = { status: "confirmed", verifiedBy: "fixture", verifierNote: note, confidence: 0.92 };
+        this.review = { ...this.review, dispatches: this.review.dispatches.map((d) => (d.id === proposalId ? { ...d, findings: d.findings.map((f) => (f.id === finding.id ? { ...f, ...patch } : f)) } : d)) };
+        this.emit({ type: "finding.updated", dispatchId: proposalId, id: finding.id, patch });
       }, ms),
     );
   }

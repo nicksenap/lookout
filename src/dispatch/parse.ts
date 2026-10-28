@@ -12,7 +12,7 @@ export interface ParsedOutput {
 const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 export const stripAnsi = (s: string) => s.replace(ANSI_RE, "");
 
-interface Fence {
+export interface Fence {
   info: string;
   start: number; // line index of the opening fence
   end: number; // line index of the closing fence (exclusive end if unterminated)
@@ -20,7 +20,7 @@ interface Fence {
 }
 
 /** Fenced code blocks in order. An unterminated final fence runs to end of output. */
-function fences(lines: string[]): Fence[] {
+export function fences(lines: string[]): Fence[] {
   const out: Fence[] = [];
   for (let i = 0; i < lines.length; i++) {
     const open = /^\s*(`{3,})\s*([\w-]*)/.exec(lines[i]!);
@@ -36,28 +36,43 @@ function fences(lines: string[]): Fence[] {
 
 /** True when `line` (new-side numbering) of `path` falls inside a hunk of the change. */
 export function lineInDiff(changeSet: ChangeSet, path: string, line: number): boolean {
+  return lineKind(changeSet, path, line) !== undefined;
+}
+
+/** The kind of the diff line at `path:line` (new-side numbering); undefined outside every hunk. */
+export function lineKind(changeSet: ChangeSet, path: string, line: number): "context" | "add" | undefined {
   const file = changeSet.files.find((f) => f.path === path);
-  if (!file) return false;
-  return file.hunks.some((h) => h.lines.some((l) => l.newLine === line));
+  const found = file?.hunks.flatMap((h) => h.lines).find((l) => l.newLine === line);
+  return found?.kind === "add" ? "add" : found?.kind === "context" ? "context" : undefined;
+}
+
+/**
+ * The last fenced ```json block of an agent's output, parsed. The rest is `freeform`.
+ * Agents print ANSI and chatter; only the final fence is the contract.
+ */
+export function lastJsonBlock(rawOutput: string): { data: unknown; freeform: string } | { error: string; freeform: string } {
+  const output = stripAnsi(rawOutput);
+  const lines = output.split("\n");
+  const block = fences(lines).filter((f) => f.info === "json").at(-1);
+  if (!block) return { error: "no ```json block in output", freeform: output.trim() };
+  const freeform = [...lines.slice(0, block.start), ...lines.slice(block.end + 1)].join("\n").trim();
+  const data = attempt((): unknown => JSON.parse(block.body));
+  if (!data.ok) return { error: `last \`\`\`json block is not valid JSON (${data.error})`, freeform: output.trim() };
+  return { data: data.value, freeform };
 }
 
 const SEVERITIES: Severity[] = ["p0", "p1", "p2"];
 
 /**
- * Parse a dispatcher's output: the last fenced ```json block holds findings
- * (`{"findings": [...]}` or a bare array). Anchors outside the diff are dropped.
+ * Parse a proposer's output: the last fenced ```json block holds findings
+ * (`{"findings": [...]}` or a bare array). Anchors outside the diff are dropped; an anchor on
+ * a context line marks the finding pre-existing.
  */
 export function parseDispatchOutput(rawOutput: string, opts: { dispatcher: string; dispatchId: string; changeSet: ChangeSet }): ParsedOutput {
-  const output = stripAnsi(rawOutput);
-  const lines = output.split("\n");
-  const block = fences(lines).filter((f) => f.info === "json").at(-1);
-  if (!block) return { findings: [], freeform: output.trim(), notes: ["no ```json findings block in output"] };
-
-  const freeform = [...lines.slice(0, block.start), ...lines.slice(block.end + 1)].join("\n").trim();
-  const data = attempt((): unknown => JSON.parse(block.body));
-  if (!data.ok) return { findings: [], freeform: output.trim(), notes: [`last \`\`\`json block is not valid JSON (${data.error})`] };
-  const list = Array.isArray(data.value) ? data.value : (data.value as { findings?: unknown } | null)?.findings;
-  if (!Array.isArray(list)) return { findings: [], freeform: output.trim(), notes: ['last ```json block has no "findings" array'] };
+  const block = lastJsonBlock(rawOutput);
+  if ("error" in block) return { findings: [], freeform: block.freeform, notes: [block.error.replace("```json block", "```json findings block")] };
+  const list = Array.isArray(block.data) ? block.data : (block.data as { findings?: unknown } | null)?.findings;
+  if (!Array.isArray(list)) return { findings: [], freeform: stripAnsi(rawOutput).trim(), notes: ['last ```json block has no "findings" array'] };
 
   const notes: string[] = [];
   const findings: Finding[] = [];
@@ -78,12 +93,16 @@ export function parseDispatchOutput(rawOutput: string, opts: { dispatcher: strin
       title: f.title.trim(),
       body: typeof f.body === "string" ? f.body : "",
       dispatcher: opts.dispatcher,
+      status: "proposed",
+      preExisting: false,
     };
     if (typeof f.path === "string" && typeof f.line === "number") {
-      if (lineInDiff(opts.changeSet, f.path, f.line)) finding.anchor = { path: f.path, line: f.line };
+      const kind = lineKind(opts.changeSet, f.path, f.line);
+      if (kind) finding.anchor = { path: f.path, line: f.line };
       else notes.push(`finding ${k + 1}: ${f.path}:${f.line} is outside the diff; shown unanchored`);
+      if (kind === "context") finding.preExisting = true;
     }
     findings.push(finding);
   });
-  return { findings, freeform, notes };
+  return { findings, freeform: block.freeform, notes };
 }

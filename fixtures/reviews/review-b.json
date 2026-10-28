@@ -3899,7 +3899,17 @@
       "paragraph": "`loadConfig` now layers repository `.lookout.toml` settings over global configuration, including areas and policy rules. The CLI classifies each `ChangeSet`, evaluates its tier and required human count, and stores the classification and verdict both before and after model ranking; `tier-survey.ts` reports these classifications for recent non-merge commits.",
       "testsTouched": true,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": [
+        {
+          "id": "intent",
+          "text": "Does this change do what the PR says, and nothing the PR leaves out?"
+        },
+        {
+          "id": "error-path",
+          "text": "Is the failure path of the new logic handled and tested?"
+        }
+      ]
     },
     {
       "id": "c209d915793d",
@@ -3919,7 +3929,8 @@
       "paragraph": "`Review` now includes `classification: Classification` and `verdict: Verdict`; `Classification` records the change kind, areas, maximum attention, sensitive paths, and file/block/inert counts, while `Verdict` records a low/medium/high tier, required human count, and reasons. `Config` now requires a `policy: Policy` field.",
       "testsTouched": true,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "ba8519f20d6e",
@@ -3948,7 +3959,8 @@
         "b246e861bf19"
       ],
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "6c7ed8d2c059",
@@ -3967,7 +3979,8 @@
       "mechanical": true,
       "testsTouched": false,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     },
     {
       "id": "b246e861bf19",
@@ -3985,7 +3998,8 @@
       "paragraph": "Exports `REPO_CONFIG_NAME` with the value `.lookout.toml` from `src/dispatch/config.ts`.",
       "testsTouched": true,
       "claimIds": [],
-      "unmentioned": false
+      "unmentioned": false,
+      "questions": []
     }
   ],
   "untouched": [

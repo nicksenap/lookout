@@ -1,4 +1,4 @@
-import type { Card, Claim, Classification, Dispatch, Door, Radius, Review, Verdict } from "./types.ts";
+import type { Card, Claim, Classification, Dispatch, Door, Finding, Radius, Review, Verdict } from "./types.ts";
 
 /** Patches, not snapshots: a 40-card review streaming paragraphs never re-sends the whole Review. */
 export type ReviewEvent =
@@ -8,6 +8,8 @@ export type ReviewEvent =
   | { type: "dispatch.started"; dispatch: Dispatch }
   | { type: "dispatch.output"; id: string; chunk: string }
   | { type: "dispatch.finished"; dispatch: Dispatch }
+  /** A finding's status changed: dedupe, a verifier's verdict, or the confidence gate. */
+  | { type: "finding.updated"; dispatchId: string; id: string; patch: Partial<Finding> }
   | { type: "warning"; text?: string }
   /** The claim list changed (model extraction landed) or one claim was grounded. */
   | { type: "claims.replaced"; claims: Claim[] }
@@ -70,6 +72,18 @@ export class ReviewStore {
     const review = this.patchDispatch(id, (d) => ({ ...d, ...patch }));
     const dispatch = review.dispatches.find((d) => d.id === id)!;
     this.set(review, { type: "dispatch.finished", dispatch });
+  }
+
+  patchFinding(dispatchId: string, findingId: string, patch: Partial<Finding>): void {
+    this.set(
+      this.patchDispatch(dispatchId, (d) => ({ ...d, findings: d.findings.map((f) => (f.id === findingId ? { ...f, ...patch } : f)) })),
+      { type: "finding.updated", dispatchId, id: findingId, patch },
+    );
+  }
+
+  /** Attach parsed verdicts or notes to a finished dispatch; no event, `dispatch.finished` already fired. */
+  updateDispatch(id: string, patch: Partial<Dispatch>): void {
+    this.set(this.patchDispatch(id, (d) => ({ ...d, ...patch })));
   }
 
   private patchDispatch(id: string, fn: (d: Dispatch) => Dispatch): Review {

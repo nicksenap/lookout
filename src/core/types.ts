@@ -76,6 +76,9 @@ export interface ChangeSet {
 
 export type Severity = "p0" | "p1" | "p2";
 
+/** Starts `proposed`; a verifier makes it `confirmed` (with evidence), `rejected` (with a reason) or `unsure`. */
+export type FindingStatus = "proposed" | "confirmed" | "rejected" | "unsure";
+
 export interface Finding {
   id: string;
   severity: Severity;
@@ -83,13 +86,32 @@ export interface Finding {
   body: string;
   anchor?: { path: string; line: number };
   dispatcher: string;
+  status: FindingStatus;
+  /** Anchored to a context line: about code the change did not touch. */
+  preExisting: boolean;
+  /** The verifier's evidence (confirmed) or reason (rejected); `duplicate of …` when dedupe dropped it. */
+  verifierNote?: string;
+  /** Which dispatcher verified it. */
+  verifiedBy?: string;
+  /** Decisions' probability that the verifier's argument holds; absent when no model scored it. */
+  confidence?: number;
+}
+
+/** What a verifier said about one finding, as parsed from its output. */
+export interface FindingVerdict {
+  findingId: string;
+  verdict: "confirmed" | "rejected" | "unsure";
+  /** Evidence for confirmed, reason for rejected or unsure. */
+  note?: string;
 }
 
 export type DispatchStatus = "running" | "done" | "failed" | "cancelled";
+export type DispatchRole = "proposer" | "verifier";
 
 export interface Dispatch {
   id: string;
   dispatcher: string;
+  role: DispatchRole;
   scope: "hunk" | "card" | "change";
   /** Hunk id when scope is "hunk". */
   hunkId?: string;
@@ -98,7 +120,11 @@ export interface Dispatch {
   cmd: string;
   status: DispatchStatus;
   output: string;
+  /** Proposer dispatches only; a verifier patches the findings of the proposer dispatches it checked. */
   findings: Finding[];
+  /** Verifier dispatches only: the finding ids it was asked about and what it said. */
+  verifies?: string[];
+  verdicts?: FindingVerdict[];
   /** Output that is not a findings block (freeform text, parse errors). */
   freeform?: string;
   error?: string;
@@ -143,6 +169,17 @@ export interface Card {
   covers?: string[];
   /** One-way door signals found in this card's edits. */
   doorSignals?: DoorSignal[];
+  // ---- questions (plan step 13)
+  /** 2–4 yes/no prompts for the human, picked from the tier bank once the evidence has landed. */
+  questions: Question[];
+}
+
+export type QuestionAnswer = "yes" | "no" | "unsure";
+export interface Question {
+  /** The bank entry's id; stable across runs so answers could be kept later. */
+  id: string;
+  text: string;
+  answer?: QuestionAnswer;
 }
 
 // ---------------------------------------------------------------- evidence

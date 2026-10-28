@@ -109,7 +109,7 @@ describe("untouchedAreas", () => {
 });
 
 describe("cardPatches", () => {
-  const card = (id: string, color: Card["color"] = "green"): Card => ({ id, title: id, color, kind: "logic", areas: [], labels: [], blockIds: [id], attention: "routine", score: 0.1, claimIds: [], unmentioned: false, testsTouched: false });
+  const card = (id: string, color: Card["color"] = "green"): Card => ({ id, title: id, color, kind: "logic", areas: [], labels: [], blockIds: [id], attention: "routine", score: 0.1, claimIds: [], unmentioned: false, testsTouched: false, questions: [] });
   test("same order → one card.updated per changed card with only the changed fields", () => {
     const before = [card("a"), card("b")];
     const after = [card("a"), { ...card("b", "amber"), attention: "needs-eyes" as const }];

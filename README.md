@@ -55,9 +55,10 @@ lookout main..                   # a range (A..B, or A...B from the merge-base)
 lookout owner/repo#123           # a pull request
 lookout https://github.com/owner/repo/pull/123
 lookout <target> --json          # the same Review as JSON
+lookout <target> --all           # also show rejected and dropped findings, with why
 ```
 
-Keys in the stack: `j/k` move, `enter` expands a card (claims, tests, door signals, then its diff with other cards' edits faded), `c` opens the claims view, `a` runs the default agent on the card, `A` on every red and amber card, `x` cancels, `?` lists everything, `q` quits.
+Keys in the stack: `j/k` move, `enter` expands a card (findings, questions, claims, tests, door signals, then its diff with other cards' edits faded), `c` opens the claims view, `a` reviews the card (a proposer agent, then a verifier on what it found), `A` on every red and amber card, `x` cancels, `?` lists everything, `q` quits. In an expanded card `y` / `n` / `u` answer its first open question.
 
 ## What you are looking at
 
@@ -70,6 +71,10 @@ Keys in the stack: `j/k` move, `enter` expands a card (claims, tests, door signa
 **Claims**: each `- ` bullet of the PR description, graded against the diff. `✓ supported`, `✗ contradicted` (shown only at ≥ 70 % confidence), `~ unclear`, `∅ not in diff`. A card no claim describes is **unmentioned**. The claims view also shows the **door** (one-way signals found in the diff: migrations, destructive SQL, data writes, removed public exports or routes, versus what the author wrote) and the **blast radius** (sensitive areas touched, files importing the changed files).
 
 **tests touched / covers**: a test card in the same change exercises this card's files (same directory, name stem, or import); the test card lists what it covers.
+
+**Findings** come from `a`: a proposer agent reviews the card's diff, then a verifier gets each finding and must confirm it with evidence, reject it with a reason, or say unsure; Decisions scores whether the evidence holds (below 70 % the finding is shown as unsure). `✓✓` verified, `✓` proposed and not yet verified, `?` unsure (p0/p1 only, dimmed). Rejected, duplicate and unsure p2 findings are hidden unless `--all`. A finding anchored to a line the change did not touch is marked **pre-existing**.
+
+**Questions**: 2–4 yes/no prompts per card, picked by Decisions from a tier-specific bank (intent match, error path tested, rollback, sensitive callers, sets a pattern, …) once the evidence has landed. Your answers are stored in the Review.
 
 Vocabulary is in `GLOSSARY.md`; the design and roadmap in `PLAN.md`.
 
@@ -102,8 +107,11 @@ area = "auth"
 tier = "high"
 reason = "touches auth"
 
-[dispatch.pi]           # agents for `a` / `A`; the first is the default
+[dispatch.pi]           # agents for `a` / `A`; the first is the default proposer
 cmd = "pi -p @{prompt_file}"
+
+[verify]                # optional: which dispatcher verifies findings (default: the first)
+dispatcher = "pi"
 ```
 
 Default areas are `auth`, `billing`, `data`, `infra`, `prompts`; their globs are deliberately broad and worth narrowing per repo.
@@ -118,6 +126,9 @@ diff ─► edit blocks ─► rules (labels, inert, sensitive paths)        0 c
      ─► claims from the PR body's bullets (LLM only if none)         0–1 calls
      ─► Decisions: ground every claim against the cards              1 call
      ─► policy: colour, tier, humans; door; tests touched; radius    0 calls
+     ─► Decisions: 2–4 questions per card from the tier bank         1 call
+  a  ─► proposer agent on the card ─► dedupe ─► verifier agent        2 agent runs
+     ─► Decisions: does the verifier's evidence hold? gate at 70 %    1 call
 ```
 
 Everything is cached by content hash under `~/.cache/lookout`, so re-running a PR after a push only recomputes changed blocks. Every model step degrades to rules plus a warning; nothing is fatal.

@@ -96,19 +96,40 @@ describe("stack contents", () => {
     void app;
   });
 
-  test("a reviews the selected card: running row, then the finding lands on the card and in the expanded view", async () => {
+  test("a reviews the selected card: proposer then verifier; the finding lands as ✓✓ with the verifier's note in the expanded view", async () => {
     const { app, session, screen } = await mount("review-b", 100, 40);
-    const finished = until(session, "dispatch.finished");
+    const verified = until(session, "finding.updated");
     app.stdin.write("a");
-    await finished;
+    await verified;
     const s = screen();
-    expect(s.some((l) => l.includes("P1") && l.includes("swallowed"))).toBe(true);
+    expect(s.some((l) => l.includes("P1 ✓✓ ") && l.includes("swallowed"))).toBe(true);
     expect(s.some((l) => l.includes("1 finding"))).toBe(true);
     app.stdin.write("\r");
     await tick();
     const e = screen();
     expect(e.some((l) => l.startsWith("findings (1)"))).toBe(true);
-    expect(e.some((l) => l.includes("fixture · done"))).toBe(true);
+    expect(e.some((l) => l.includes("by fixture · verified by fixture 92%"))).toBe(true);
+    expect(e.some((l) => l.includes("retry() returns the last caught error"))).toBe(true);
+    expect(e.some((l) => l.includes("fixture · verifier · done"))).toBe(true);
+  });
+
+  test("questions show as boxes on the card; in the expanded view y answers the first open one and n the next", async () => {
+    const { app, screen } = await mount("review-b", 100, 40);
+    expect(screen().filter((l) => l.includes("☐ ")).length).toBe(2);
+    app.stdin.write("\r");
+    await tick();
+    expect(screen().some((l) => l.startsWith("questions (2)"))).toBe(true);
+    expect(screen().at(-1)).toContain("y/n/u answer");
+    app.stdin.write("y");
+    await tick();
+    app.stdin.write("n");
+    await tick();
+    const e = screen();
+    expect(e.some((l) => l.includes("☑ yes") && l.includes("what the PR says"))).toBe(true);
+    expect(e.some((l) => l.includes("☒ no") && l.includes("failure path"))).toBe(true);
+    app.stdin.write("u");
+    await tick();
+    expect(screen().at(-1)).toContain("no open question on this card");
   });
 
   test("claims: a contradicted claim shows on its card and in the header; c opens the claims view with door and radius; esc returns", async () => {

@@ -1,5 +1,5 @@
 import { Text } from "ink";
-import type { Card, Claim, ClaimStatus, Dispatch, Finding, Hunk, Review } from "../core/types.ts";
+import type { Card, Claim, ClaimStatus, Dispatch, Finding, FindingStatus, Hunk, Question, Review } from "../core/types.ts";
 import { COLOR_LABEL, theme } from "./theme.ts";
 
 export interface Segment {
@@ -65,7 +65,9 @@ const BAR = "┃";
 
 export interface CardContext {
   review: Review;
+  /** Already filtered for display (`visibleFindings`); `hidden` is how many `--all` would add. */
   findings: Finding[];
+  hidden: number;
   dispatches: Dispatch[];
   pending: boolean;
   frame: number;
@@ -138,19 +140,36 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   for (const f of ctx.findings.slice(0, 4)) lines.push(row(findingLine(f, inner)));
   if (ctx.findings.length > 4) lines.push(row([{ text: `  +${ctx.findings.length - 4} more`, dim: true }]));
   for (const c of claims.filter((c) => c.status === "contradicted")) lines.push(row(claimLine(c, inner)));
+  for (const q of card.questions) lines.push(row(questionLine(q, inner)));
   const running = ctx.dispatches.find((d) => d.status === "running");
-  if (running) lines.push(row([{ text: `  ${theme.spinner[ctx.frame % theme.spinner.length]} ${running.dispatcher} reviewing… ${clock(ctx.elapsed(running))}`, color: theme.accent }]));
+  if (running) lines.push(row([{ text: `  ${theme.spinner[ctx.frame % theme.spinner.length]} ${running.dispatcher} ${running.role === "verifier" ? "verifying" : "reviewing"}… ${clock(ctx.elapsed(running))}`, color: theme.accent }]));
   else {
     const last = ctx.dispatches[0];
     if (last && last.status !== "done") lines.push(row([{ text: `  ${last.dispatcher} ${last.status}${last.error ? `: ${fit(last.error, inner - 20)}` : ""}`, dim: true }]));
-    else if (last && ctx.findings.length === 0) lines.push(row([{ text: `  ✓ ${last.dispatcher} found nothing to report`, color: theme.card.green }]));
+    else if (last && ctx.findings.length === 0) lines.push(row([{ text: `  ✓ ${last.dispatcher} found nothing to ${last.role === "verifier" ? "confirm" : "report"}${ctx.hidden ? ` (${ctx.hidden} dropped; --all shows why)` : ""}`, color: theme.card.green }]));
   }
   return lines;
 }
 
+/** Mark per finding status; both glyph and word so a stripped frame still reads. `✓✓` is verified, `✓` one pass. */
+export const FINDING_MARK: Record<FindingStatus, { glyph: string; word: string }> = {
+  proposed: { glyph: "✓", word: "proposed" },
+  confirmed: { glyph: "✓✓", word: "verified" },
+  unsure: { glyph: "?", word: "unsure" },
+  rejected: { glyph: "✗", word: "rejected" },
+};
+
 export function findingLine(f: Finding, w: number): Segment[] {
-  const where = f.anchor ? `${f.anchor.path.split("/").pop()}:${f.anchor.line}` : "";
-  return sides([{ text: "  " }, { text: f.severity.toUpperCase(), color: theme.severity[f.severity], bold: true }, { text: ` ${f.title}` }], where, w);
+  const where = [f.anchor ? `${f.anchor.path.split("/").pop()}:${f.anchor.line}` : "", f.preExisting ? "pre-existing" : ""].filter(Boolean).join(" · ");
+  const dim = f.status === "unsure" || f.status === "rejected";
+  const mark = FINDING_MARK[f.status];
+  return sides([{ text: "  " }, { text: f.severity.toUpperCase(), color: theme.severity[f.severity], bold: !dim, dim }, { text: ` ${mark.glyph}`, color: f.status === "confirmed" ? theme.card.green : f.status === "rejected" ? theme.card.red : undefined, dim }, { text: ` ${f.title}`, dim }], where, w);
+}
+
+/** `☐ question` until answered; `☑ yes`, `☒ no`, `☐ ?` after. */
+export function questionLine(q: Question, w: number): Segment[] {
+  const box = q.answer === "yes" ? "☑ yes" : q.answer === "no" ? "☒ no" : q.answer === "unsure" ? "☐ ?" : "☐";
+  return [{ text: "  " }, { text: box, color: q.answer ? theme.accent : undefined, bold: !q.answer, dim: q.answer !== undefined }, { text: ` ${fit(q.text, Math.max(0, w - box.length - 3))}`, dim: q.answer !== undefined }];
 }
 
 /** `  ✗ contradicted  the PR says X`; a claim without a status shows as pending. */
@@ -177,20 +196,28 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
   const push = (segs: Segment[]) => lines.push({ segments: segs });
 
   if (ctx.findings.length > 0) {
-    push([{ text: `findings (${ctx.findings.length})`, color, bold: true }]);
+    push([{ text: `findings (${ctx.findings.length})`, color, bold: true }, { text: ctx.hidden ? `   ${ctx.hidden} hidden (--all)` : "", dim: true }]);
     for (const f of ctx.findings) {
       push(findingLine(f, w));
       for (const l of wrap(f.body, w - 5)) push([{ text: `     ${l}`, dim: true }]);
-      push([{ text: `     by ${f.dispatcher}`, dim: true }]);
+      const by = f.verifiedBy ? `${FINDING_MARK[f.status].word} by ${f.verifiedBy}${f.confidence !== undefined ? ` ${Math.round(f.confidence * 100)}%` : ""}` : f.status === "rejected" ? FINDING_MARK.rejected.word : "not yet verified";
+      push([{ text: `     by ${f.dispatcher} · ${by}`, dim: true }]);
+      if (f.verifierNote) for (const l of wrap(f.verifierNote, w - 5)) push([{ text: `     ${l}`, color: f.status === "confirmed" ? theme.card.green : f.status === "rejected" ? theme.card.red : theme.card.amber }]);
     }
+    push([{ text: "" }]);
+  }
+
+  if (card.questions.length > 0) {
+    push([{ text: `questions (${card.questions.length})`, color, bold: true }, { text: "   y / n / u answer the first open one", dim: true }]);
+    for (const q of card.questions) push(questionLine(q, w));
     push([{ text: "" }]);
   }
 
   const d = ctx.dispatches[0];
   if (d) {
     const status = d.status === "running" ? `${theme.spinner[ctx.frame % theme.spinner.length]} running ${clock(ctx.elapsed(d))}` : d.status;
-    push([{ text: `${d.dispatcher} · ${status}`, color: theme.accent, bold: true }, { text: `  ${fit(d.cmd, Math.max(0, w - 30))}`, dim: true }]);
-    const showLog = d.status === "running" || (d.status === "done" && d.findings.length === 0) || d.status === "failed";
+    push([{ text: `${d.dispatcher} · ${d.role} · ${status}`, color: theme.accent, bold: true }, { text: `  ${fit(d.cmd, Math.max(0, w - 30))}`, dim: true }]);
+    const showLog = d.status === "running" || (d.status === "done" && d.findings.length === 0 && !d.verdicts?.length) || d.status === "failed";
     if (showLog) {
       const text = (d.status === "running" ? d.output : d.freeform || d.output || d.error || "").replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
       const rows = text.split("\n").filter((l) => l.trim() !== "");

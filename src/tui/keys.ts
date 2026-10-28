@@ -12,10 +12,16 @@ export type Action =
   | { type: "review" }
   | { type: "reviewAll" }
   | { type: "cancel" }
+  | { type: "answer"; answer: "yes" | "no" | "unsure" }
   | { type: "help" }
   | { type: "quit" };
 
-export function keyAction(input: string, key: Key): Action | undefined {
+export function keyAction(input: string, key: Key, mode: Mode = "stack"): Action | undefined {
+  if (mode === "expanded") {
+    if (input === "y") return { type: "answer", answer: "yes" };
+    if (input === "n") return { type: "answer", answer: "no" };
+    if (input === "u") return { type: "answer", answer: "unsure" };
+  }
   if (input === "j" || key.downArrow) return { type: "move", delta: 1 };
   if (input === "k" || key.upArrow) return { type: "move", delta: -1 };
   if (input === "J" || key.pageDown || input === " ") return { type: "page", delta: 1 };
@@ -38,7 +44,7 @@ export interface KeyHelp {
   label: string;
 }
 
-export function keyHelp(mode: Mode, running: boolean, dispatchable: boolean, claims = false): KeyHelp[] {
+export function keyHelp(mode: Mode, running: boolean, dispatchable: boolean, claims = false, questions = false): KeyHelp[] {
   const out: KeyHelp[] = [];
   if (mode === "stack") {
     out.push({ keys: "j/k", label: "card" }, { keys: "enter", label: "expand" });
@@ -47,6 +53,7 @@ export function keyHelp(mode: Mode, running: boolean, dispatchable: boolean, cla
   } else if (mode === "claims") out.push({ keys: "j/k", label: "scroll" }, { keys: "esc", label: "back" });
   else {
     out.push({ keys: "j/k", label: "scroll" }, { keys: "J/K", label: "page" }, { keys: "esc", label: "back" });
+    if (questions) out.push({ keys: "y/n/u", label: "answer" });
     if (dispatchable) out.push({ keys: "a", label: "review card" });
   }
   if (running) out.push({ keys: "x", label: "cancel" });
@@ -61,9 +68,10 @@ export const HELP_LINES: readonly string[] = [
   "enter l →    expand the card: its diff, findings, agent log",
   "esc h ←      back to the stack",
   "c            claims: the PR description against the diff, door and blast radius",
-  "a            review this card with the default agent (proposer)",
+  "a            review this card: a proposer agent, then a verifier on what it found",
   "A            review every red and amber card, one after another",
   "x            cancel the running review",
+  "y/n/u        expanded card: answer its first open question (yes / no / unsure)",
   "?            this list",
   "q            quit",
 ];

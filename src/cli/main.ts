@@ -16,18 +16,21 @@ Usage:
 
 Options:
   --json        print the Review as JSON instead of opening the card stack
+  --all         also show rejected and dropped findings, with why
   --version     print version
   --help        this help`;
 
 interface CliArgs {
   json: boolean;
+  all: boolean;
   target?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { json: false };
+  const args: CliArgs = { json: false, all: false };
   for (const a of argv) {
     if (a === "--json") args.json = true;
+    else if (a === "--all") args.all = true;
     else if (a === "--version" || a === "-v") {
       console.log(`lookout ${pkg.version}`);
       process.exit(0);
@@ -69,7 +72,7 @@ async function main(): Promise<number> {
     return 0;
   }
   const { runTui } = await import("../tui/App.tsx");
-  await runTui(session, config.value.dispatchers.length > 0, async () => runner?.shutdown());
+  await runTui(session, { dispatchable: config.value.dispatchers.length > 0, showAll: args.all }, async () => runner?.shutdown());
   return 0;
 }
 

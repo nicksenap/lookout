@@ -25,6 +25,8 @@ export interface Config {
   dispatchers: DispatcherConfig[];
   /** Optional override of the default prompt template. */
   prompt?: string;
+  /** Which dispatcher verifies findings; the first dispatcher when unset. */
+  verifier?: string;
   policy: Policy;
   /** Where the config came from, for error messages. */
   source: string;
@@ -58,8 +60,8 @@ const MODEL_SPEC = /^[\w.-]+:.+$/;
  */
 export function validateConfig(raw: unknown, source: string, base: Config = DEFAULT_CONFIG): Result<Config> {
   if (!isTable(raw)) return err(`${source}: expected a TOML table at top level`);
-  const known = new Set(["model", "rank", "dispatch", "prompt", "areas", "policy"]);
-  for (const key of Object.keys(raw)) if (!known.has(key)) return err(`${source}: unknown key "${key}" (expected model, dispatch, prompt, areas, policy)`);
+  const known = new Set(["model", "rank", "dispatch", "prompt", "verify", "areas", "policy"]);
+  for (const key of Object.keys(raw)) if (!known.has(key)) return err(`${source}: unknown key "${key}" (expected model, dispatch, prompt, verify, areas, policy)`);
 
   let decide = base.model.decide;
   let write = base.model.write;
@@ -111,6 +113,15 @@ export function validateConfig(raw: unknown, source: string, base: Config = DEFA
     if (!placeholders.ok) return placeholders;
     config.prompt = raw.prompt;
   } else if (base.prompt !== undefined) config.prompt = base.prompt;
+  if (raw.verify !== undefined) {
+    if (!isTable(raw.verify)) return err(`${source}: [verify] must be a table with dispatcher`);
+    for (const key of Object.keys(raw.verify)) if (key !== "dispatcher") return err(`${source}: unknown key "verify.${key}" (expected dispatcher)`);
+    const verifier = raw.verify.dispatcher;
+    if (verifier !== undefined) {
+      if (typeof verifier !== "string" || !dispatchers.some((d) => d.name === verifier)) return err(`${source}: verify.dispatcher must name a [dispatch.<name>] (have: ${dispatchers.map((d) => d.name).join(", ")})`);
+      config.verifier = verifier;
+    }
+  } else if (base.verifier !== undefined && dispatchers.some((d) => d.name === base.verifier)) config.verifier = base.verifier;
   return ok(config);
 }
 
