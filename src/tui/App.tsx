@@ -17,7 +17,7 @@ import {
 } from "./Card.tsx";
 import { type Composer, composerKey, composerLines, openComposer } from "./Composer.tsx";
 import { type HelpState, helpBox, helpKey, overlay } from "./Help.tsx";
-import { jumpTarget, keyAction, keyHelp, type Mode } from "./keys.ts";
+import { type Action, jumpTarget, keyAction, keyHelp, type Mode } from "./keys.ts";
 import { highlight, nextHit, openSearch, type Search, searchFooter, searchHits, searchKey } from "./Search.tsx";
 import { runFullscreen } from "./screen.ts";
 import { theme } from "./theme.ts";
@@ -212,30 +212,8 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     void session.command({ type: "ask", text, ...(cardId ? { cardId } : {}) });
   };
 
-  useInput((input, key) => {
-    const shown = helpRef.current;
-    if (shown) return setHelp(helpKey(shown, input, key, w));
-    const open = askingRef.current;
-    if (open) {
-      const result = composerKey(open, input, key);
-      if ("composer" in result) return setAsking(result.composer);
-      if ("send" in result) send(result.scope, result.send);
-      return setAsking(undefined);
-    }
-    const typing = searchRef.current;
-    if (typing?.open) {
-      const result = searchKey(typing, input, key);
-      if ("close" in result) return setSearch(undefined);
-      if ("commit" in result) return setSearch(result.commit);
-      setSearch(result.search);
-      return followSearch(result.search.query);
-    }
-    // A committed search: esc clears it before anything else sees the key.
-    if (typing && key.escape) return setSearch(undefined);
-    const next = keyAction(input, key, prefix.current);
-    prefix.current = next.pending;
-    const action = next.action;
-    if (!action) return;
+  /** One stack action; the key → action mapping lives in keys.ts. */
+  const perform = (action: Action) => {
     switch (action.type) {
       case "quit":
         return exit();
@@ -291,6 +269,33 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
         return setSelected(Math.max(0, Math.min(to, cards.length - 1)));
       }
     }
+  };
+
+  useInput((input, key) => {
+    const shown = helpRef.current;
+    if (shown) return setHelp(helpKey(shown, input, key, w));
+    const open = askingRef.current;
+    if (open) {
+      const result = composerKey(open, input, key);
+      if ("composer" in result) return setAsking(result.composer);
+      if ("send" in result) send(result.scope, result.send);
+      return setAsking(undefined);
+    }
+    const typing = searchRef.current;
+    if (typing?.open) {
+      const result = searchKey(typing, input, key);
+      if ("close" in result) return setSearch(undefined);
+      if ("commit" in result) return setSearch(result.commit);
+      setSearch(result.search);
+      return followSearch(result.search.query);
+    }
+    // A committed search: esc clears it before anything else sees the key.
+    if (typing && key.escape) return setSearch(undefined);
+    const next = keyAction(input, key, prefix.current);
+    prefix.current = next.pending;
+    const action = next.action;
+    if (!action) return;
+    perform(action);
   });
 
   // The body is always bodyH rows; the help popup is painted over them rather than replacing them.
