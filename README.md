@@ -64,21 +64,16 @@ Without a key lookout still runs: rules only, one card per file, rule colours, n
 ### 3. Review something
 
 ```sh
-cd some-repo
-lookout                          # dirty tree: review it · clean tree: pick an open PR
-lookout owner/repo#123           # a pull request
+cd some-repo && lookout
 ```
 
 ## Usage
 
 ```sh
-lookout                          # working tree vs HEAD; clean tree in a GitHub repo → picker of open PRs
-lookout --pick                   # the picker
+lookout                          # dirty tree: review it · clean tree in a GitHub repo: pick an open PR
 lookout main..                   # a range (A..B, or A...B from the merge-base)
-lookout owner/repo#123           # a pull request
-lookout https://github.com/owner/repo/pull/123
-lookout <target> --json          # the same Review as JSON
-lookout <target> --json --evidence   # plus claims, grounding, unmentioned and questions (JSON only)
+lookout owner/repo#123           # a pull request (or its URL)
+lookout <target> --json          # the Review as JSON; --evidence adds claims, unmentioned, questions
 ```
 
 ### Keys
@@ -94,91 +89,38 @@ Vim and helix conventions. `?` overlays the full list and a glossary.
 | `a` | ask about the selected card (`tab`: the whole change; `↑/↓` earlier questions) |
 | `?` · `q` | help and glossary · quit |
 
-While cards load, a bar under the header shows the phase (ranking → splitting → writing) and the count.
+## Reading a card
 
-## What you are looking at
+A **card** is one logical change: edit blocks from any files, a title and a paragraph written from those edits alone and checked against them. **Colour** is a rule, never an opinion: red for a suspicious edit, behaviour in a sensitive area or a one-way edit that needs eyes; amber for needs-eyes, config and one-way signals; green for the rest; grey for verified-clean. Renames, typing and moves get a template sentence only when rules confirm the model's label. **One-way** signals (migrations, destructive SQL, in-place data writes, removed public exports or routes) attach to the card that owns the line. A paragraph that fails its check twice is shown dimmed as *unverified*. The header's **verdict** is the tier and how many humans must review, from the repo's policy.
 
-**Card**: one logical change, built from edit blocks (contiguous `+`/`-` runs) across any files, titled and described in at most three sentences from its own edits. Two fixed cards: *verified clean* collects every inert edit (lockfiles, whitespace, generated code), *untouched* lists sensitive areas the change does not reach.
-
-**Colour** is a rule, not an opinion. Red: a suspicious edit, behaviour changed inside a sensitive area, or a one-way signal on an edit that needs eyes. Amber: needs eyes, dependency/config/CI changes, or a one-way signal. Green: fine. Grey: verified clean. Tests, renames and docs inside a sensitive area stay green and keep the area badge. The stack is red → amber → green; mechanical and docs cards last; a configuration switch first within its colour.
-
-**Mechanical** cards (renames, typing, moves) carry a template sentence only when rules confirm the model's label: a consistent one-to-one identifier substitution, type-only edits with no narrowing and no new return type, code that reappears verbatim. Anything else is behaviour.
-
-**One-way** signals in the diff (migrations, destructive SQL, in-place data writes incl. key-value updates, removed public exports or members, removed routes, contract files) attach to the card that owns the line and raise its colour.
-
-Cards whose paragraph failed the check twice (a name not in the edits, or Decisions puts under 70 % on "every statement follows from the edits") show **paragraph unverified** and dim the text.
-
-**Verdict** (header): risk tier and how many humans must review, from the repo's policy: change kind defaults, area rules, and floors (a touched area is never low; a needs-eyes edit is at least medium).
-
-**tests touched / covers**: a test card in the same change exercises this card's files (same directory, name stem, or import); the test card lists what it covers.
-
-**Evidence layer** (`--evidence`, JSON only for now): each `- ` bullet of the PR description graded against the diff (`supported`, `contradicted` at ≥ 70 % confidence, `unclear`, `not-in-diff`), cards no claim describes marked `unmentioned`, and 2–4 yes/no questions per card from a tier-specific bank. Agent find + verify (`dispatch/`, `verify/`) is wired to the same flag through the session commands. These were built in v1 and are parked until the cards themselves pass review (`PLAN-v2.md`).
+`?` in the app has the full glossary; so does [GLOSSARY.md](GLOSSARY.md).
 
 ## Configure
 
-Global `~/.config/lookout/config.toml`, then the repo's `.lookout.toml` layered on top. Every error names the key.
+Global `~/.config/lookout/config.toml`, then the repo's `.lookout.toml` on top. Every error names the key.
 
 ```toml
 [model]
-decide = "openai:gpt-6-luna"   # Decisions API: attention, kinds, claim grounding
-write  = "openai:gpt-6-luna"   # prose: titles, paragraphs
+decide = "openai:gpt-6-luna"   # Decisions API: attention, kinds, checks
+write  = "openai:gpt-6-luna"   # prose: titles, paragraphs, answers
 
-# Sensitive areas: name = path globs. An empty list removes a default area.
-[areas]
-auth    = ["src/auth/**", "src/middleware/session*.ts"]
+[areas]                        # sensitive areas: name = globs; [] removes a default
+auth    = ["src/auth/**"]
 billing = ["src/billing/**"]
-data    = []
 
-[policy.kinds]          # minimum tier per change kind
-docs = "low"
-logic = "medium"
-
-[policy.humans]
-low = 0
-medium = 1
-high = 2
-
-[[policy.rules]]        # raise the tier when every condition holds
+[[policy.rules]]               # raise the tier when every condition holds
 area = "auth"
 tier = "high"
-reason = "touches auth"
-
-[dispatch.pi]           # review agents (--evidence, session commands); the first is the default proposer
-cmd = "pi -p @{prompt_file}"
-
-[verify]                # optional: which dispatcher verifies findings (default: the first)
-dispatcher = "pi"
 ```
 
-Default areas are `auth`, `billing`, `data`, `infra`, `prompts`; their globs are deliberately broad and worth narrowing per repo.
-
-## How it works
-
-```
-diff ─► edit blocks ─► rules (labels, inert, sensitive paths, scope at head)   0 calls
-     ─► Decisions: attention score + kind per block                            1 call / 20 blocks
-     ─► rules confirm mechanical kinds; fragments join their owner             0 calls
-     ─► deterministic grouping; oversized cards split by the writer,
-        the partition repaired or rejected by rules                            1 call / blob
-     ─► LLM: title + paragraph per card shape, in parallel                     1 call / card
-     ─► rules + Decisions: does every sentence follow from the edits?          1 call / card
-     ─► policy: colour, order, tier, humans; door signals; tests touched       0 calls
-  a  ─► LLM answer from the scope's edits ─► Decisions consistency check       2 calls
-  --evidence ─► claims, grounding, unmentioned, questions, agents               parked (JSON only)
-```
-
-Everything is cached by content hash under `~/.cache/lookout`, so re-running a PR after a push only recomputes changed blocks. Every model step degrades to rules plus a warning; nothing is fatal.
+Defaults: areas `auth`, `billing`, `data`, `infra`, `prompts` (broad globs, worth narrowing per repo); `docs`/`additive` low, `logic`/`config`/`deps` medium; `[policy.kinds]`, `[policy.humans]` and `unless` on rules are in [docs](HANDOFF.md). The evidence layer (`--evidence`: PR claims graded against the diff, unmentioned cards, review questions, agents) is JSON-only and parked until the cards pass review; see [PLAN-v2.md](PLAN-v2.md).
 
 ## Development
 
 ```sh
-bun run check       # what CI runs, as separate steps: typecheck · biome · complexity · knip · test · fixture drift
-bun run lint:fix    # biome: format (140 cols), lint rules, import order
-bun run complexity --top 15   # cyclomatic complexity per function (gate 50, scripts/complexity.ts)
-bun run knip:exports          # advisory: exports nothing else imports
-bun run hooks       # pre-commit runs typecheck · biome · test
-bun run story review-a --paragraphs   # the real App against a saved review, no models
-bun run bench       # grouping benchmark against hand-judged targets
+bun run check       # what CI runs: typecheck · biome · complexity · knip · test · fixture drift
+bun run lint:fix    # format and fix
+bun run story review-a --paragraphs   # the real App over a saved review, no models
 ```
 
-`AGENTS.md` has the working rules, `GLOSSARY.md` the vocabulary, `PLAN-v2.md` the current plan (the v1 design is `PLAN.md`), `HANDOFF.md` where things stand.
+[AGENTS.md](AGENTS.md) has the working rules, [HANDOFF.md](HANDOFF.md) where things stand and what's next.
