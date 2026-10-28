@@ -166,7 +166,9 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
     if (hunks.length === 0) continue;
     push([{ text: fit(file.path, w), color: theme.accent, bold: true }]);
     for (const h of hunks) {
-      push([{ text: fit(h.header, w), dim: true }]);
+      // The scope path (`DEPLOYMENTS › stage › servedTools › web`) says where the hunk sits better than its header.
+      const scope = h.blocks.find((b) => ids.has(b.id) && b.scope)?.scope;
+      push([{ text: fit(scope ? `in ${scope.join(" › ")}` : h.header, w), dim: true }]);
       for (const l of hunkRows(h, ids, w)) push(l);
     }
     push([{ text: "" }]);

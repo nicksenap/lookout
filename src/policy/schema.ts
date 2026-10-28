@@ -1,7 +1,7 @@
 import type { ChangeKind, Tier } from "../core/types.ts";
 import { ok, err, type Result } from "../core/result.ts";
 
-/** A rule raises the tier to at least `tier` when every stated condition holds. */
+/** A rule raises the tier to at least `tier` when every stated condition holds and no `unless` condition does. */
 export interface PolicyRule {
   area?: string;
   kind?: ChangeKind;
@@ -9,6 +9,11 @@ export interface PolicyRule {
   attention?: "needs-eyes" | "suspicious";
   tier: Tier;
   reason?: string;
+  /**
+   * The rule stands down when the change is of this kind and (with `oneWay: false`) shows no
+   * one-way signal. Lets `infra → high` skip a reversible additive line while a migration stays high.
+   */
+  unless?: { kind: ChangeKind; oneWay?: false };
 }
 
 export interface Policy {
@@ -46,7 +51,8 @@ export const DEFAULT_RULES: PolicyRule[] = [
   { area: "auth", tier: "high", reason: "touches auth" },
   { area: "billing", tier: "high", reason: "touches billing" },
   { area: "data", tier: "high", reason: "touches data schema or migrations" },
-  { area: "infra", tier: "high", reason: "touches infra or CI" },
+  // One reversible additive line in infra (a served-tools entry, a flag) is medium: the floors keep it off low.
+  { area: "infra", tier: "high", reason: "touches infra or CI", unless: { kind: "additive", oneWay: false } },
   { area: "prompts", tier: "medium", reason: "touches prompts" },
 ];
 
@@ -101,9 +107,15 @@ export function validatePolicy(raw: Record<string, unknown>, source: string, bas
       for (const [k, r] of p.rules.entries()) {
         const where = `${source}: policy.rules[${k}]`;
         if (!isTable(r)) return err(`${where} must be a table`);
-        for (const key of Object.keys(r)) if (!["area", "kind", "attention", "tier", "reason"].includes(key)) return err(`${where}: unknown key "${key}"`);
+        for (const key of Object.keys(r)) if (!["area", "kind", "attention", "tier", "reason", "unless"].includes(key)) return err(`${where}: unknown key "${key}"`);
         if (!TIERS.includes(r.tier as Tier)) return err(`${where}: tier must be one of ${TIERS.join(", ")}`);
         const rule: PolicyRule = { tier: r.tier as Tier };
+        if (r.unless !== undefined) {
+          const u = r.unless as { kind?: unknown; oneWay?: unknown };
+          if (typeof r.unless !== "object" || r.unless === null || !KINDS.includes(u.kind as ChangeKind)) return err(`${where}.unless: needs kind = one of ${KINDS.join(", ")}`);
+          if (u.oneWay !== undefined && u.oneWay !== false) return err(`${where}.unless.oneWay: only false is meaningful (the rule stands down when the diff shows no one-way signal)`);
+          rule.unless = u.oneWay === false ? { kind: u.kind as ChangeKind, oneWay: false } : { kind: u.kind as ChangeKind };
+        }
         if (r.area !== undefined) {
           if (typeof r.area !== "string" || !(r.area in policy.areas)) return err(`${where}: area "${String(r.area)}" is not defined in [areas] (known: ${Object.keys(policy.areas).join(", ")})`);
           rule.area = r.area;

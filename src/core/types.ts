@@ -51,6 +51,8 @@ export interface EditBlock {
   kind?: BlockKind;
   /** The model's mechanical label when rules could not confirm it and `kind` fell back to `behavior`. */
   suggestedKind?: BlockKind;
+  /** Declarations and object keys enclosing the first changed line at head, outermost first (rank/scope.ts). */
+  scope?: string[];
 }
 
 export type BlockKind = "typing-refactor" | "rename" | "move" | "behavior" | "test" | "types" | "config" | "docs";
@@ -296,6 +298,8 @@ export interface Classification {
   maxAttention: Attention;
   /** Blocks whose path matched the built-in sensitive-word heuristic, by path. */
   sensitivePaths: string[];
+  /** The diff shows a one-way door signal (migration, data write, removed export or route, contract). */
+  oneWay: boolean;
   counts: { files: number; blocks: number; inert: number };
 }
 

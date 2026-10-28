@@ -17,9 +17,25 @@ function must<T>(r: Result<T>): T {
   return r.value;
 }
 
-const c = (over: Partial<Classification>): Classification => ({ kind: "logic", areas: [], maxAttention: "routine", sensitivePaths: [], counts: { files: 1, blocks: 1, inert: 0 }, ...over });
+const c = (over: Partial<Classification>): Classification => ({ kind: "logic", areas: [], maxAttention: "routine", sensitivePaths: [], oneWay: false, counts: { files: 1, blocks: 1, inert: 0 }, ...over });
 
 describe("evaluate: tier table", () => {
+  test("a rule with `unless` stands down for a two-way additive change and holds for a one-way one or a logic change", () => {
+    const rules = [{ area: "infra", tier: "high" as const, reason: "touches infra", unless: { kind: "additive" as const, oneWay: false as const } }];
+    const policy = { ...DEFAULT_POLICY, rules };
+    const additive = evaluate(c({ kind: "additive", areas: ["infra"], maxAttention: "needs-eyes" }), policy);
+    expect(additive.tier).toBe("medium");
+    expect(additive.reasons.some((r) => r.includes("stands down"))).toBe(true);
+    expect(evaluate(c({ kind: "additive", areas: ["infra"], oneWay: true }), policy).tier).toBe("high");
+    expect(evaluate(c({ kind: "logic", areas: ["infra"] }), policy).tier).toBe("high");
+  });
+
+  test("validatePolicy accepts unless and names bad keys", () => {
+    expect(must(validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "additive", oneWay: false } }] } }, "t")).rules.at(-1)!.unless).toEqual({ kind: "additive", oneWay: false });
+    expect(validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "nope" } }] } }, "t").ok).toBe(false);
+    expect(validatePolicy({ policy: { rules: [{ area: "infra", tier: "high", unless: { kind: "additive", oneWay: true } }] } }, "t").ok).toBe(false);
+  });
+
   const table: [Partial<Classification>, Tier, 0 | 1 | 2][] = [
     [{ kind: "docs" }, "low", 0],
     [{ kind: "test" }, "low", 0],

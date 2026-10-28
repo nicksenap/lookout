@@ -30,7 +30,8 @@ export function kindOf(blocks: { path: string; labels: string[]; hasDeletions: b
   return "logic";
 }
 
-export function classify(changeSet: ChangeSet, policy: Policy): Classification {
+/** `oneWay` comes from the caller (evidence/door.ts); policy cannot import evidence. */
+export function classify(changeSet: ChangeSet, policy: Policy, oneWay = false): Classification {
   const refs = allBlocks(changeSet);
   const live = refs.filter((r) => r.block.attention !== "inert");
   const areas = new Set<string>();
@@ -53,6 +54,7 @@ export function classify(changeSet: ChangeSet, policy: Policy): Classification {
     areas: [...areas].sort(),
     maxAttention,
     sensitivePaths: [...sensitivePaths].sort(),
+    oneWay,
     counts: { files: changeSet.files.length, blocks: refs.length, inert: refs.length - live.length },
   };
 }
@@ -71,6 +73,10 @@ export function evaluate(c: Classification, policy: Policy): Verdict {
     if (rule.area && !c.areas.includes(rule.area)) continue;
     if (rule.kind && c.kind !== rule.kind) continue;
     if (rule.attention && rank(c.maxAttention) < rank(rule.attention)) continue;
+    if (rule.unless && c.kind === rule.unless.kind && (rule.unless.oneWay === undefined || c.oneWay === false)) {
+      reasons.push({ tier: "low", text: `${rule.reason ?? `touches ${rule.area}`} → ${rule.tier}, but the change is ${c.kind}${rule.unless.oneWay === false ? " and two-way" : ""}: rule stands down` });
+      continue;
+    }
     const what = rule.reason ?? [rule.area && `touches ${rule.area}`, rule.kind && `${rule.kind} change`, rule.attention && `a block is ${rule.attention}`].filter(Boolean).join(", ");
     reasons.push({ tier: rule.tier, text: `${what} → ${rule.tier}` });
     tier = maxTier(tier, rule.tier);

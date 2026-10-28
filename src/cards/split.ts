@@ -62,7 +62,7 @@ export function splitPrompt(changeSet: ChangeSet, card: Pick<Card, "blockIds">):
     .map((r) => {
       const lines = blockText(r.hunk, r.block, 2).split("\n");
       const body = lines.length > MAX_LINES_PER_EDIT ? `${lines.slice(0, MAX_LINES_PER_EDIT).join("\n")}\n… ${lines.length - MAX_LINES_PER_EDIT} more lines` : lines.join("\n");
-      return `### edit ${r.block.id} · ${r.block.path} ${r.hunk.header}\n${body}`;
+      return `### edit ${r.block.id} · ${r.block.path}${r.block.scope ? ` in ${r.block.scope.join(" › ")}` : ` ${r.hunk.header}`}\n${body}`;
     })
     .join("\n\n");
   return SPLIT_PROMPT.replace("{intent}", changeSet.intent?.title ?? "(none)").replace("{edits}", edits.slice(0, 120_000));

@@ -29,10 +29,10 @@ export interface WriteOptions {
 /** Below this the paragraph is rewritten once; below it again, it is shown as unverified. */
 export const PROSE_GATE = 0.7;
 // Cache key version: bumped with the prompts so a sharper question is never answered from an old cache.
-const PROSE_VERSION = "prose-v3";
+const PROSE_VERSION = "prose-v4";
 
 const PREAMBLE = `You are briefing a senior engineer who must review an agent-written code change without reading the diff.
-Below is ONE logical change: a set of edits (contiguous +/- runs) with a few lines of context each; each edit names its file and the enclosing declaration from the hunk header.
+Below is ONE logical change: a set of edits (contiguous +/- runs) with a few lines of context each; each edit names its file and, after "in", the declarations and object keys that enclose it (outermost first), read from the file itself. Use that path: it tells you which environment, policy or function an edit belongs to when the diff lines alone do not.
 Write from the edits only; name functions, props, keys and values exactly as they appear; no advice, no praise, no preamble. Never describe code the edits do not show. If some edits do not belong with the others, say so in the last sentence.`;
 
 /** One prompt per card shape: what a reviewer needs first differs for behaviour, configuration, tests and docs. */
@@ -79,7 +79,7 @@ export function editsOf(changeSet: ChangeSet, card: Pick<Card, "blockIds">): str
   const ids = new Set(card.blockIds);
   return allBlocks(changeSet)
     .filter((r) => ids.has(r.block.id))
-    .map((r) => `### ${r.block.path} ${r.hunk.header}\n${blockText(r.hunk, r.block, 3)}`)
+    .map((r) => `### ${r.block.path}${r.block.scope ? ` in ${r.block.scope.join(" › ")}` : ` ${r.hunk.header}`}\n${blockText(r.hunk, r.block, 3)}`)
     .join("\n\n")
     .slice(0, 48_000);
 }
@@ -95,6 +95,7 @@ A checker found at least one statement in a previous draft that the edits do not
  */
 export function unsupportedNames(edits: string, paragraph: string): string[] {
   const names = [...paragraph.matchAll(/`([^`]+)`/g)].map((m) => m[1]!.trim());
+  // The edits text includes each block's scope path, so a paragraph may name the enclosing key (`stage`).
   const code = edits.toLowerCase();
   return [...new Set(names.filter((n) => {
     // A path or an expression is judged by its identifier parts: `fieldsQueryKeys.dependencies('w')` → fieldsQueryKeys, dependencies.

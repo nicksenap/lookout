@@ -12,6 +12,8 @@ import { classify, evaluate } from "../policy/evaluate.ts";
 import { answer, pickQuestions } from "../questions/pick.ts";
 import type { RankCache } from "../rank/cache.ts";
 import { rankWithModel } from "../rank/rank.ts";
+import { attachScopes } from "../rank/scope.ts";
+import { allBlocks, mapBlocks } from "./blocks.ts";
 import { applyRules } from "../rank/rules.ts";
 import { buildVerifyPrompt } from "../verify/prompt.ts";
 import { duplicates, judgeVerdicts, parseVerdicts } from "../verify/verify.ts";
@@ -64,6 +66,8 @@ export interface LocalSessionOptions {
   write?: (prompt: string) => Promise<string>;
   check?: (edits: string, prose: { title: string; paragraph: string }) => Promise<number>;
   answer?: typeof ask;
+  /** `false` skips reading files at head for block scopes (tests without a repo). */
+  scopes?: boolean;
   /** Model cache for prose and splits; tests pass a temp dir so fakes never land in the user's cache. */
   cache?: RankCache;
   env?: Record<string, string | undefined>;
@@ -210,10 +214,10 @@ export class LocalSession implements ReviewSession {
 
   private assemble(changeSet: ChangeSet, rankedBy: string, warning?: string): Review {
     const policy = this.opts.config.policy;
-    const classification = classify(changeSet, policy);
     const previous = this.store?.getSnapshot();
     const claims = previous?.claims ?? (this.opts.evidence ? extractClaims(changeSet.intent) : []);
     const door = detectDoor(changeSet, authorDoor(changeSet.intent, claims));
+    const classification = classify(changeSet, policy, door.computed === "one-way");
     const cards = attachDoorSignals(changeSet, markTests(changeSet, buildCards(changeSet, policy, this.splits)), door.signals);
     const radius = initialRadius(classification.areas, claims.find((c) => c.section === "radius")?.text);
     const review: Review = {
@@ -242,9 +246,15 @@ export class LocalSession implements ReviewSession {
 
   private async runModel(ruled: ChangeSet): Promise<void> {
     const rank = this.opts.rank ?? rankWithModel;
-    const res = await rank(ruled, { modelSpec: this.opts.config.model.decide, env: this.opts.env, onProgress: (done, total) => this.progress({ phase: "ranking", done, total }) });
+    // Scopes (the enclosing declarations at head) are read while the model ranks; both land before cards are built.
+    const [res, scoped] = await Promise.all([
+      rank(ruled, { modelSpec: this.opts.config.model.decide, env: this.opts.env, onProgress: (done, total) => this.progress({ phase: "ranking", done, total }) }),
+      this.opts.scopes === false ? Promise.resolve(ruled) : attachScopes(ruled, this.opts.repo),
+    ]);
+    const scopeOf = new Map(allBlocks(scoped).filter((r) => r.block.scope).map((r) => [r.block.id, r.block.scope!]));
+    const changeSet = scopeOf.size ? mapBlocks(res.changeSet, ({ block }) => (scopeOf.has(block.id) ? { ...block, scope: scopeOf.get(block.id)! } : block)) : res.changeSet;
     const before = this.snapshot();
-    const after = this.assemble(res.changeSet, res.rankedBy, res.warning);
+    const after = this.assemble(changeSet, res.rankedBy, res.warning);
     this.store.update(() => after);
     for (const event of cardPatches(before.cards, after.cards, after.untouched)) this.store.emit(event);
     if (JSON.stringify(before.verdict) !== JSON.stringify(after.verdict) || JSON.stringify(before.classification) !== JSON.stringify(after.classification)) {
@@ -264,7 +274,7 @@ export class LocalSession implements ReviewSession {
     if (split.warning) this.warn(split.warning);
     if (split.splits.size > 0) {
       this.splits = split.splits;
-      const resplit = this.assemble(res.changeSet, res.rankedBy, this.snapshot().warning);
+      const resplit = this.assemble(changeSet, res.rankedBy, this.snapshot().warning);
       this.store.update(() => resplit);
       for (const event of cardPatches(after.cards, resplit.cards, resplit.untouched)) this.store.emit(event);
     }
