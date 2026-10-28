@@ -149,7 +149,7 @@ export async function writeCards(changeSet: ChangeSet, cards: Card[], opts: Writ
       onCard(card.id, prose);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(opts.concurrency ?? 6, todo.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(opts.concurrency ?? 12, todo.length) }, worker));
   // A read-only cache dir only costs a rewrite next time.
   if (touched) await attemptAsync(async () => cache.save());
   return warning ? { warning } : {};

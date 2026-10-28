@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildCards } from "../src/cards/build.ts";
 import { changedIdentifiers, groupBlocks, mechanicalText } from "../src/cards/group.ts";
-import { parseProse, prosePrompt, writeCards } from "../src/cards/write.ts";
+import { parseProse, type Prose, prosePrompt, writeCards } from "../src/cards/write.ts";
 import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { LocalSession } from "../src/core/session.ts";
@@ -156,7 +156,7 @@ describe("writeCards gate", () => {
       checks.push(prose.paragraph);
       return prose.paragraph.includes("Production") ? 0.2 : 0.95;
     };
-    const landed: Record<string, unknown>[] = [];
+    const landed: Prose[] = [];
     await writeCards(set, cards, { modelSpec: "mock:w", cache: new RankCache(dir), write, check }, (_id, prose) => landed.push(prose));
     expect(prompts).toHaveLength(2);
     expect(prompts[0]).toContain("Configure");
@@ -166,7 +166,7 @@ describe("writeCards gate", () => {
     expect(landed[0]).toEqual({ title: "Configure stage tools", paragraph: "Stage adds reports.", check: 0.95 });
 
     const stubborn = async () => "TITLE: Configure tools\nPARAGRAPH: Production adds reports and removes portal.";
-    const bad: Record<string, unknown>[] = [];
+    const bad: Prose[] = [];
     await writeCards(set, cards.map((c) => ({ ...c, id: `${c.id}x` })), { modelSpec: "mock:w", cache: new RankCache(dir), write: stubborn, check }, (_id, prose) => bad.push(prose));
     expect(bad[0]).toMatchObject({ unverified: true, check: 0.2 });
     rmSync(dir, { recursive: true, force: true });
