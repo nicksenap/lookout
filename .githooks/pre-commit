@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -e
-# Fast subset of `bun run check`; CI runs the full gate (fixture drift included).
-bun run typecheck && bun test
+# Fast subset of `bun run check`; CI runs the full gate (knip, complexity, fixture drift included).
+bun run typecheck && bun run lint && bun test
