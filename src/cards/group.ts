@@ -30,7 +30,7 @@ export const isOrphan = (r: BlockRef): boolean => blockLines(r.hunk, r.block).ma
  * An edit that cannot stand alone as a logical change: imports, re-exports, a lone type or
  * interface, a destructured prop. It belongs to the card that owns its file, whatever kind
  * the model gave it. Measured on three production PRs where these formed cards of their
- * own (a lone request model as a card, "Rename in the deployment file" for two `export` lines).
+ * own (a lone request model as a card, "Rename in x.ts" for two `export` lines).
  */
 export function isFragment(r: BlockRef): boolean {
   const lines = blockLines(r.hunk, r.block)

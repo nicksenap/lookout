@@ -168,7 +168,7 @@ describe("writeCards gate", () => {
   test("a paragraph under the gate is rewritten once with the draft quoted; still under, it lands unverified; shape and hint reach the prompt", async () => {
     const text = diff("infra/deploy/stage.ts", "@@ -1,3 +1,3 @@", [" a", "-tools: [portal],", "+tools: [portal, reports],", " b"]);
     const set = cs(text, ["config"]);
-    const cards = buildCards(set, DEFAULT_POLICY).map((c) => ({ ...c, hint: "Serve new-tool tools on stage" }));
+    const cards = buildCards(set, DEFAULT_POLICY).map((c) => ({ ...c, hint: "Serve report tools on stage" }));
     const dir = mkdtempSync(join(tmpdir(), "lookout-gate-"));
     const prompts: string[] = [];
     const checks: string[] = [];
@@ -184,7 +184,7 @@ describe("writeCards gate", () => {
     await writeCards(set, cards, { modelSpec: "mock:w", cache: new RankCache(dir), write, check }, (_id, prose) => landed.push(prose));
     expect(prompts).toHaveLength(2);
     expect(prompts[0]).toContain("Configure");
-    expect(prompts[0]).toContain("Serve new-tool tools on stage");
+    expect(prompts[0]).toContain("Serve report tools on stage");
     expect(prompts[1]).toContain("Previous draft");
     expect(checks).toHaveLength(2);
     expect(landed[0]).toEqual({ title: "Configure stage tools", paragraph: "Stage adds reports.", check: 0.95 });
