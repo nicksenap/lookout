@@ -22,9 +22,6 @@ import { type ReviewEvent, ReviewStore } from "./store.ts";
 import type { Card, ChangeSet, Claim, Exchange, Finding, Progress, QuestionAnswer, Review } from "./types.ts";
 
 export type { ReviewEvent } from "./store.ts";
-// Pure view helpers a UI needs; re-exported here so the TUI imports only this file and types.
-export { cardDispatches, cardFindings } from "../cards/findings.ts";
-export { visibleFindings } from "../verify/verify.ts";
 
 export type ReviewCommand =
   /** A free question about one card (`cardId`) or the whole change; answered from the diff. */

@@ -1,5 +1,5 @@
 import { splitHunk } from "./blocks.ts";
-import type { DiffLine, FileChange, Hunk } from "./types.ts";
+import type { DiffLine, FileChange } from "./types.ts";
 
 /** Unquote a git C-style quoted path ("a/\303\251 x") or return it unchanged. */
 export function unquoteGitPath(raw: string): string {

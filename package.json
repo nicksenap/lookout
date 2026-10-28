@@ -9,14 +9,18 @@
     "lookout": "bin/lookout"
   },
   "scripts": {
-    "check": "bun run typecheck && bun test && bun run fixtures:check",
+    "check": "bun run typecheck && bun test && bun run lint && bun run fixtures:check",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "fixtures": "bun scripts/refresh-fixtures.ts",
     "fixtures:check": "bun scripts/refresh-fixtures.ts > /dev/null && git diff --quiet -- fixtures/reviews || (echo 'fixtures/reviews drifted from the pipeline; run bun run fixtures and commit' && git --no-pager diff --stat -- fixtures/reviews && exit 1)",
     "story": "bun stories/run.ts",
     "bench": "scripts/grouping-bench.sh",
-    "hooks": "git config core.hooksPath .githooks"
+    "hooks": "git config core.hooksPath .githooks",
+    "lint": "bun run complexity && bun run deadcode",
+    "complexity": "bun scripts/complexity.ts",
+    "deadcode": "bunx knip --include files,dependencies,unlisted,unresolved",
+    "deadcode:exports": "bunx knip --include exports,types"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.89",
@@ -32,6 +36,7 @@
     "@types/bun": "^1.4.4",
     "@types/react": "19.3.0",
     "ink-testing-library": "4.0.0",
+    "oxc-parser": "^0.156.0",
     "typescript": "^7.0.2"
   }
 }

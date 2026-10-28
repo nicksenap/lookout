@@ -3,15 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Experimental_DecisionMockModelV4 } from "ai/test";
-import { buildCards, untouchedAreas } from "../src/cards/build.ts";
+import { buildCards } from "../src/cards/build.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { LocalSession } from "../src/core/session.ts";
 import type { ReviewEvent } from "../src/core/store.ts";
-import type { ChangeSet, Finding, Review } from "../src/core/types.ts";
+import type { ChangeSet, Finding } from "../src/core/types.ts";
 import { DEFAULT_CONFIG, validateConfig } from "../src/dispatch/config.ts";
 import { parseDispatchOutput } from "../src/dispatch/parse.ts";
 import { DispatchRunner } from "../src/dispatch/runner.ts";
-import { classify, evaluate } from "../src/policy/evaluate.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { verdictQuestionId } from "../src/rank/model.ts";
 import { buildVerifyPrompt, VERDICTS_CONTRACT } from "../src/verify/prompt.ts";
@@ -30,10 +29,6 @@ afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })))
 async function changeSet(): Promise<ChangeSet> {
   const files = parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/result-errors.diff`).text());
   return { target: "HEAD~1..HEAD", base: "a", head: "b", files, intent: { title: "Return Result everywhere", body: "Expected failures are returned, not thrown." } };
-}
-function review(cs: ChangeSet): Review {
-  const classification = classify(cs, DEFAULT_POLICY);
-  return { changeSet: cs, classification, verdict: evaluate(classification, DEFAULT_POLICY), cards: buildCards(cs, DEFAULT_POLICY), untouched: untouchedAreas(cs, DEFAULT_POLICY), claims: [], door: { computed: "two-way", signals: [] }, radius: { areas: [] }, dispatches: [], rankedBy: "rules", evidence: true, exchanges: [] };
 }
 const finding = (id: string, title: string, extra: Partial<Finding> = {}): Finding => ({ id, severity: "p1", title, body: "", dispatcher: "fake", status: "proposed", preExisting: false, ...extra });
 const fence = (json: string) => `chatter\n\`\`\`json\n${json}\n\`\`\`\n`;

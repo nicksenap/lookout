@@ -230,11 +230,6 @@ export function rankBlockByRules(file: FileChange, hunk: Hunk, block: EditBlock)
   return { labels, attention, score };
 }
 
-/** Rank a whole hunk as one unit (used when a hunk has no blocks, e.g. tests of legacy fixtures). */
-export function rankHunkByRules(file: FileChange, hunk: Hunk): RuleResult {
-  const whole: EditBlock = { id: hunk.id, hunkId: hunk.id, path: hunk.path, from: 0, to: hunk.lines.length, labels: [], attention: "routine", score: 0 };
-  return rankBlockByRules(file, hunk, whole);
-}
 
 export function applyRules(changeSet: ChangeSet): ChangeSet {
   return mapBlocks(changeSet, ({ file, hunk, block }) => ({ ...block, ...rankBlockByRules(file, hunk, block) }));

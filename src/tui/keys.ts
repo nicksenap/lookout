@@ -56,6 +56,21 @@ export function keyAction(input: string, key: Key, pending?: string): { action?:
   return {};
 }
 
+/**
+ * Where `]`/`[` (next colour band) or `}`/`{` (next red or amber card) land from `sel` in a stack
+ * already sorted by colour; `undefined` when there is nothing further that way.
+ */
+export function jumpTarget(colors: string[], sel: number, delta: 1 | -1, what: "band" | "hot"): number | undefined {
+  const hot = (c: string) => c === "red" || c === "amber";
+  const matches = (k: number) => (what === "hot" ? hot(colors[k]!) : colors[k] !== colors[sel]);
+  let k = sel + delta;
+  while (k >= 0 && k < colors.length && !matches(k)) k += delta;
+  if (k < 0 || k >= colors.length) return undefined;
+  // Going up into a band lands on its first card, so repeated `[` walks band by band.
+  if (what === "band" && delta < 0) while (k > 0 && colors[k - 1] === colors[k]) k--;
+  return k;
+}
+
 export interface KeyHelp {
   keys: string;
   label: string;

@@ -172,7 +172,9 @@ Everything is cached by content hash under `~/.cache/lookout`, so re-running a P
 ## Development
 
 ```sh
-bun run check       # what CI runs: typecheck, tests, fixture drift
+bun run check       # what CI runs: typecheck (incl. unused imports/locals), tests, lint, fixture drift
+bun run lint        # cyclomatic complexity gate (scripts/complexity.ts) + knip for unused files/deps
+bun run deadcode:exports   # advisory: exports nothing else imports
 bun run hooks       # pre-commit runs the fast subset
 bun run story review-a --paragraphs   # the real App against a saved review, no models
 bun run bench       # grouping benchmark against hand-judged targets

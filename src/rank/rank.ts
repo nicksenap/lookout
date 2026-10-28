@@ -1,5 +1,5 @@
 import { allBlocks, type BlockRef, mapBlocks } from "../core/blocks.ts";
-import { ATTENTION_ORDER, type Attention, type ChangeSet, type EditBlock, type Hunk } from "../core/types.ts";
+import { ATTENTION_ORDER, type Attention, type ChangeSet, type EditBlock } from "../core/types.ts";
 import { attempt, attemptAsync } from "../core/result.ts";
 import { RankCache } from "./cache.ts";
 import { type AttentionModel, type BlockJudgement, type Env, resolveAttentionModel, type ResolvedModel, scoreBlockBatch, ATTENTION_LEVELS, BLOCK_KINDS } from "./model.ts";
@@ -25,10 +25,6 @@ export interface ModelRankOptions {
   onProgress?: (done: number, total: number) => void;
 }
 
-/** Highest attention first, then highest score; stable for equal keys. */
-export function compareHunks(a: Hunk, b: Hunk): number {
-  return ATTENTION_ORDER.indexOf(b.attention) - ATTENTION_ORDER.indexOf(a.attention) || b.score - a.score;
-}
 
 const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
 

@@ -1,3 +1,4 @@
+import type { Key } from "ink";
 import { fit, type Line, type Segment, width, wrap } from "./Card.tsx";
 import { HELP_KEYS } from "./keys.ts";
 import { theme } from "./theme.ts";
@@ -38,6 +39,23 @@ interface HelpRow {
 function helpRows(page: HelpState["page"], inner: number): HelpRow[] {
   if (page === "keys") return HELP_KEYS.flatMap((l) => (width(l) <= inner ? [{ text: l, style: /^[A-Z][a-z]+$/.test(l.trim()) ? ("heading" as const) : undefined }] : wrap(l, inner).map((t) => ({ text: t }))));
   return GLOSSARY.flatMap((e, k) => [...(k ? [{ text: "" }] : []), { text: e.term, style: "term" as const }, ...wrap(e.text, inner - 2).map((t) => ({ text: `  ${t}` }))]);
+}
+
+/** Keys while the popup is open: returns the next state, or `undefined` to close it. */
+export function helpKey(help: HelpState, input: string, key: Key, w: number): HelpState | undefined {
+  if (help.find !== undefined) {
+    if (key.escape || key.return) return { ...help, find: undefined };
+    const find = key.backspace || key.delete ? [...help.find].slice(0, -1).join("") : input && !key.ctrl && !key.meta ? help.find + input : help.find;
+    return findInHelp({ ...help, find }, w);
+  }
+  if (key.escape || input === "?" || input === "q" || key.return) return undefined;
+  if (input === "/") return { ...help, find: "" };
+  if (key.tab || input === "h" || input === "l" || key.leftArrow || key.rightArrow) return { page: help.page === "keys" ? "glossary" : "keys", scroll: 0 };
+  if (input === "j" || key.downArrow) return scrollHelp(help, 1, w);
+  if (input === "k" || key.upArrow) return scrollHelp(help, -1, w);
+  if (input === "J" || (key.ctrl && input === "d") || input === " ") return scrollHelp(help, 5, w);
+  if (input === "K" || (key.ctrl && input === "u")) return scrollHelp(help, -5, w);
+  return help;
 }
 
 /** Scroll to the first row whose text contains `find` (a glossary term first, then any row); unchanged when nothing matches. */

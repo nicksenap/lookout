@@ -4,8 +4,8 @@ import type { ReviewSession } from "../core/session.ts";
 import type { Card, Review } from "../core/types.ts";
 import { type CardContext, cardLines, changeExchanges, exchangeLines, expandedLines, fit, type Line, plural, progressLine, Row, sides } from "./Card.tsx";
 import { type Composer, composerKey, composerLines, openComposer } from "./Composer.tsx";
-import { findInHelp, helpBox, type HelpState, overlay, scrollHelp } from "./Help.tsx";
-import { keyAction, keyHelp, type Mode } from "./keys.ts";
+import { helpBox, helpKey, type HelpState, overlay } from "./Help.tsx";
+import { jumpTarget, keyAction, keyHelp, type Mode } from "./keys.ts";
 import { runFullscreen } from "./screen.ts";
 import { highlight, nextHit, openSearch, type Search, searchFooter, searchHits, searchKey } from "./Search.tsx";
 import { theme } from "./theme.ts";
@@ -156,6 +156,15 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     if (mode === "stack" && windowTop !== top) setTop(windowTop);
   }, [windowTop, mode, top]);
   const visible = bodyLines.slice(windowTop, windowTop + bodyH).map((l) => (search ? highlight(l, search.query) : l));
+  /** Live search: the selection (or scroll) lands on the first match as the query grows. */
+  const followSearch = (query: string) => {
+    const live = searchHits(bodyLines, query);
+    if (live.length === 0) return;
+    if (mode === "stack") {
+      const c = bodyLines[live[0]!]!.card;
+      if (c !== undefined) setSelected(c);
+    } else setScroll(Math.max(0, Math.min(live[0]!, Math.max(0, bodyLines.length - bodyH))));
+  };
   const jumpToHit = (direction: 1 | -1) => {
     if (mode === "stack") {
       const to = nextHit(hitCards.sort((a, b) => a - b), sel, direction);
@@ -173,22 +182,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
 
   useInput((input, key) => {
     const shown = helpRef.current;
-    if (shown?.find !== undefined) {
-      if (key.escape) return setHelp({ ...shown, find: undefined });
-      if (key.return) return setHelp({ ...shown, find: undefined });
-      const find = key.backspace || key.delete ? [...shown.find].slice(0, -1).join("") : input && !key.ctrl && !key.meta ? shown.find + input : shown.find;
-      return setHelp(findInHelp({ ...shown, find }, w));
-    }
-    if (shown) {
-      if (key.escape || input === "?" || input === "q" || key.return) return setHelp(undefined);
-      if (input === "/") return setHelp({ ...shown, find: "" });
-      if (key.tab || input === "h" || input === "l" || key.leftArrow || key.rightArrow) return setHelp({ page: shown.page === "keys" ? "glossary" : "keys", scroll: 0 });
-      if (input === "j" || key.downArrow) return setHelp(scrollHelp(shown, 1, w));
-      if (input === "k" || key.upArrow) return setHelp(scrollHelp(shown, -1, w));
-      if (input === "J" || (key.ctrl && input === "d") || input === " ") return setHelp(scrollHelp(shown, 5, w));
-      if (input === "K" || (key.ctrl && input === "u")) return setHelp(scrollHelp(shown, -5, w));
-      return;
-    }
+    if (shown) return setHelp(helpKey(shown, input, key, w));
     const open = askingRef.current;
     if (open) {
       const result = composerKey(open, input, key);
@@ -202,14 +196,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
       if ("close" in result) return setSearch(undefined);
       if ("commit" in result) return setSearch(result.commit);
       setSearch(result.search);
-      // Live: the selection (or scroll) lands on the first match as the query grows.
-      const live = searchHits(bodyLines, result.search.query);
-      if (live.length === 0) return;
-      if (mode === "stack") {
-        const c = bodyLines[live[0]!]!.card;
-        if (c !== undefined) setSelected(c);
-      } else setScroll(Math.max(0, Math.min(live[0]!, Math.max(0, bodyLines.length - bodyH))));
-      return;
+      return followSearch(result.search.query);
     }
     // A committed search: esc clears it before anything else sees the key.
     if (typing && key.escape) return setSearch(undefined);
@@ -230,13 +217,8 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
         }
         return;
       case "jump": {
-        // Bands are runs of one colour in the (already sorted) stack; hot cards are red or amber.
-        const hot = (c: Card) => c.color === "red" || c.color === "amber";
-        const matches = (k: number) => (action.what === "hot" ? hot(cards[k]!) : cards[k]!.color !== cards[sel]!.color);
-        let k = sel + action.delta;
-        while (k >= 0 && k < cards.length && !matches(k)) k += action.delta;
-        if (action.what === "band" && k >= 0 && k < cards.length && action.delta < 0) while (k > 0 && cards[k - 1]!.color === cards[k]!.color) k--;
-        if (k >= 0 && k < cards.length) setSelected(k);
+        const to = jumpTarget(cards.map((c) => c.color), sel, action.delta, action.what);
+        if (to !== undefined) setSelected(to);
         return;
       }
       case "search":
