@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  # `ai` and every `@ai-sdk/*` package are pinned exactly (AGENTS.md); dependabot proposes, a human merges.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      ai-sdk:
+        patterns: ["ai", "@ai-sdk/*"]
+      tooling:
+        patterns: ["@biomejs/*", "knip", "oxc-parser", "typescript", "@types/*", "ink-testing-library"]

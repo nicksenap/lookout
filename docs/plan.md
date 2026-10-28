@@ -37,7 +37,7 @@ On the same three PRs plus three fresh ones, re-run through the same evaluator p
 
 Each ends with a check. `bun run typecheck` and `bun test` pass before every commit.
 
-**15. Grouping benchmark.** `fixtures/grouping/<name>.json`: for a diff, a hand-judged target `{ concern: string, blockIds: string[] }[]` plus `mechanical: blockIds[]` (blocks a reviewer would accept as "unchanged behaviour"). Targets for this repo's own commits are committed; targets for the three external PRs live in `~/.cache/lookout/bench/` (block ids and labels only, but keep them out of the repo). `scripts/grouping-score.ts <repo> <target>` runs the real pipeline and prints: pairwise block agreement with the target (ARI), largest-card size vs target, and **mechanical leaks** (blocks in a mechanical card that the target calls behaviour). Check: script runs on 6 targets; current scores recorded in `HANDOFF.md` as the baseline.
+**15. Grouping benchmark.** `fixtures/grouping/<name>.json`: for a diff, a hand-judged target `{ concern: string, blockIds: string[] }[]` plus `mechanical: blockIds[]` (blocks a reviewer would accept as "unchanged behaviour"). Targets for this repo's own commits are committed; targets for the three external PRs live in `~/.cache/lookout/bench/` (block ids and labels only, but keep them out of the repo). `scripts/grouping-score.ts <repo> <target>` runs the real pipeline and prints: pairwise block agreement with the target (ARI), largest-card size vs target, and **mechanical leaks** (blocks in a mechanical card that the target calls behaviour). Check: script runs on 6 targets; current scores recorded in `docs/handoff.md` as the baseline.
 
 **16. Mechanical guard (rules bound the model).** A block keeps a mechanical kind only when rules can confirm it; otherwise it becomes `behavior` and the model's label is kept as `suggestedKind` for the debug view.
 - `rename`: a consistent one-to-one identifier substitution maps every removed line onto an added line (whitespace-normalised). `deps(ws, id)` → `depsByField(ws, id)` passes; `[…, id, 'dependencies']` → `[…, 'dependencies', id]` fails.
@@ -60,7 +60,7 @@ Then one Decisions `boolean` per paragraph: "does every statement follow from th
 
 **21. Trim the TUI and JSON.** Remove the claims view, radius row, questions and finding glyphs from the default render (they return under `--evidence`). Card JSON gains `files: string[]` and `suggestedKind`. Header: cards · time · model. Check: TUI tests at narrow/wide pass; story `review-a` reads clean; boundary test unchanged.
 
-**22. Done gate.** Run the evaluator prompt from this session (`/tmp/lookout-eval/` reports hold the baseline) on the 3 PRs plus 3 fresh ones from production repos (the list is kept outside the repo in `~/.cache/lookout/bench/targets.txt`). Record scores in `HANDOFF.md`. Only then decide which of claims, door, find+verify come back, in that order of evidence.
+**22. Done gate.** Run the evaluator prompt from this session (`/tmp/lookout-eval/` reports hold the baseline) on the 3 PRs plus 3 fresh ones from production repos (the list is kept outside the repo in `~/.cache/lookout/bench/targets.txt`). Record scores in `docs/handoff.md`. Only then decide which of claims, door, find+verify come back, in that order of evidence.
 
 ## What stays true from v1
 

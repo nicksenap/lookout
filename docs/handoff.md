@@ -1,6 +1,6 @@
 # Handoff
 
-State of lookout for the next session. `PLAN-v2.md` is the current plan (steps 15–22), `PLAN.md` the v1 spec it narrows, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those first; this file is what they don't say.
+State of lookout for the next session. `docs/plan.md` is the current plan (steps 15–22), `docs/plan-v1.md` the v1 spec it narrows, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those first; this file is what they don't say.
 
 ## v2: cards first (steps 15–22, this session)
 
@@ -60,7 +60,7 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged"
 - Fixtures: `scripts/refresh-fixtures.ts` rebuilds `fixtures/reviews/*` cards from the saved change set (prose kept where the card id survives; evidence remapped to the overlapping card). The own-commit targets (b015e48, 3ddc924, 34fc149) are not in this repo's squashed history; the benchmark reads their saved change sets.
 - Tests pass `cache: new RankCache(tmpdir)` to `LocalSession`; before, fake prose landed in the user's `~/.cache/lookout`.
 
-**Next**: PLAN-v2 step 22 did not pass, so stay on cards. Suggested order: (1) a "narrowed side effect" rule in `colorFloor`/door (removed call or condition in a behaviour block, same-name arity change on an exported function) → amber; (2) split blocks at top-level declaration boundaries before grouping; (3) test blocks join the production card they name; (4) `kindOf` config detection for infra `.ts`; then re-run the gate (`/tmp/lookout-eval/v2` prompt is in this session's history; the six PRs are PR A/#824, PR B/#3307, PR C/#1122).
+**Next**: plan step 22 did not pass, so stay on cards. Suggested order: (1) a "narrowed side effect" rule in `colorFloor`/door (removed call or condition in a behaviour block, same-name arity change on an exported function) → amber; (2) split blocks at top-level declaration boundaries before grouping; (3) test blocks join the production card they name; (4) `kindOf` config detection for infra `.ts`; then re-run the gate (`/tmp/lookout-eval/v2` prompt is in this session's history; the six PRs are PR A/#824, PR B/#3307, PR C/#1122).
 
 ---
 
@@ -68,7 +68,7 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged"
 
 ## Where we are
 
-Steps 1–13 of `PLAN.md` are done and committed. `bun run typecheck` is clean and `bun test` passes (292 tests, no network).
+Steps 1–13 of `docs/plan-v1.md` are done and committed. `bun run typecheck` is clean and `bun test` passes (292 tests, no network).
 
 What works end to end today, `lookout <range | PR>`:
 1. Diff → edit blocks (contiguous +/- runs) → rules (path labels, whitespace/comment detection, inert).

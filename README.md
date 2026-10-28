@@ -113,7 +113,7 @@ area = "auth"
 tier = "high"
 ```
 
-Defaults: areas `auth`, `billing`, `data`, `infra`, `prompts` (broad globs, worth narrowing per repo); `docs`/`additive` low, `logic`/`config`/`deps` medium; `[policy.kinds]`, `[policy.humans]` and `unless` on rules are in [docs](HANDOFF.md). The evidence layer (`--evidence`: PR claims graded against the diff, unmentioned cards, review questions, agents) is JSON-only and parked until the cards pass review; see [PLAN-v2.md](PLAN-v2.md).
+Defaults: areas `auth`, `billing`, `data`, `infra`, `prompts` (broad globs, worth narrowing per repo); `docs`/`additive` low, `logic`/`config`/`deps` medium; `[policy.kinds]`, `[policy.humans]` and `unless` on rules are in [docs/handoff.md](docs/handoff.md). The evidence layer (`--evidence`: PR claims graded against the diff, unmentioned cards, review questions, agents) is JSON-only and parked until the cards pass review; see [docs/plan.md](docs/plan.md).
 
 ## Development
 
@@ -123,4 +123,4 @@ bun run lint:fix    # format and fix
 bun run story review-a --paragraphs   # the real App over a saved review, no models
 ```
 
-[AGENTS.md](AGENTS.md) has the working rules, [HANDOFF.md](HANDOFF.md) where things stand and what's next.
+[AGENTS.md](AGENTS.md) has the working rules, [docs/handoff.md](docs/handoff.md) where things stand and what's next.

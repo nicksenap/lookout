@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for agents working in this repository. `PLAN.md` is the spec; `GLOSSARY.md` is the vocabulary. Read both before changing the model or the pipeline, and use the glossary's terms in code, comments and tests.
+Guidance for agents working in this repository. `docs/plan.md` is the current plan (v2; `docs/plan-v1.md` the original spec), `GLOSSARY.md` the vocabulary, `docs/handoff.md` where things stand. Read both before changing the model or the pipeline, and use the glossary's terms in code, comments and tests.
 
 ## Repository
 
@@ -53,7 +53,7 @@ Guidance for agents working in this repository. `PLAN.md` is the spec; `GLOSSARY
 
 - `bun run check` (typecheck with unused-import errors, biome lint, complexity gate, knip, tests, fixture drift) must pass before a commit; CI runs each script as its own parallel job. Add a new check as a script in `package.json`, in `check`, and as a job in `ci.yml`. Biome formats at 140 columns; run `bun run lint:fix` before committing. Rules turned off on purpose: `noNonNullAssertion` (`x!` after a bounds check is the idiom here), `noAssignInExpressions` (union-find), `useIterableCallbackReturn`, `noControlCharactersInRegex` (ANSI), `noArrayIndexKey` and `useExhaustiveDependencies` (TUI rows are positional and memo deps are deliberate). `bun run hooks` installs the pre-commit fast subset.
 - Max 3 attempts on the same failing command or approach, then stop and report what was tried.
-- Each numbered step in `PLAN.md` ends with a check. Do not start step N+1 until step N's check passes.
+- Each numbered step in `docs/plan.md` ends with a check. Do not start step N+1 until step N's check passes.
 
 ## Commits
 

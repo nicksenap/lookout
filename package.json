@@ -1,6 +1,12 @@
 {
   "name": "lookout",
   "version": "0.1.0",
+  "description": "Review agent-written code as a stack of colour-coded cards, one per logical change, instead of a diff",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicksenap/lookout.git"
+  },
+  "homepage": "https://github.com/nicksenap/lookout",
   "type": "module",
   "private": true,
   "packageManager": "bun@1.3.14",
