@@ -45,6 +45,8 @@ export function isFragment(r: BlockRef): boolean {
   return lines.length <= 2 && lines.every((l) => /^\s*[A-Za-z_$][\w$]*\??,?\s*$/.test(l));
 }
 
+const isImportLike = (r: BlockRef): boolean => blockLines(r.hunk, r.block).filter((l) => l.kind !== "context" && l.text.trim() !== "").every((l) => isImport(l.text) || /^\s*(export\s*\{|\}\s*from\b|export\s+\*)/.test(l.text));
+
 export interface Group {
   refs: BlockRef[];
   /** The kind every member shares, when they do. */
@@ -73,7 +75,10 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
   // 1. Orphans (punctuation-only edits such as a moved brace) join the nearest earlier block in
   //    the same hunk, else the next, and take no further part: otherwise a lone brace bridges
   //    two unrelated groups.
-  const fragment = refs.map(isFragment);
+  // A one-identifier line (a destructured prop, a list entry) is a fragment only when its file
+  // has a real edit to own it; otherwise it is the edit, and groups like any other block.
+  const candidate = refs.map(isFragment);
+  const fragment = refs.map((r, k) => candidate[k] && (isImportLike(r) || refs.some((o, j) => j !== k && !candidate[j] && o.file.path === r.file.path)));
   const orphan = refs.map((r, k) => isOrphan(r) && !fragment[k]);
   refs.forEach((r, k) => {
     if (!orphan[k]) return;
@@ -128,11 +133,16 @@ export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighb
     const candidates = refs.map((_, j) => j).filter((j) => j !== k && !fragment[j] && !orphan[j]);
     const weight = (j: number) => refs.filter((o, m) => find(m) === find(j) && o.file.path === r.file.path && !fragment[m]).length;
     const inFile = candidates.filter((j) => refs[j]!.file.path === r.file.path);
+    // Across files, prefer code over docs or tests: an import of `fooModule` belongs with the code that registers it, not the README that mentions it.
+    const prose = (j: number) => kindOf(j) === "docs" || kindOf(j) === "test";
+    const elsewhere = refs.map((_, j) => j).filter((j) => j !== k && !orphan[j] && [...ids[k]!].some((w) => ids[j]!.has(w)));
     const owner =
       inFile.filter((j) => !isMechanical(kindOf(j))).sort((a, b) => weight(b) - weight(a))[0] ??
       inFile.sort((a, b) => weight(b) - weight(a))[0] ??
-      refs.findIndex((_, j) => j !== k && !orphan[j] && [...ids[k]!].some((w) => ids[j]!.has(w)));
-    if (owner === -1) return;
+      elsewhere.find((j) => !prose(j) && !fragment[j]) ??
+      elsewhere.find((j) => !prose(j)) ??
+      elsewhere[0];
+    if (owner === undefined) return;
     if (owner !== undefined) union(k, owner);
   });
 
