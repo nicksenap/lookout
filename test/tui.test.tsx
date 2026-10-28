@@ -9,17 +9,50 @@ import { FixtureSession, loadReview } from "../stories/fixture-session.ts";
 const ANSI = /\x1b\[[0-9;]*m/g;
 const lines = (frame: string | undefined) => (frame ?? "").split("\n").map((l) => l.replace(ANSI, ""));
 const widest = (ls: string[]) => Math.max(...ls.map((l) => Bun.stringWidth(l)));
-/** Let React commit and Ink paint one frame. The spinner frame is injected and the throttle is 0, so one tick is one frame. */
-const tick = () => new Promise((r) => setTimeout(r, 30));
-/** Wait on the signal, not on time: resolves when the session emits `type`, then paints a frame. */
+type Rendered = { lastFrame: () => string | undefined };
+/**
+ * Wait on the signal, not on time: the frame changing is the signal that a key was handled and
+ * Ink painted. Polls `lastFrame()` until it differs from `before` (or, with no `before`, until
+ * a frame exists), capped so a key that is meant to change nothing still returns. The spinner
+ * frame is injected and the throttle is 0, so every state change paints exactly one frame.
+ */
+const painted = async (app: Rendered, before?: string, capMs = 2000) => {
+  const start = Date.now();
+  while (Date.now() - start < capMs) {
+    await new Promise((r) => setTimeout(r, 5));
+    const now = app.lastFrame();
+    if (before === undefined ? now !== undefined : now !== before) return;
+  }
+};
+/**
+ * Send keys one at a time, each waiting for its frame (a key that changes nothing waits out the
+ * cap), then one more macrotask so Ink re-registers `useInput` with the new closure before the
+ * next key: a key delivered to the old closure would see the previous selection.
+ */
+const press = async (app: Rendered & { stdin: { write: (s: string) => void } }, ...keys: string[]) => {
+  for (const k of keys) {
+    const before = app.lastFrame();
+    app.stdin.write(k);
+    await painted(app, before, 300);
+    await new Promise((r) => setTimeout(r, 0));
+  }
+};
+/** Resolves when the session emits `type`; the caller then waits for the frame it expects with `shows`. */
 const until = (session: FixtureSession, type: string) =>
   new Promise<void>((resolve) => {
     const off = session.subscribe((e) => {
       if (e.type !== type) return;
       off();
-      void tick().then(() => resolve());
+      resolve();
     });
   });
+/** Wait for a frame containing `text` (the signal that an async event has been painted), capped. */
+const shows = async (app: Rendered, text: string, capMs = 2000) => {
+  const start = Date.now();
+  while (Date.now() - start < capMs && !lines(app.lastFrame()).some((l) => l.includes(text))) await new Promise((r) => setTimeout(r, 5));
+};
+/** Settle after a render with no key: one short wait is enough since nothing else changes the frame. */
+const tick = () => new Promise((r) => setTimeout(r, 30));
 
 const sessions: FixtureSession[] = [];
 afterEach(() => sessions.splice(0).forEach((s) => s.dispose()));
@@ -28,6 +61,7 @@ async function mount(name: string, columns: number, rows: number) {
   const session = new FixtureSession(await loadReview(name), { dispatchMs: 0 });
   sessions.push(session);
   const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+  await painted(app);
   await tick();
   return { app, session, screen: () => lines(app.lastFrame()) };
 }
@@ -50,25 +84,21 @@ describe.each([
   test("j moves the selection; enter expands to a diff with hunk headers; esc returns", async () => {
     const { app, screen } = await mount("review-a", columns, rows);
     const before = screen().join("\n");
-    app.stdin.write("j");
-    await tick();
+    await press(app, "j");
     expect(screen().join("\n")).not.toBe(before);
-    app.stdin.write("\r");
-    await tick();
+    await press(app, "\r");
     const expanded = screen();
     expect(expanded.some((l) => l.includes("@@"))).toBe(true);
     expect(widest(expanded)).toBeLessThanOrEqual(columns);
     expect(expanded.at(-1)).toContain("esc back");
-    app.stdin.write("\x1b");
-    await tick();
+    await press(app, "\x1b");
     expect(screen().some((l) => l.includes("@@"))).toBe(false);
   });
 
   test("? overlays a help popup on the stack: keys page, tab to the glossary, j scrolls by entry, esc restores the frame", async () => {
     const { app, screen } = await mount("review-b", columns, rows);
     const before = screen();
-    app.stdin.write("?");
-    await tick();
+    await press(app, "?");
     const popup = screen();
     expect(popup.length).toBe(before.length);
     expect(popup.some((l) => l.includes("expand the card"))).toBe(true);
@@ -78,21 +108,18 @@ describe.each([
     expect(popup[0]).toBe(before[0]);
     expect(popup[top]!.startsWith(before[top]!.slice(0, 1))).toBe(true);
     expect(widest(popup)).toBeLessThanOrEqual(columns);
-    app.stdin.write("\t");
-    await tick();
+    await press(app, "\t");
     const glossary = screen();
     expect(glossary.some((l) => l.includes("│ Card "))).toBe(true);
     expect(glossary.some((l) => l.includes("One logical change"))).toBe(true);
     expect(glossary.some((l) => l.includes("expand the card"))).toBe(false);
-    app.stdin.write("j");
-    await tick();
+    await press(app, "j");
     const scrolled = screen();
     // The first visible body row is an entry title, never the middle of a definition.
     const firstBody = scrolled.findIndex((l) => l.includes("┌─")) + 1;
     expect(scrolled[firstBody]!).toMatch(/│ [A-Za-z-]/);
     expect(scrolled.some((l) => l.includes("│ Card "))).toBe(false);
-    app.stdin.write("\x1b");
-    await tick();
+    await press(app, "\x1b");
     expect(screen()).toEqual(before);
   });
 });
@@ -110,8 +137,15 @@ describe("stack contents", () => {
   test("a card's paragraph replaces its summary line and wraps to the width", async () => {
     const { app, session, screen } = await mount("review-c", 60, 30);
     const card = session.snapshot().cards[0]!;
-    session.setParagraph(card.id, "Adds a conversation tick rail so a reader can jump between messages. ".repeat(3));
-    await tick();
+    {
+
+      const before = app.lastFrame();
+
+      session.setParagraph(card.id, "Adds a conversation tick rail so a reader can jump between messages. ".repeat(3));
+
+      await painted(app, before);
+
+    }
     const s = screen();
     expect(s.some((l) => l.includes("Adds a conversation tick rail"))).toBe(true);
     expect(widest(s)).toBeLessThanOrEqual(60);
@@ -125,6 +159,7 @@ describe("stack contents", () => {
     const session = new FixtureSession({ ...review, rankedBy: "rules+openai:gpt-6-luna" }, { dispatchMs: 0 });
     sessions.push(session);
     const app = render(<App session={session} size={{ columns: 110, rows: 32 }} frame={0} throttleMs={0} />);
+    await painted(app);
     await tick();
     const s = lines(app.lastFrame());
     expect(s[0]).toContain("gpt-6-luna");
@@ -132,8 +167,7 @@ describe("stack contents", () => {
     expect(s.some((l) => l.includes("✗ contradicted") || l.includes("☐ ") || l.includes("P1 "))).toBe(false);
     expect(s.at(-1)).not.toContain("c claims");
     expect(s.at(-1)).not.toContain("review card");
-    app.stdin.write("c");
-    await tick();
+    await press(app, "c");
     expect(lines(app.lastFrame())).toEqual(s);
   });
 
@@ -151,26 +185,20 @@ describe("ask and progress", () => {
   test("a opens a composer box above the keys about the selected card; typing, backspace and enter send it; the answer lands under the card", async () => {
     const { app, session, screen } = await mount("review-c", 100, 30);
     const rows = screen().length;
-    app.stdin.write("a");
-    await tick();
+    await press(app, "a");
     let s = screen();
     expect(s.length).toBe(rows);
     expect(s.some((l) => l.startsWith("┌") && l.includes("ask · card 1"))).toBe(true);
     expect(s.some((l) => l.includes("Ask about this card…"))).toBe(true);
     expect(s.at(-1)).toContain("j/k card");
-    app.stdin.write("why 3x?");
-    app.stdin.write("\x7f");
-    app.stdin.write("?");
-    await tick();
+    await press(app, "why 3x?", "\x7f", "?");
     s = screen();
     expect(s.some((l) => l.startsWith("│ why 3x?▏"))).toBe(true);
     const landed = until(session, "exchange.updated");
-    app.stdin.write("\r");
-    await tick();
+    await press(app, "\r");
     expect(screen().some((l) => l.startsWith("┌"))).toBe(false);
-    expect(screen().some((l) => l.includes("› why 3x?"))).toBe(true);
     await landed;
-    await tick();
+    await shows(app, "Fixture answer");
     s = screen();
     const q = s.findIndex((l) => l.includes("› why 3x?"));
     expect(q).toBeGreaterThan(0);
@@ -183,22 +211,18 @@ describe("ask and progress", () => {
     const session = new FixtureSession(review, { dispatchMs: 0, unverified: true });
     sessions.push(session);
     const app = render(<App session={session} size={{ columns: 100, rows: 30 }} frame={0} throttleMs={0} />);
+    await painted(app);
     await tick();
-    app.stdin.write("a");
-    app.stdin.write("\t");
-    await tick();
+    await press(app, "a", "\t");
     expect(lines(app.lastFrame()).some((l) => l.includes("ask · the whole change"))).toBe(true);
-    app.stdin.write("\x1b");
-    await tick();
+    await press(app, "\x1b");
     expect(lines(app.lastFrame()).some((l) => l.startsWith("┌"))).toBe(false);
     expect(session.snapshot().exchanges).toHaveLength(0);
-    app.stdin.write("a");
-    app.stdin.write("\t");
-    app.stdin.write("safe?");
+    await press(app, "a", "\t", "safe?");
     const landed = until(session, "exchange.updated");
-    app.stdin.write("\r");
+    await press(app, "\r");
     await landed;
-    await tick();
+    await shows(app, "answer unverified");
     const s = lines(app.lastFrame());
     const q = s.findIndex((l) => l.includes("› safe?"));
     const firstCard = s.findIndex((l) => /^[┃█] (RED|AMBER|GREEN)/.test(l));
@@ -206,32 +230,20 @@ describe("ask and progress", () => {
     expect(q).toBeLessThan(firstCard);
     expect(s[q + 1]).toContain("answer unverified");
     expect(session.snapshot().exchanges[0]!.cardId).toBeUndefined();
-    app.stdin.write("a");
-    app.stdin.write("\x1b[A");
-    await tick();
+    await press(app, "a", "\x1b[A");
     expect(lines(app.lastFrame()).some((l) => l.startsWith("│ safe?▏"))).toBe(true);
     app.stdin.write("\x1b");
   });
 
   test("composer editing: cursor keys, ctrl-w, ctrl-u, pasted newlines become spaces, long text wraps to at most three rows that follow the cursor", async () => {
     const { app, screen } = await mount("review-c", 60, 30);
-    app.stdin.write("a");
-    app.stdin.write("one two three");
-    app.stdin.write("\x17"); // ctrl-w
-    await tick();
+    await press(app, "a", "one two three", "\x17");
     expect(screen().some((l) => l.startsWith("│ one two ▏"))).toBe(true);
-    app.stdin.write("\x1b[D"); // ←
-    app.stdin.write("\x1b[D");
-    app.stdin.write("X");
-    await tick();
+    await press(app, "\x1b[D", "\x1b[D", "X");
     expect(screen().some((l) => l.startsWith("│ one twX▏o "))).toBe(true);
-    app.stdin.write("\x15"); // ctrl-u: delete to line start
-    app.stdin.write("a\nb");
-    await tick();
+    await press(app, "\x15", "a\nb");
     expect(screen().some((l) => l.startsWith("│ a b▏o "))).toBe(true);
-    app.stdin.write("\x01"); // ctrl-a
-    app.stdin.write("word ".repeat(40));
-    await tick();
+    await press(app, "\x01", "word ".repeat(40));
     const s = screen();
     const body = s.filter((l) => l.startsWith("│ "));
     expect(body.length).toBe(3);
@@ -243,14 +255,28 @@ describe("ask and progress", () => {
   test("progress shows as a bar under the header while the pipeline runs and takes one row from the body; it disappears on clear", async () => {
     const { app, session, screen } = await mount("review-c", 100, 30);
     const before = screen();
-    session.setProgress({ phase: "writing", done: 3, total: 10 });
-    await tick();
+    {
+
+      const before = app.lastFrame();
+
+      session.setProgress({ phase: "writing", done: 3, total: 10 });
+
+      await painted(app, before);
+
+    }
     const s = screen();
     expect(s.length).toBe(before.length);
     expect(s[1]).toContain("▰▰▰▱▱▱▱▱▱▱");
     expect(s[1]).toContain("writing 3/10");
-    session.setProgress(undefined);
-    await tick();
+    {
+
+      const before = app.lastFrame();
+
+      session.setProgress(undefined);
+
+      await painted(app, before);
+
+    }
     expect(screen()[1]).not.toContain("▰");
     void app;
   });
@@ -262,53 +288,40 @@ describe("search", () => {
     const cards = session.snapshot().cards;
     const target = cards.findIndex((c) => c.color === "green");
     const word = cards[target]!.title.split(" ").find((w) => w.length > 4)!;
-    app.stdin.write("/");
-    await tick();
+    await press(app, "/");
     expect(screen().at(-1)).toMatch(/^ \/▏/);
-    app.stdin.write(word.toLowerCase());
-    await tick();
+    await press(app, word.toLowerCase());
     const s = screen();
     const selectedRow = s.findIndex((l) => l.startsWith("█ "));
     expect(s.slice(selectedRow, selectedRow + 3).some((l) => l.includes(word))).toBe(true);
     expect(s.at(-1)).toContain(`/${word.toLowerCase()}`);
     expect(s.at(-1)).toMatch(/\d+ match/);
-    app.stdin.write("\r");
-    await tick();
+    await press(app, "\r");
     expect(screen().at(-1)).toContain("n/N next/prev");
-    app.stdin.write("\x1b");
-    await tick();
+    await press(app, "\x1b");
     expect(screen().at(-1)).toContain("j/k card");
   });
 
   test("/ in the expanded card scrolls the diff to the first matching row; the footer counts rows", async () => {
     const { app, session, screen } = await mount("review-c", 100, 30);
-    app.stdin.write("\r");
-    await tick();
+    await press(app, "\r");
     const file = session.snapshot().changeSet.files[0]!.path.split("/").pop()!;
-    app.stdin.write("/");
-    app.stdin.write(file.slice(0, 5));
-    await tick();
+    await press(app, "/", file.slice(0, 5));
     const s = screen();
     expect(s.at(-1)).toMatch(/match/);
     expect(s.some((l) => l.includes(file.slice(0, 5)))).toBe(true);
-    app.stdin.write("\x1b"); // clears the search
-    await tick();
+    await press(app, "\x1b");
     expect(screen().at(-1)).toContain("esc back");
-    app.stdin.write("\x1b"); // back to the stack
-    await tick();
+    await press(app, "\x1b");
     expect(screen().at(-1)).toContain("j/k card");
   });
 
   test("/ in the help popup finds a glossary term", async () => {
     const { app, screen } = await mount("review-c", 100, 24);
-    app.stdin.write("?");
-    await tick();
-    app.stdin.write("\t");
-    await tick();
-    app.stdin.write("/");
-    await tick();
-    app.stdin.write("scope");
-    await tick();
+    await press(app, "?");
+    await press(app, "\t");
+    await press(app, "/");
+    await press(app, "scope");
     const s = screen();
     const firstBody = s.findIndex((l) => l.includes("┌─")) + 1;
     expect(s[firstBody]).toContain("│ Scope");
@@ -323,35 +336,23 @@ describe("vim keys", () => {
     const { app, session, screen } = await mount("review-a", 120, 50);
     const colours = session.snapshot().cards.map((c) => c.color);
     const selectedIndex = () => screen().findIndex((l) => l.startsWith("█ ")); // first row of the selected card
-    app.stdin.write("G");
-    await tick();
+    await press(app, "G");
     const lastRow = selectedIndex();
-    app.stdin.write("g");
-    app.stdin.write("g");
-    await tick();
+    await press(app, "g", "g");
     expect(selectedIndex()).toBeLessThan(lastRow);
-    app.stdin.write("g");
-    app.stdin.write("e");
-    await tick();
+    await press(app, "g", "e");
     expect(selectedIndex()).toBe(lastRow);
-    app.stdin.write("g");
-    app.stdin.write("g");
-    await tick();
-    app.stdin.write("]");
-    await tick();
+    await press(app, "g", "g");
+    await press(app, "]");
     const band = screen()[selectedIndex()]!.split(/\s+/)[1];
     expect(band).toBe(colours.find((c) => c !== colours[0])!.toUpperCase());
-    app.stdin.write("}");
-    await tick();
+    await press(app, "}");
     expect(screen()[selectedIndex()]!.split(/\s+/)[1]).toBe(band); // no hotter card below amber
-    app.stdin.write("{");
-    await tick();
+    await press(app, "{");
     expect(screen()[selectedIndex()]!.split(/\s+/)[1]).toBe("RED");
-    app.stdin.write("o");
-    await tick();
+    await press(app, "o");
     expect(screen().some((l) => l.startsWith("diff ·"))).toBe(true);
-    app.stdin.write("o");
-    await tick();
+    await press(app, "o");
     expect(screen().some((l) => l.startsWith("diff ·"))).toBe(false);
     void app;
   });
