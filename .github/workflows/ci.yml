@@ -13,6 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+      - run: ls node_modules/@types node_modules/ink/build/components/StdoutContext.d.ts && bunx tsc --version && bunx tsc --showConfig | head -30 && bunx tsc --noEmit --explainFiles | grep -i "@types/node/\|ink/build/components/StdoutContext\|bun-types" | head
       - run: bun run typecheck
 
   biome:
