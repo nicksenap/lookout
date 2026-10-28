@@ -1,6 +1,68 @@
 # Handoff
 
-State of lookout for the next session. `PLAN.md` is the spec, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those three first; this file is what they don't say.
+State of lookout for the next session. `PLAN-v2.md` is the current plan (steps 15–22), `PLAN.md` the v1 spec it narrows, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those first; this file is what they don't say.
+
+## v2: cards first (steps 15–22, this session)
+
+Three production PRs scored v1 at 3/3/2 of 5 and every evaluator blamed the cards, so v2 narrowed to grouping + prose and put the evidence layer behind `--evidence`. Reviewer-persona subagents judged every step on real PRs (reports under `/tmp/bench/step*/verdict.md` and `/tmp/lookout-eval/v2/*.md` while that machine lives; the numbers are here).
+
+**What shipped**
+- **Grouping benchmark** (`scripts/grouping-digest.ts`, `scripts/grouping-score.ts`, `scripts/grouping-bench.sh`): hand-judged targets (concern → block ids, plus the blocks a reviewer would skip) for 3 own commits in `fixtures/grouping/` and 3 external PRs in `~/.cache/lookout/bench/` (never committed). Metrics: ARI, **purity** (share of blocks in a card whose majority is one judge concern; ARI punishes a finer split than the judge, purity only wrong merges), largest card, **mechanical leaks**, mechanical recall. `--split` runs the model splitter (cached); `--saved` scores saved cards.
+- **Mechanical guard** (`rank/mechanical.ts`, `guardKinds` after ranking): rules confirm `rename` (consistent one-to-one identifier substitution, target not a name whose body this change edits), `typing-refactor` (equal after stripping types, no narrowing, no return-type change), `move` (verbatim elsewhere), `docs` (all comment lines or a doc file), `types` (type-only). Unconfirmed → `behavior`, model label kept as `suggestedKind`. Imports and comment-only blocks pass whatever the label.
+- **Fragments** (`cards/group.ts` `isFragment`): imports, re-exports, lone types, a destructured prop join the card owning their file (else, across files, a code card that mentions the name; docs/tests last).
+- **Blob splitting** (`cards/split.ts`): a non-mechanical card > 8 blocks or > 3 files gets one writer call proposing `{title, blockIds}` concerns; `parseSplit` repairs (foreign ids dropped, duplicates once, unplaced ids homed by file, singletons merged) or rejects; concerns still > 24 blocks are asked once more. Unusable answers are cached as "no split". `buildCards(changeSet, policy, splits)` stays pure. Session: assemble → split → re-assemble (`cards.replaced`) → prose.
+- **Card-shape writers** (`cards/write.ts`): behaviour / config / test / docs prompts; split titles reach the writer as `hint` with sibling titles for distinct names; **gate** = rule (`unsupportedNames`: backticked names absent from the edits) then Decisions `boolean` "every statement follows from the edits" at 0.7; one rewrite quoting the draft, then `unverified` (TUI dims + labels). Coverage sentences were removed: "no test edit here" was wrong 11/17 times because tests live on sibling cards.
+- **Colour and order** (`evidence/door.ts` + `cards/build.ts`): door signals (data writes incl. DynamoDB `update_item`/`UpdateExpression`, removed exports incl. members of exported objects in public paths, routes, contracts) attach by old/new side and raise the card to amber, red when it also needs eyes; signal text is a reason, not the code. Order: colour → behaviour before mechanical/docs → config switches first → attention → block count.
+- **`--evidence`**: off by default; without it no claims, grounding, unmentioned, questions, dispatch (`a`/`A` refuse with a notice), no claims view. `findImporters` deleted (stem matching listed 32–235 false importers per monorepo PR and flipped a true radius claim to ✗). Cards carry `files`. Header shows tier · humans · cards · model · elapsed.
+
+**Benchmark, 6 targets (HEAD d31ef31 → now with `--split`)**
+
+| target | cards | ARI | purity | largest card | leaks |
+|---|---|---|---|---|---|
+| own b015e48 (80 blocks) | 8 → 10 | -0.00 → 0.58 | 0.40 → 0.94 | 44 → 18 | 4 → 0 |
+| own 3ddc924 (27) | 5 → 7 | 0.20 → 0.39 | 0.59 → 0.74 | 18 → 11 | 0 → 0 |
+| own 34fc149 (47) | 7 → 7 | 0.01 → 0.68 | 0.40 → 0.83 | 21 → 11 | 6 → 0 |
+| PR A (75) | 7 → 11 | 0.33 → 0.33 | 0.68 → 0.80 | 26 → 15 | 21 → 0 |
+| ca#3309 (17) | 6 → 6 | 0.10 → 0.57 | 0.65 → 0.88 | 7 → 5 | 0 → 0 |
+| iap#1128 (86) | 8 → 9 | 0.05 → 0.66 | 0.37 → 0.84 | 59 → 16 | 4 → 0 |
+
+Mechanical recall fell (0.25–0.95 → 0.25–0.71): the guard only demotes, and judges count imports as mechanical, which now fold into owner cards instead.
+
+**Done gate (step 22), reviewer-persona scores 1–5**
+
+| PR | grouping | order+colour | prose | usefulness | v1 |
+|---|---|---|---|---|---|
+| PR A | 3 | 2 | 3 (3 false / 11 cards) | 3 | 3 |
+| ca#3309 | 4 | 3 | 4 (0 false / 6) | 4 | 3 |
+| iap#1128 | 4 | 4 | 4 (2 false / 8) | 4 | 2 |
+| PR D (fresh) | 3 | 3 | 4 | 3 | – |
+| ca#3307 (fresh, infra) | 3 | 3 | 4 (0 false) | 3 | – |
+| iap#1122 (fresh, 26 files) | 2 | 3 | 3 (3 false / 16) | 3 | – |
+
+Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged" on the first three). Reviewers said "what the PR does in < 3 min: yes" on 5/6; "where the risk is": only on iap#1128. **The gate's ≥ 4 on grouping and prose for every PR is not met**; usefulness moved 3/3/2 → 3/4/4 and fresh PRs land at 3.
+
+**What the gate says is still wrong, in order of weight**
+1. **Risky behaviour that the attention score calls routine stays green and sinks**: PR A's narrowed mutation invalidation (5th, green), PR D's auto-submitting CTA, iap#1122's allowlist → denylist widening of child tool grants and the 60-min lifetime cap. Rules only raise colour on door signals; a "narrowed side effect" (a dropped invalidation/condition/call, a same-name signature change like `dependencies(ws, id)` → `dependencies(ws)`) has no rule. This is the single most-requested change across four evaluators.
+2. **Block granularity**: one contiguous +/- run can hold two functions (`extend_subagent` + `_resolve_child_tools` in one 110-line block; a 185-line `move_task_to_project` block). Cards cannot split what blocks fuse. AST-level edit units (roadmap) or splitting a block at top-level declaration boundaries would fix it.
+3. **Tests group by file/kind, not by what they pin**: the infra test pinning ca#3309's switch sits in the general test card; backend and Tavern tests merge. Attach test blocks to the production card whose names they assert (the `exercises` machinery exists in `evidence/tests.ts`).
+4. **Config switches**: `kindOf` does not call `infra/config/deployments/the deployment file` config (CONFIG_RE misses `.ts` under infra), so the toggle-first ordering never fired and the paragraph lost "stage" between runs. Reviewers want the activation line first, named by environment, key and consumer.
+5. Prose: residual false statements come from hunk headers naming the wrong class (`@@ … class CancelSubagentInput`), from describing a file instead of the card's blocks, and from a dedent-only docs edit described as new guidance. The name check cannot see names in context lines as unsupported (by design).
+6. One-way labels on cache keys over-state ("one-way" for renamed members); the true one-way rule (a task that has run can never leave a project) is semantic and unlabelled.
+7. Cold timing: 11–47 s on 10–26-file PRs (split round ~10 s per blob, sequential re-split, then prose + gate); warm 1–2 s. Plan said < 10 s. Concurrency is 12; the split prompt (≤ 120k chars) and two rounds dominate.
+
+**Decisions this session**
+- Keep deterministic grouping as the spine; the LLM only partitions blobs, rules repair/reject. Full LLM grouping was 65 s and worse in v1.
+- The guard only demotes. Promoting model-called-behaviour to mechanical would let rules lower attention; left out on purpose.
+- Fallback for an unusable split is "no split", not per-file (per-file over-splits a 15-file blob worse than the blob reads).
+- Paragraph gate threshold 0.7; on 6 PRs checks ranged 0.17–1.0 and it fired 3 times, each deserved per the evaluators.
+- Fixtures: `scripts/refresh-fixtures.ts` rebuilds `fixtures/reviews/*` cards from the saved change set (prose kept where the card id survives; evidence remapped to the overlapping card). The own-commit targets (b015e48, 3ddc924, 34fc149) are not in this repo's squashed history; the benchmark reads their saved change sets.
+- Tests pass `cache: new RankCache(tmpdir)` to `LocalSession`; before, fake prose landed in the user's `~/.cache/lookout`.
+
+**Next**: PLAN-v2 step 22 did not pass, so stay on cards. Suggested order: (1) a "narrowed side effect" rule in `colorFloor`/door (removed call or condition in a behaviour block, same-name arity change on an exported function) → amber; (2) split blocks at top-level declaration boundaries before grouping; (3) test blocks join the production card they name; (4) `kindOf` config detection for infra `.ts`; then re-run the gate (`/tmp/lookout-eval/v2` prompt is in this session's history; the six PRs are PR A/#824, PR B/#3307, PR C/#1122).
+
+---
+
+## v1 state (steps 1–13), kept for reference
 
 ## Where we are
 
