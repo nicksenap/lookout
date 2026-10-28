@@ -1,0 +1,151 @@
+{
+  "target": "b015e48^..b015e48",
+  "concerns": [
+    {
+      "concern": "Placeholder validation moved from use sites to config load only",
+      "why": "Templates and commands not routed through validateConfig (default prompt, built-in dispatchers, direct callers) are no longer checked, so an unknown placeholder now passes silently.",
+      "blockIds": [
+        "a2101c491617",
+        "5072be33e130",
+        "a513c66b493d",
+        "9410d847049d",
+        "78707def1129",
+        "63a9e7fe786a",
+        "cd5e17ce305f"
+      ]
+    },
+    {
+      "concern": "DispatchRunner.start returns Result instead of throwing",
+      "why": "Callers in session.ts must now check .ok or a busy/unknown-dispatcher failure is silently dropped, and spawn errors are truncated to their first line.",
+      "blockIds": [
+        "de6109ab59f6",
+        "52bd7befafec",
+        "86139267c65a",
+        "ddcfd99a9428",
+        "26836ff15b45",
+        "a439cd9f08db",
+        "9c374137c969",
+        "83896393c9fe",
+        "9fadd4b0f28a"
+      ]
+    },
+    {
+      "concern": "CLI main maps Results to exit codes; model ranking awaited inline",
+      "why": "Every load failure now exits 1 via fail(), repoRoot failure falls back silently, and a rejected rankWithModel still reaches the catch-all while --json and default modes now share one path.",
+      "blockIds": [
+        "5831ba39ed9d",
+        "296c0f747d24",
+        "9a8096180584",
+        "f8b224348d2b",
+        "4e3e3a97de5a",
+        "bd034ed426c0",
+        "4e12b8b3dfb5",
+        "d1f1a0a7879b"
+      ]
+    },
+    {
+      "concern": "Config loading and validation return Result; ConfigError removed",
+      "why": "Every throw site must become an early return; a missed propagation (placeholders, policy, layered repo file) would accept invalid config, and TOML errors are now cut to the first line.",
+      "blockIds": [
+        "2df46891ce05",
+        "e086907c6220",
+        "4884c3a115b0",
+        "070ed3bd0853",
+        "8d238bc2826a",
+        "bb9dabafa350",
+        "1a6c523475cd",
+        "47419082eb9a",
+        "5152967375bf",
+        "c2e893030866",
+        "93b313eb9ded",
+        "8a8ffb2e0e46",
+        "cb7d5c1086c7",
+        "24d815a6af8f",
+        "f64ddc7b1466",
+        "9f727cb21131",
+        "5a1ddd1b19f9",
+        "25f0f3269825",
+        "68dcdda1601c",
+        "987c94b568d1",
+        "bdd3e2539a93",
+        "a94eca321bfc",
+        "2e68448d72a9",
+        "9f8ebc2a2ae3",
+        "d638b86ef787"
+      ]
+    },
+    {
+      "concern": "Git and gh sources and target resolution return Result",
+      "why": "Each git/gh step must short-circuit on failure; run() still throws on a missing binary despite its doc, and invalid gh JSON is now a returned error.",
+      "blockIds": [
+        "17edc5955da9",
+        "c1483f7f80ed",
+        "1489c8b274d5",
+        "267ec4d08f83",
+        "03317bbd9970",
+        "a12dae2836b6",
+        "9f44e56899ae",
+        "ffc64b54352e",
+        "4b41fe0e8123",
+        "80a7aeafcb8a",
+        "48267f344d11",
+        "4cfbf3a99139",
+        "adb3f94016ee",
+        "626cdd928601",
+        "2b23450343da",
+        "d421a2ba5a26",
+        "ce73b93dd416",
+        "e6cffca3ea74",
+        "1872f6f0c56f",
+        "46cb7cdaefac",
+        "03214d4525f8",
+        "6072c52b1735",
+        "a35de0b33278",
+        "385e3e3c7da2"
+      ]
+    },
+    {
+      "concern": "try/catch replaced with attempt in parse, cache, model, signal",
+      "why": "attempt keeps only the error's first line, so JSON-parse notes and model-resolution reasons can lose detail; the swallow-all sites should behave identically.",
+      "blockIds": [
+        "6efe58b61c9d",
+        "353f77b666d6",
+        "816a82d05edb",
+        "dfa4bd69b475",
+        "428302b637b7",
+        "575ae6e63ee4",
+        "135b8c48a2b6"
+      ]
+    }
+  ],
+  "mechanical": [
+    "2df46891ce05",
+    "6efe58b61c9d",
+    "de6109ab59f6",
+    "816a82d05edb",
+    "428302b637b7",
+    "1489c8b274d5",
+    "48267f344d11",
+    "2b23450343da",
+    "9410d847049d",
+    "5072be33e130",
+    "9a8096180584",
+    "9c374137c969",
+    "dfa4bd69b475",
+    "135b8c48a2b6",
+    "24d815a6af8f",
+    "bdd3e2539a93",
+    "f64ddc7b1466",
+    "a94eca321bfc",
+    "1872f6f0c56f",
+    "9f727cb21131",
+    "5a1ddd1b19f9",
+    "987c94b568d1",
+    "2e68448d72a9",
+    "9f8ebc2a2ae3",
+    "46cb7cdaefac",
+    "03214d4525f8",
+    "6072c52b1735",
+    "a35de0b33278"
+  ]
+}

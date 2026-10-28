@@ -1,0 +1,41 @@
+{
+  "target": "3ddc924^..3ddc924",
+  "concerns": [
+    {
+      "concern": "Change classification and tier evaluation with non-configurable floors",
+      "why": "kindOf/classify/evaluate decide how many humans must review; a wrong kind rule, inert filter or floor silently lowers the required review.",
+      "blockIds": ["cf24e823f071", "eb8e109f5889"]
+    },
+    {
+      "concern": "Policy schema, default areas/rules and validatePolicy layering",
+      "why": "Default globs and the replace-vs-merge semantics (empty list deletes an area, rules replace the list) determine which paths are treated as sensitive.",
+      "blockIds": ["a1f98dfb93fe"]
+    },
+    {
+      "concern": "Review carries classification and verdict, recomputed after model ranking",
+      "why": "The verdict must be recomputed from the model-ranked change set or the shown tier goes stale against raised attention.",
+      "blockIds": ["334b24d81b1f", "af9901c7a4e2", "b7697b4aa51c", "eb6219060cac", "f02af4ccb44d"]
+    },
+    {
+      "concern": "Repo .lookout.toml layered over global config",
+      "why": "Layering changes which values win (base rank/dispatch/prompt carried over) and the CLI swallows repoRoot failures, so a repo policy could be silently skipped.",
+      "blockIds": ["bf129ebeda9f", "31b2fa9f241b", "a733ec9b0f35", "35e33d02e556", "a882afeec11c", "06cfe27c0bde", "0eedd61cb429", "f86149d42fef", "1c3033197f0c", "736fdd39e6f1"]
+    },
+    {
+      "concern": "Config accepts areas and policy keys via validatePolicy",
+      "why": "New top-level keys widen what config accepts and policy errors must still surface as ConfigError naming the key.",
+      "blockIds": ["2d38949e7d03", "7e271cdad315", "fbe82144af78", "70832a42573e"]
+    },
+    {
+      "concern": "Policy tests and dispatch test fixtures updated for new shapes",
+      "why": "Tests pin the tier table, schema errors and layering; dispatch fixtures must build Review/Config with the new required fields.",
+      "blockIds": ["f2b87b37b7fc", "9fc05c1acd8c", "cd9787e8adf7", "5454929e3ca4"]
+    },
+    {
+      "concern": "Read-only tier survey script over recent commits",
+      "why": "Data-check script only; risk is limited to running git read-only in the target repo.",
+      "blockIds": ["c37de64686c8"]
+    }
+  ],
+  "mechanical": ["af9901c7a4e2", "334b24d81b1f", "7e271cdad315", "0eedd61cb429"]
+}

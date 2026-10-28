@@ -1,0 +1,36 @@
+{
+  "target": "34fc149^..34fc149",
+  "concerns": [
+    {
+      "concern": "Rules classify and score each edit block in isolation",
+      "why": "isolateBlock-based content classification now decides which blocks are inert, so a lexer-context or neutralisation bug could hide a real change from the reviewer.",
+      "blockIds": ["1f42ba9a1b72", "4eeca9b5df01", "a7aa5908d380", "1b0def1a370a", "1bd4838c3f8f", "7f0cfd53b5d1", "a40599d9c777", "03415796b2ee", "de57b34e440c"]
+    },
+    {
+      "concern": "Edit blocks split from hunks; hunk attention derived from blocks",
+      "why": "splitHunk ranges, block ids and deriveHunk's label/attention aggregation are the new foundation every ranking step reads, and errors propagate everywhere.",
+      "blockIds": ["af7fa5d91547", "286d059a0db5", "433165ba29f7", "83a889007bb8", "90afb76d678c", "7102fde3e8a1", "008f1854031d", "51f8301ea145", "e9c548142d67", "52c525e842ad"]
+    },
+    {
+      "concern": "Model prompt scores edit blocks with surrounding context",
+      "why": "Question ids, instructions, state key and truncation of the decide prompt all change, which shifts model scores and the shape the mock must answer.",
+      "blockIds": ["df3ff9e8a12f", "1615069dde8e", "a7fc25338ef7", "57531f94407c", "3dd432d2d44f", "0702e47429d9", "080ad8d92748", "c3fc830f99f6", "a3d3874b6a4f", "5ae904c3bd18", "06a4aa512f28"]
+    },
+    {
+      "concern": "rankChangeSet batches, caches and merges model scores per block",
+      "why": "Cache keys move from hunk ids to block ids and merging goes through mapBlocks, so the rules-bound-the-model invariant and batch counts must still hold.",
+      "blockIds": ["70a36e435953", "42bb310f39b2", "9bdad580fb47", "a794b969f2c9", "18aea5f77965", "7324f11cad0b", "ae7dbd84136d", "a982b65c4911", "6b13229b80a7", "4c0ca3f3d98e"]
+    },
+    {
+      "concern": "Result type with attempt helpers replaces try/catch in ranking",
+      "why": "Rewriting error handling around batch scoring and cache save must keep the degrade-to-rules-only and ignore-save-failure behaviour exactly.",
+      "blockIds": ["ef774989deb5", "d75f81ccb191", "18a99e26f3ec", "33fbd393df23", "79aae49d3106"]
+    },
+    {
+      "concern": "Inert audit script reports per edit block",
+      "why": "A read-only data check whose counts and printed lines now come from block ranges, so only its output changes.",
+      "blockIds": ["405f36860b83", "29a3b9333661"]
+    }
+  ],
+  "mechanical": ["433165ba29f7", "83a889007bb8", "90afb76d678c", "286d059a0db5", "df3ff9e8a12f", "1615069dde8e", "a7fc25338ef7", "3dd432d2d44f", "70a36e435953", "42bb310f39b2", "9bdad580fb47", "18aea5f77965", "1f42ba9a1b72", "4eeca9b5df01", "ae7dbd84136d", "51f8301ea145"]
+}
