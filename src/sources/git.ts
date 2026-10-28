@@ -16,6 +16,12 @@ async function revParse(rev: string, cwd: string): Promise<Result<string>> {
   return trimmed(await run(["git", "rev-parse", "--verify", "--end-of-options", `${rev}^{commit}`], cwd));
 }
 
+/** True when the working tree has staged or unstaged changes against HEAD (untracked files do not count). */
+export async function worktreeDirty(cwd: string = process.cwd()): Promise<Result<boolean>> {
+  const res = await run(["git", "status", "--porcelain", "--untracked-files=no"], cwd);
+  return res.ok ? ok(res.value.trim() !== "") : res;
+}
+
 /** Working tree (staged + unstaged) vs HEAD. */
 export async function loadWorktree(cwd: string = process.cwd()): Promise<Result<ChangeSet>> {
   const head = await revParse("HEAD", cwd);

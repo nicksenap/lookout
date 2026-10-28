@@ -50,7 +50,8 @@ Without a key lookout still runs: rules only, one card per file, rule colours, n
 ## Use
 
 ```sh
-lookout                          # working tree vs HEAD
+lookout                          # working tree vs HEAD; clean tree in a GitHub repo → picker of open PRs
+lookout --pick                   # the picker
 lookout main..                   # a range (A..B, or A...B from the merge-base)
 lookout owner/repo#123           # a pull request
 lookout https://github.com/owner/repo/pull/123

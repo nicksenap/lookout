@@ -263,6 +263,27 @@ export interface Progress {
   total: number;
 }
 
+/** One row of the PR picker (sources/github.ts fills it; the TUI only reads it). */
+export interface PrSummary {
+  number: number;
+  title: string;
+  author: string;
+  branch: string;
+  draft: boolean;
+  files: number;
+  additions: number;
+  deletions: number;
+  /** `pass`, `fail`, `pending` or `none` from the status rollup. */
+  checks: "pass" | "fail" | "pending" | "none";
+  /** GitHub's review decision: approved, changes requested, review required, or none. */
+  review: "approved" | "changes" | "required" | "none";
+  /** Open PRs you are asked to review come first. */
+  requested: boolean;
+  updatedAt: string;
+  /** `owner/repo#N`, the target lookout accepts. */
+  target: string;
+}
+
 export interface Review {
   changeSet: ChangeSet;
   classification: Classification;
