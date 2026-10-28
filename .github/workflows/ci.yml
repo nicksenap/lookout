@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Single source of truth: CI runs `just check` (typecheck, tests, fixture drift).
+  # Add new checks to the Justfile, not here.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: extractions/setup-just@v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: just check
+        run: just check

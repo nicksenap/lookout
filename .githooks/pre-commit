@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -e
+# Fast subset of `just check`; CI runs the full gate (fixture drift included).
+exec just typecheck test
