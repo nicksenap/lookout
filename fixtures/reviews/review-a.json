@@ -2102,7 +2102,8 @@
                   "start": 16,
                   "end": 17
                 },
-                "kind": "docs"
+                "kind": "behavior",
+                "suggestedKind": "docs"
               }
             ],
             "labels": [],
@@ -4546,7 +4547,8 @@
                   "start": 25,
                   "end": 31
                 },
-                "kind": "docs"
+                "kind": "behavior",
+                "suggestedKind": "docs"
               },
               {
                 "id": "9f727cb21131",
@@ -6099,17 +6101,18 @@
       "questions": [],
       "blockKind": "test",
       "covers": [
-        "b274d9e9ff32",
-        "a4f8da5957b3"
+        "50b86de6e77e"
       ]
     },
     {
-      "id": "b274d9e9ff32",
-      "title": "main.ts +10 more · err, Result",
+      "id": "50b86de6e77e",
+      "title": "main.ts +11 more · err, Result",
       "color": "amber",
       "kind": "logic",
       "areas": [],
-      "labels": [],
+      "labels": [
+        "test"
+      ],
       "blockIds": [
         "5831ba39ed9d",
         "296c0f747d24",
@@ -6139,8 +6142,10 @@
         "a513c66b493d",
         "de6109ab59f6",
         "9410d847049d",
+        "78707def1129",
         "52bd7befafec",
         "86139267c65a",
+        "63a9e7fe786a",
         "ddcfd99a9428",
         "26836ff15b45",
         "a439cd9f08db",
@@ -6167,7 +6172,8 @@
         "2b23450343da",
         "d421a2ba5a26",
         "ce73b93dd416",
-        "e6cffca3ea74"
+        "e6cffca3ea74",
+        "f64ddc7b1466"
       ],
       "attention": "needs-eyes",
       "score": 0.596,
@@ -6176,47 +6182,6 @@
       "testsTouched": true,
       "questions": [],
       "blockKind": "behavior"
-    },
-    {
-      "id": "a4f8da5957b3",
-      "title": "Document Command Placeholder Validation",
-      "color": "green",
-      "kind": "logic",
-      "areas": [],
-      "labels": [
-        "test"
-      ],
-      "blockIds": [
-        "78707def1129",
-        "f64ddc7b1466"
-      ],
-      "attention": "routine",
-      "score": 0.321,
-      "claimIds": [],
-      "unmentioned": false,
-      "testsTouched": true,
-      "questions": [],
-      "blockKind": "docs",
-      "paragraph": "`expandCommand` no longer accepts `where` or calls `checkPlaceholders`; its comment says placeholders were validated with the config. `test/dispatch.test.ts` adds `must`, which unwraps a `Result` or throws its error. These edits do not belong together."
-    },
-    {
-      "id": "ffc90e698834",
-      "title": "Remove dispatcher config path",
-      "color": "green",
-      "kind": "logic",
-      "areas": [],
-      "labels": [],
-      "blockIds": [
-        "63a9e7fe786a"
-      ],
-      "attention": "routine",
-      "score": 0.234,
-      "claimIds": [],
-      "unmentioned": false,
-      "testsTouched": false,
-      "questions": [],
-      "blockKind": "behavior",
-      "paragraph": "`DispatchRunner` no longer passes `dispatch.${dispatcher.name}.cmd` as the `where` argument to `expandCommand`; command expansion still receives the dispatcher command and the prompt, prompt-file, repository, and diff-file values."
     },
     {
       "id": "4c078e0cac32",

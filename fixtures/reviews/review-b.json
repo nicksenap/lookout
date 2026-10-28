@@ -713,7 +713,8 @@
                   "start": 109,
                   "end": 134
                 },
-                "kind": "types"
+                "kind": "behavior",
+                "suggestedKind": "types"
               }
             ],
             "labels": [],
@@ -3865,8 +3866,8 @@
   },
   "cards": [
     {
-      "id": "ac15b74179e9",
-      "title": "tier-survey.ts +4 more · policy, base",
+      "id": "496a927d49ca",
+      "title": "tier-survey.ts +5 more · policy, base",
       "color": "amber",
       "kind": "logic",
       "areas": [],
@@ -3881,6 +3882,7 @@
         "736fdd39e6f1",
         "eb6219060cac",
         "f02af4ccb44d",
+        "eb8e109f5889",
         "2d38949e7d03",
         "31b2fa9f241b",
         "fbe82144af78",
@@ -3912,16 +3914,14 @@
       "blockKind": "behavior"
     },
     {
-      "id": "c209d915793d",
-      "title": "Type change classification and policy metadata",
+      "id": "b34df6c56e33",
+      "title": "src/core/types.ts · classification, Classification",
       "color": "amber",
       "kind": "additive",
       "areas": [],
       "labels": [],
       "blockIds": [
-        "334b24d81b1f",
-        "eb8e109f5889",
-        "7e271cdad315"
+        "334b24d81b1f"
       ],
       "attention": "needs-eyes",
       "score": 0.442,
@@ -3929,8 +3929,7 @@
       "unmentioned": false,
       "testsTouched": true,
       "questions": [],
-      "blockKind": "types",
-      "paragraph": "`Review` now includes `classification: Classification` and `verdict: Verdict`; `Classification` records the change kind, areas, maximum attention, sensitive paths, and file/block/inert counts, while `Verdict` records a low/medium/high tier, required human count, and reasons. `Config` now requires a `policy: Policy` field."
+      "blockKind": "types"
     },
     {
       "id": "ba8519f20d6e",
@@ -3956,11 +3955,28 @@
       "questions": [],
       "blockKind": "test",
       "covers": [
-        "ac15b74179e9",
-        "c209d915793d",
+        "496a927d49ca",
         "b246e861bf19"
       ],
       "paragraph": "`dispatch.test.ts` now builds each `Review` with `classification` from `classify` and `verdict` from `evaluate`, and supplies `DEFAULT_POLICY` in test configs. New `policy.test.ts` cases cover tier and human-count evaluation, change-kind and area classification, diff classification, schema errors, and global/repository config layering."
+    },
+    {
+      "id": "6f018a164a97",
+      "title": "src/dispatch/config.ts · policy, Policy",
+      "color": "green",
+      "kind": "additive",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "7e271cdad315"
+      ],
+      "attention": "routine",
+      "score": 0.303,
+      "claimIds": [],
+      "unmentioned": false,
+      "testsTouched": true,
+      "questions": [],
+      "blockKind": "types"
     },
     {
       "id": "b246e861bf19",

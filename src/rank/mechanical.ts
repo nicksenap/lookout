@@ -2,8 +2,8 @@ import { blockLines, mapBlocks } from "../core/blocks.ts";
 import type { BlockKind, ChangeSet, DiffLine, EditBlock, Hunk } from "../core/types.ts";
 
 /**
- * Rules confirm the model's mechanical kinds. The model may call an edit a `rename`, a
- * `typing-refactor` or a `move`; it keeps that kind only when the text proves it, otherwise
+ * Rules confirm the model's non-behaviour kinds. The model may call an edit a `rename`, a
+ * `typing-refactor`, a `move`, `docs` or `types`; it keeps that kind only when the text proves it, otherwise
  * the edit is `behavior` and the model's label survives as `suggestedKind`. Measured on three
  * production PRs where every "behaviour is unchanged" card hid a value change: a cache-key
  * shape swap labelled rename, a 5-minute timeout constant labelled typing refactor.
@@ -45,6 +45,13 @@ export function confirmMechanical(hunk: Hunk, block: EditBlock, kind: BlockKind,
       return squash(stripTypes(oldText)) === squash(stripTypes(newText)) && !narrows(oldText, newText) && !returnTypeChanged(oldText, newText);
     case "move":
       return (del.length > 0 && del.every((d) => elsewhere.added.has(squash(d)))) || (add.length > 0 && add.every((a) => elsewhere.removed.has(squash(a))));
+    // A contiguous run that deletes a member and adds a doc comment above its replacement is one block;
+    // the model sees mostly prose and says `docs`. Only all-comment edits (or documentation files) are docs,
+    // and only type-only edits are `types`; anything else is behaviour, so the deletion lands on a real card.
+    case "docs":
+      return /\.(md|mdx|rst|txt|adoc)$/i.test(block.path) || [...del, ...add].every((l) => /^\s*(\/\/|\/\*|\*|#|"""|\x27\x27\x27|<!--)/.test(l) || /^\s*\*\/\s*$/.test(l));
+    case "types":
+      return typeOnly([...del, ...add]) || [...del, ...add].every((l) => isImport(l) || /^\s*(export\s+)?(type|interface)\b/.test(l) || /^\s*(readonly\s+)?[A-Za-z_$][\w$]*\??:\s*[^=()]+[;,]?\s*$/.test(l) || /^\s*[}\]|,;]*\s*$/.test(l));
     default:
       return true;
   }

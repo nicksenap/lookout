@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildCards } from "../src/cards/build.ts";
 import { changedIdentifiers, groupBlocks, mechanicalText } from "../src/cards/group.ts";
-import { parseProse, type Prose, prosePrompt, writeCards } from "../src/cards/write.ts";
+import { parseProse, type Prose, prosePrompt, unsupportedNames, writeCards } from "../src/cards/write.ts";
 import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { LocalSession } from "../src/core/session.ts";
@@ -141,6 +141,30 @@ describe("writer", () => {
 });
 
 describe("writeCards gate", () => {
+  test("unsupportedNames: backticked names absent from the edits, judged by identifier parts", () => {
+    const edits = "+  const result = clear_promotion(task_id, project_id=None)\n+  fieldsQueryKeys.dependencies(ws)";
+    expect(unsupportedNames(edits, "`clear_promotion` replaces `commit_promotion`; `fieldsQueryKeys.dependencies('w')` and `None` stay.")).toEqual(["commit_promotion"]);
+    expect(unsupportedNames(edits, "No names here.")).toEqual([]);
+  });
+
+  test("a paragraph naming something the edits lack is rewritten with the names quoted, without a model check", async () => {
+    const text = diff("src/store.py", "@@ -1,3 +1,3 @@", [" a", "-    def commit_promotion(self, task_id: str) -> None:", "+    def clear_promotion(self, task_id: str) -> None:", " b"]);
+    const set = cs(text, ["behavior"]);
+    const cards = buildCards(set, DEFAULT_POLICY);
+    const dir = mkdtempSync(join(tmpdir(), "lookout-names-"));
+    const prompts: string[] = [];
+    const write = async (p: string) => {
+      prompts.push(p);
+      return p.includes("names not in the edits: remove_task_artifact") ? "TITLE: Clear promotion\nPARAGRAPH: `clear_promotion` replaces `commit_promotion`." : "TITLE: Clear promotion\nPARAGRAPH: `remove_task_artifact` and `clear_promotion` replace `commit_promotion`.";
+    };
+    const landed: Prose[] = [];
+    await writeCards(set, cards, { modelSpec: "mock:w", cache: new RankCache(dir), write }, (_id, prose) => landed.push(prose));
+    expect(prompts).toHaveLength(2);
+    expect(landed[0]!.paragraph).toBe("`clear_promotion` replaces `commit_promotion`.");
+    expect(landed[0]!.unverified).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   test("a paragraph under the gate is rewritten once with the draft quoted; still under, it lands unverified; shape and hint reach the prompt", async () => {
     const text = diff("infra/deploy/stage.ts", "@@ -1,3 +1,3 @@", [" a", "-tools: [portal],", "+tools: [portal, reports],", " b"]);
     const set = cs(text, ["config"]);

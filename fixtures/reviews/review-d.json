@@ -1722,7 +1722,8 @@
                   "start": 24,
                   "end": 46
                 },
-                "kind": "types"
+                "kind": "behavior",
+                "suggestedKind": "types"
               }
             ],
             "labels": [],
@@ -4755,8 +4756,8 @@
   },
   "cards": [
     {
-      "id": "254542720897",
-      "title": "inert-audit.ts +6 more · block, hunk",
+      "id": "7e5315680ac3",
+      "title": "inert-audit.ts +7 more · block, hunk",
       "color": "amber",
       "kind": "logic",
       "areas": [],
@@ -4772,6 +4773,7 @@
         "90afb76d678c",
         "7102fde3e8a1",
         "ef774989deb5",
+        "286d059a0db5",
         "df3ff9e8a12f",
         "1615069dde8e",
         "a7fc25338ef7",
@@ -4811,25 +4813,6 @@
       "blockKind": "behavior"
     },
     {
-      "id": "a4430321ec76",
-      "title": "Type Hunk Edit Blocks and Summaries",
-      "color": "amber",
-      "kind": "additive",
-      "areas": [],
-      "labels": [],
-      "blockIds": [
-        "286d059a0db5"
-      ],
-      "attention": "needs-eyes",
-      "score": 0.611,
-      "claimIds": [],
-      "unmentioned": false,
-      "testsTouched": true,
-      "questions": [],
-      "blockKind": "types",
-      "paragraph": "`Hunk` now includes derived `blocks`, `labels`, `attention`, and `score` fields. The new `EditBlock` type records each contiguous run of changed lines by ID, hunk ID, path, line-index bounds, optional old/new line ranges, labels, attention, and score."
-    },
-    {
       "id": "5644666f2732",
       "title": "Test edit-block splitting and ranking",
       "color": "green",
@@ -4855,31 +4838,9 @@
       "questions": [],
       "blockKind": "test",
       "covers": [
-        "254542720897",
-        "a4430321ec76"
+        "7e5315680ac3"
       ],
       "paragraph": "Tests verify that hunks split into edit blocks with correct ranges and stable IDs, and that `isolateBlock`, `blockText`, and `deriveHunk` handle block content and aggregate rankings. Model-ranking tests now expect questions and attention scores per edit block, while checking that each hunk inherits its highest-ranked block."
-    },
-    {
-      "id": "c8af32f3d31b",
-      "title": "Document Error Handling Rules",
-      "color": "green",
-      "kind": "docs",
-      "areas": [],
-      "labels": [
-        "docs"
-      ],
-      "blockIds": [
-        "79aae49d3106"
-      ],
-      "attention": "routine",
-      "score": 0.254,
-      "claimIds": [],
-      "unmentioned": false,
-      "testsTouched": false,
-      "questions": [],
-      "blockKind": "docs",
-      "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes."
     },
     {
       "id": "7bc35c9c049f",
@@ -4902,6 +4863,27 @@
       "questions": [],
       "blockKind": "docs",
       "paragraph": "The data model now places `EditBlock`s on `Hunk.blocks`, with `from` and `to` indexing `hunk.lines` and optional `oldRange` and `newRange`; hunk labels, attention, and score derive from its blocks. `Review` no longer includes a separate `blocks` field."
+    },
+    {
+      "id": "c8af32f3d31b",
+      "title": "Document Error Handling Rules",
+      "color": "green",
+      "kind": "docs",
+      "areas": [],
+      "labels": [
+        "docs"
+      ],
+      "blockIds": [
+        "79aae49d3106"
+      ],
+      "attention": "routine",
+      "score": 0.254,
+      "claimIds": [],
+      "unmentioned": false,
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "docs",
+      "paragraph": "PLAN.md now specifies that expected recoverable failures use `Result<T, E>` or a value carrying a warning, while programmer errors and impossible states throw. It assigns conversion of throwing library calls to `attempt`/`attemptAsync` at call sites and reserves catch-all handling in `cli/main.ts` for mapping errors to exit codes."
     },
     {
       "id": "clean",

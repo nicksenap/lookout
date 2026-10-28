@@ -116,9 +116,13 @@ export function colorFloor(card: Pick<Card, "attention" | "areas" | "labels" | "
   return "green";
 }
 
-/** Riskiest first: color, then attention, then score; stable for equal keys. */
+/**
+ * Riskiest first: colour, then behaviour before mechanical and docs, then attention, then the
+ * larger card (more to decide), then score; stable for equal keys.
+ */
 export function compareCards(a: Card, b: Card): number {
-  return COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) || rank(b.attention) - rank(a.attention) || b.score - a.score;
+  const skim = (c: Card) => (c.mechanical || c.kind === "docs" || c.blockKind === "docs" ? 1 : 0);
+  return COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) || skim(a) - skim(b) || rank(b.attention) - rank(a.attention) || b.blockIds.length - a.blockIds.length || b.score - a.score;
 }
 
 /** Policy areas that no file of the change touches at all. */

@@ -29,7 +29,7 @@ export interface WriteOptions {
 /** Below this the paragraph is rewritten once; below it again, it is shown as unverified. */
 export const PROSE_GATE = 0.7;
 // Cache key version: bumped with the prompts so a sharper question is never answered from an old cache.
-const PROSE_VERSION = "prose-v2";
+const PROSE_VERSION = "prose-v3";
 
 const PREAMBLE = `You are briefing a senior engineer who must review an agent-written code change without reading the diff.
 Below is ONE logical change: a set of edits (contiguous +/- runs) with a few lines of context each; each edit names its file and the enclosing declaration from the hunk header.
@@ -38,7 +38,7 @@ Write from the edits only; name functions, props, keys and values exactly as the
 /** One prompt per card shape: what a reviewer needs first differs for behaviour, configuration, tests and docs. */
 export const SHAPE_PROMPTS = {
   behaviour: `${PREAMBLE}
-Write a 3-8 word title, then ONE paragraph of at most 3 sentences. Sentence 1: what now happens differently for the caller or user (not how the code is arranged). Sentence 2: how, naming the functions and values. Sentence 3, only if true: a path these edits change that no test edit here covers.`,
+Write a 3-8 word title, then ONE paragraph of at most 3 sentences. Sentence 1: what now happens differently for the caller or user (not how the code is arranged). Sentence 2: how, naming the functions and values. Never comment on test coverage: tests live in other cards you cannot see.`,
   config: `${PREAMBLE}
 This is configuration, infrastructure or dependency plumbing. Write a title starting with "Configure", then ONE paragraph of at most 3 sentences that MUST name: which environment or deployment is affected (stage, production, EU, a preview), the exact key or list edited and what reads it, and what undoing it takes (remove the line, revert the version). Say "all environments" only if the edits show it.`,
   test: `${PREAMBLE}
@@ -86,8 +86,22 @@ export function editsOf(changeSet: ChangeSet, card: Pick<Card, "blockIds">): str
 
 const REWRITE_NOTE = `
 
-A checker found at least one statement in a previous draft that the edits do not support. Write only what the edits show; drop any sentence you cannot point to a +/- line for. Previous draft:
+A checker found at least one statement in a previous draft that the edits do not support{names}. Write only what the edits show; drop any sentence you cannot point to a +/- line for. Previous draft:
 `;
+
+/**
+ * Backticked names in the paragraph that appear nowhere in the card's edits. A rule, not a model
+ * call: an invented `remove_task_artifact` sailed through the model gate at 0.99 on one PR.
+ */
+export function unsupportedNames(edits: string, paragraph: string): string[] {
+  const names = [...paragraph.matchAll(/`([^`]+)`/g)].map((m) => m[1]!.trim());
+  const code = edits.toLowerCase();
+  return [...new Set(names.filter((n) => {
+    // A path or an expression is judged by its identifier parts: `fieldsQueryKeys.dependencies('w')` → fieldsQueryKeys, dependencies.
+    const parts = n.match(/[A-Za-z_$][\w$]*/g)?.filter((w) => w.length > 2) ?? [];
+    return parts.length > 0 && parts.some((w) => !code.includes(w.toLowerCase()));
+  }))];
+}
 
 /** Parse `TITLE: … PARAGRAPH: …`; tolerate a missing label by using the first line as title. */
 export function parseProse(text: string): Prose | undefined {
@@ -143,7 +157,9 @@ export async function writeCards(changeSet: ChangeSet, cards: Card[], opts: Writ
         warning ??= first.error;
         continue;
       }
-      const prose = check ? await gate(check, editsOf(changeSet, card), first.value, (previous) => draft(write!, `${prompt}${REWRITE_NOTE}${previous.paragraph}`)) : first.value;
+      const edits = editsOf(changeSet, card);
+      const rewrite = (previous: Prose) => draft(write!, `${prompt}${REWRITE_NOTE.replace("{names}", unsupportedNames(edits, previous.paragraph).length ? ` (names not in the edits: ${unsupportedNames(edits, previous.paragraph).join(", ")})` : "")}${previous.paragraph}`);
+      const prose = check ? await gate(check, edits, first.value, rewrite) : await nameGate(edits, first.value, rewrite);
       cache.set(opts.modelSpec, key, prose);
       touched = true;
       onCard(card.id, prose);
@@ -168,12 +184,25 @@ async function draft(write: (prompt: string) => Promise<string>, prompt: string)
  * unverified. A failed check call leaves the draft ungated rather than unwritten.
  */
 async function gate(check: (edits: string, prose: Prose) => Promise<number>, edits: string, first: Prose, rewrite: (previous: Prose) => Promise<Result<Prose>>): Promise<Prose> {
-  const p1 = await attemptAsync(() => check(edits, first));
-  if (!p1.ok) return first;
-  if (p1.value >= PROSE_GATE) return { ...first, check: p1.value };
-  const second = await rewrite(first);
-  if (!second.ok) return { ...first, check: p1.value, unverified: true };
+  // Names come first: a rule failure costs no model call and the rewrite can quote the offending names.
+  const named = await nameGate(edits, first, rewrite);
+  if (named.unverified) return named;
+  const p1 = await attemptAsync(() => check(edits, named));
+  if (!p1.ok) return named;
+  if (p1.value >= PROSE_GATE) return { ...named, check: p1.value };
+  const second = await rewrite(named);
+  if (!second.ok) return { ...named, check: p1.value, unverified: true };
+  if (unsupportedNames(edits, second.value.paragraph).length > 0) return { ...second.value, check: p1.value, unverified: true };
   const p2 = await attemptAsync(() => check(edits, second.value));
   if (!p2.ok) return { ...second.value, check: p1.value, unverified: true };
   return p2.value >= PROSE_GATE ? { ...second.value, check: p2.value } : { ...second.value, check: p2.value, unverified: true };
 }
+
+/** The rule half of the gate: one rewrite when the paragraph names things the edits do not contain; unverified if it still does. */
+async function nameGate(edits: string, first: Prose, rewrite: (previous: Prose) => Promise<Result<Prose>>): Promise<Prose> {
+  if (unsupportedNames(edits, first.paragraph).length === 0) return first;
+  const second = await rewrite(first);
+  if (!second.ok) return { ...first, unverified: true };
+  return unsupportedNames(edits, second.value.paragraph).length === 0 ? second.value : { ...second.value, unverified: true };
+}
+
