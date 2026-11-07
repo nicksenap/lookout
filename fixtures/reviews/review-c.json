@@ -537,6 +537,7 @@
         "0aab16626f91"
       ],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": true,
       "questions": [],
       "blockKind": "behavior",
@@ -564,6 +565,7 @@
         "66b5e8bfb819"
       ],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": false,
       "questions": [],
       "blockKind": "test",
@@ -643,5 +645,6 @@
   "dispatches": [],
   "rankedBy": "rules+openai:gpt-6-luna",
   "evidence": true,
-  "exchanges": []
+  "exchanges": [],
+  "unmentionedCount": 0
 }

@@ -316,6 +316,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     v.tier.toUpperCase(),
     plural(v.requiredHumans, "human"),
     plural(cards.length, "card"),
+    review.unmentionedCount > 0 ? `${review.unmentionedCount} not in body` : "",
     review.door.computed === "one-way" ? "one-way" : "",
     model ? model : "rules only",
     pending ? `${theme.spinner[frame % theme.spinner.length]} ${Math.round((Date.now() - openedAt.current) / 1000)}s` : "",

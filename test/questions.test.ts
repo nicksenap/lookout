@@ -24,6 +24,7 @@ async function review(): Promise<Review> {
     radius: { areas: [] },
     dispatches: [],
     rankedBy: "rules",
+    unmentionedCount: 0,
     evidence: true,
     exchanges: [],
   };
@@ -41,6 +42,7 @@ const card = (extra: Partial<Card>): Card => ({
   score: 0.5,
   claimIds: [],
   unmentioned: false,
+  mentioned: true,
   testsTouched: false,
   questions: [],
   ...extra,

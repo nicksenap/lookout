@@ -38,6 +38,7 @@ async function review(): Promise<Review> {
     radius: { areas: [] },
     dispatches: [],
     rankedBy: "rules",
+    unmentionedCount: 0,
     evidence: true,
     exchanges: [],
   };

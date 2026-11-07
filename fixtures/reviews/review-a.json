@@ -6102,6 +6102,7 @@
       "score": 0.728,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": false,
       "questions": [],
       "blockKind": "test",
@@ -6198,6 +6199,7 @@
       "score": 0.596,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": true,
       "questions": [],
       "blockKind": "behavior"
@@ -6219,6 +6221,7 @@
       "score": 0.188,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": false,
       "questions": [],
       "blockKind": "behavior",
@@ -6241,6 +6244,7 @@
       "score": 0.098,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": false,
       "questions": [],
       "fixed": "clean"
@@ -6264,5 +6268,6 @@
   "dispatches": [],
   "rankedBy": "rules+openai:gpt-6-luna",
   "evidence": true,
-  "exchanges": []
+  "exchanges": [],
+  "unmentionedCount": 0
 }

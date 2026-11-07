@@ -153,6 +153,8 @@ export interface Card {
   blockIds: string[];
   /** Paths of the card's blocks, in diff order; derived, for readers of the JSON. */
   files: string[];
+  /** The PR body names a file or changed identifier, or this card is exempt from body coverage. */
+  mentioned: boolean;
   /** Highest attention and score among the card's blocks. */
   attention: Attention;
   score: number;
@@ -290,6 +292,8 @@ export interface Review {
   verdict: Verdict;
   /** Riskiest first; the "clean" card last. Every block is in exactly one card. */
   cards: Card[];
+  /** Deterministic body coverage; separate from the evidence layer's claim-based unmentioned. */
+  unmentionedCount: number;
   /** Policy areas no file of the change touches. */
   untouched: string[];
   claims: Claim[];

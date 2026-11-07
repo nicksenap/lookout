@@ -111,6 +111,7 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
     score,
     claimIds: [],
     unmentioned: false,
+    mentioned: true,
     testsTouched: false,
     questions: [],
   };

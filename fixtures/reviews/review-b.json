@@ -3908,6 +3908,7 @@
       "score": 0.73,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": true,
       "questions": [
         {
@@ -3938,6 +3939,7 @@
       "score": 0.442,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": true,
       "questions": [],
       "blockKind": "types"
@@ -3966,6 +3968,7 @@
       "score": 0.476,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": false,
       "questions": [],
       "blockKind": "test",
@@ -3992,6 +3995,7 @@
       "score": 0.303,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": true,
       "questions": [],
       "blockKind": "types"
@@ -4013,6 +4017,7 @@
       "score": 0.118,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": true,
       "questions": [],
       "blockKind": "config",
@@ -4037,5 +4042,6 @@
   "dispatches": [],
   "rankedBy": "rules+openai:gpt-6-luna",
   "evidence": true,
-  "exchanges": []
+  "exchanges": [],
+  "unmentionedCount": 0
 }

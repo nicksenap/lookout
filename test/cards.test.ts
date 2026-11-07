@@ -129,6 +129,7 @@ describe("compareCards", () => {
     score: 0.1,
     claimIds: [],
     unmentioned: false,
+    mentioned: true,
     testsTouched: false,
     questions: [],
   };
@@ -170,6 +171,7 @@ describe("cardPatches", () => {
     score: 0.1,
     claimIds: [],
     unmentioned: false,
+    mentioned: true,
     testsTouched: false,
     questions: [],
   });
