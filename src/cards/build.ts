@@ -2,7 +2,17 @@ import { allBlocks, type BlockRef } from "../core/blocks.ts";
 import { ATTENTION_ORDER, type Attention, type Card, type CardColor, type ChangeSet, COLOR_ORDER } from "../core/types.ts";
 import { areasOf, kindOf } from "../policy/evaluate.ts";
 import type { Policy } from "../policy/schema.ts";
-import { changedIdentifiers, type Group, groupBlocks, isMechanical, joinTests, markTestGroups, mechanicalText } from "./group.ts";
+import {
+  changedIdentifiers,
+  type Group,
+  groupBlocks,
+  isLockfileOnly,
+  isMechanical,
+  joinTests,
+  lockfileText,
+  markTestGroups,
+  mechanicalText,
+} from "./group.ts";
 import type { Splits } from "./split.ts";
 
 const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
@@ -35,7 +45,7 @@ export function buildCards(changeSet: ChangeSet, policy: Policy, splits: Splits 
         const card = makeCard(cardId(g.refs.map((r) => r.block.id)), g.hint ?? titleFor(g.refs, g.topIdentifiers), g.refs, policy);
         if (g.kind) card.blockKind = g.kind;
         if (g.hint) card.hint = g.hint;
-        if (isMechanical(g.kind)) {
+        if (isMechanical(g.kind) && !isLockfileOnly(card)) {
           const text = mechanicalText(g);
           card.title = text.title;
           card.paragraph = text.paragraph;
@@ -118,6 +128,7 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
     testsTouched: false,
     questions: [],
   };
+  if (isLockfileOnly(card)) Object.assign(card, lockfileText(card));
   card.color = colorFloor(card);
   return card;
 }
@@ -132,9 +143,10 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
  * a touched area still means more humans.
  */
 export function colorFloor(
-  card: Pick<Card, "attention" | "areas" | "labels" | "kind"> & Partial<Pick<Card, "blockKind" | "mechanical">>,
+  card: Pick<Card, "attention" | "areas" | "labels" | "kind"> & Partial<Pick<Card, "blockKind" | "mechanical" | "files">>,
 ): CardColor {
   if (card.attention === "inert") return "grey";
+  if (isLockfileOnly(card)) return "green";
   if (card.attention === "suspicious") return "red";
   const sensitive = card.areas.length > 0 || card.labels.includes("sensitive");
   const test = card.kind === "test" || card.blockKind === "test";
@@ -154,13 +166,15 @@ export function colorFloor(
  * stable for equal keys.
  */
 export function compareCards(a: Card, b: Card): number {
-  const skim = (c: Card) => (c.mechanical || c.kind === "docs" || c.blockKind === "docs" ? 1 : 0);
+  const skim = (c: Card) => (isLockfileOnly(c) || c.mechanical || c.kind === "docs" || c.blockKind === "docs" ? 1 : 0);
+  // Rules know lockfiles better than the model's score; keep attention in JSON, but sort them as routine skim material.
+  const attention = (c: Card) => rank(isLockfileOnly(c) ? "routine" : c.attention);
   // A configuration switch decides whether the rest ships; it reads first at equal colour, attention and skim.
   const toggle = (c: Card) => (c.kind === "config" || c.kind === "ci" || c.kind === "deps" ? 0 : 1);
   return (
     COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) ||
     Number(Boolean(b.risk)) - Number(Boolean(a.risk)) ||
-    rank(b.attention) - rank(a.attention) ||
+    attention(b) - attention(a) ||
     skim(a) - skim(b) ||
     toggle(a) - toggle(b) ||
     b.blockIds.length - a.blockIds.length ||
