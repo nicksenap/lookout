@@ -152,6 +152,44 @@ describe.each([
   });
 });
 
+describe.each([
+  [80, 24],
+  [120, 40],
+])("risk lines at %dx%d", (columns, rows) => {
+  test("risk appears below the title and before prose; unverified risk has a word label", async () => {
+    const review = await loadReview("review-a");
+    const first = review.cards.find((c) => !c.fixed)!;
+    review.cards = [
+      {
+        ...first,
+        id: "verified",
+        title: "Verified change",
+        risk: "Existing callers lose an operation.",
+        paragraph: "The implementation changes.",
+      },
+      {
+        ...first,
+        id: "unverified",
+        title: "Unchecked change",
+        risk: "Existing users lose access.",
+        riskUnverified: true,
+        paragraph: "The second implementation changes.",
+      },
+    ];
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    const screen = lines(app.lastFrame());
+    const title = screen.findIndex((l) => l.includes("Verified change"));
+    expect(screen[title + 1]).toContain("risk: Existing callers lose an operation.");
+    expect(screen[title + 2]).toContain("The implementation changes.");
+    expect(screen.some((l) => l.includes("risk unverified: Existing users lose access."))).toBe(true);
+    expect(widest(screen)).toBeLessThanOrEqual(columns);
+    app.unmount();
+  });
+});
+
 describe("stack contents", () => {
   test("cards are riskiest first and the untouched line closes the stack", async () => {
     const { screen } = await mount("review-a", 120, 50);

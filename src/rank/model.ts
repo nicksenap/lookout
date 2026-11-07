@@ -167,6 +167,31 @@ export async function scoreBlockBatch(model: AttentionModel, refs: BlockRef[], i
   return out;
 }
 
+// ---------------------------------------------------------------- risk line (plan v3 step 25)
+
+/** Score reliance changed by one behaviour card, independent of its attention score. */
+export async function scoreRiskWithModel(model: AttentionModel, edits: string): Promise<number> {
+  const result = await experimental_decide({
+    model,
+    state: { edits },
+    questions: {
+      reliance: {
+        type: "score",
+        instructions:
+          "Does this change narrow, remove or widen something existing callers or users rely on? Judge the edits and enclosing symbols only. Look for newly refused operations, removed item types or side effects, widened access or changed contracts, not generic review complexity.",
+        criteria: [
+          "No existing caller or user reliance changes; purely additive internal implementation or harmless rearrangement.",
+          "Existing callers or users may lose or gain an operation, item type, side effect, access or contract they rely on.",
+        ],
+      },
+    },
+    abortSignal: AbortSignal.timeout(60_000),
+  });
+  const answer = (result.answers as Record<string, { type: string; score?: number }>).reliance;
+  if (answer?.type !== "score" || typeof answer.score !== "number") throw new Error("no score from the risk check");
+  return answer.score;
+}
+
 // ---------------------------------------------------------------- paragraph gate (plan v2 step 19)
 
 /**

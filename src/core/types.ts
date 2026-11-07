@@ -170,6 +170,12 @@ export interface Card {
   proseCheck?: number;
   /** The paragraph failed the gate twice: shown dimmed and labelled, not trusted. */
   unverified?: boolean;
+  /** One sentence naming what existing callers or users may lose or gain. */
+  risk?: string;
+  /** Decisions' consistency probability for the risk sentence. */
+  riskCheck?: number;
+  /** Risk failed its gate: visible but cannot raise colour. */
+  riskUnverified?: boolean;
   /** The fixed card that collects every inert block. */
   fixed?: "clean";
   // ---- evidence (plan step 12)

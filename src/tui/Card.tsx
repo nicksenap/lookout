@@ -142,6 +142,10 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   }
 
   lines.push(row([{ text: fit(card.title, inner), bold: true }]));
+  if (card.risk) {
+    const label = card.riskUnverified ? "risk unverified" : "risk";
+    for (const l of wrap(`${label}: ${card.risk}`, inner)) lines.push(row([{ text: l, dim: card.riskUnverified }]));
+  }
   if (card.paragraph && card.unverified) {
     // The gate failed twice: the text is shown, but dimmed and labelled so nobody reads it as checked.
     lines.push(row([{ text: fit("paragraph unverified · read the diff", inner), color: theme.card.amber }]));
