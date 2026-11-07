@@ -278,6 +278,20 @@ function groupByOwnership(refs: BlockRef[], opts: { rareShare?: number; neighbou
   });
 }
 
+/** Rules recognise skim material by every file, not the model's kind or a single lockfile label. */
+export function isLockfileOnly(card: { files?: string[] }): boolean {
+  const names = ["bun.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "Cargo.lock", "poetry.lock", "uv.lock", "go.sum"];
+  return Boolean(card.files?.length) && card.files!.every((file) => names.includes(file.split("/").pop()!));
+}
+
+/** Lockfile prose names only the files we can count, including metadata-only updates. */
+export function lockfileText(card: Pick<Card, "files">): { title: string; paragraph: string } {
+  return {
+    title: card.files.length === 1 ? "Lockfile updated" : "Lockfiles updated",
+    paragraph: `${card.files.map((file) => `\`${file}\``).join(", ")} updated.`,
+  };
+}
+
 /** Deterministic title and one-line paragraph for a mechanical group; no model needed. */
 export function mechanicalText(group: Group): { title: string; paragraph: string } {
   const n = group.refs.length;
