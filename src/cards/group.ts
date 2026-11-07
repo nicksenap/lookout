@@ -144,10 +144,14 @@ export function joinTests(groups: Group[]): Group[] {
           .filter((line) => line.kind === "add")
           .map((line) => line.text)
           .join("\n");
-        const identifierOwners = candidates.filter((_, index) => exercises(added, names[index]!));
-        const owners = identifierOwners.length > 0 ? identifierOwners : candidates.filter((_, index) => exercises(added, stems[index]!));
+        const byName = candidates.map((_, index) => index).filter((index) => exercises(added, names[index]!));
+        // A shared name (the tool both cards mention) leaves several owners; the test file's own stem decides among them.
+        const pool = byName.length > 0 ? byName : candidates.map((_, index) => index);
+        const testStem = stemOf(ref.file.path);
+        const owners =
+          byName.length === 1 ? byName : pool.filter((index) => stems[index]!.has(testStem) || exercises(added, stems[index]!));
         if (owners.length !== 1) return true;
-        owners[0]!.refs.push(ref);
+        candidates[owners[0]!]!.refs.push(ref);
         return false;
       });
       return { ...group, refs };
