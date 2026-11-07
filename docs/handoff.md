@@ -1,6 +1,6 @@
 # Handoff
 
-State of lookout for the next session. `docs/plan.md` is the current plan (steps 15–22), `docs/plan-v1.md` the v1 spec it narrows, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those first; this file is what they don't say.
+State of lookout for the next session. `docs/plan.md` is the current plan (v2 steps 15–22, v3 steps 23–27), `docs/plan-v1.md` the v1 spec it narrows, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those first; this file is what they don't say.
 
 ## v2: cards first (steps 15–22, this session)
 
