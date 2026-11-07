@@ -1,4 +1,4 @@
-# lookout — plan (v2: cards first; v3: point at the risk)
+# lookout — plan (v2: cards first; v3: point at the risk; v4: one level up)
 
 v1 built the whole north light (cards, claims, door, radius, find+verify, questions). Three production PRs (PR A, PR B, PR C; reports in `/tmp/lookout-eval/`) scored it 3/3/2 out of 5, and every evaluator named the same cause: the cards are wrong before anything downstream runs. v2 narrows to one question — **can a reviewer understand a PR from the card titles and paragraphs alone?** — and measures it before anything else gets attention back.
 
