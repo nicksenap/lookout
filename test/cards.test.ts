@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Experimental_DecisionMockModelV4 } from "ai/test";
-import { buildCards, colorFloor, untouchedAreas } from "../src/cards/build.ts";
+import { buildCards, colorFloor, compareCards, untouchedAreas } from "../src/cards/build.ts";
 import { allBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { cardPatches, LocalSession } from "../src/core/session.ts";
@@ -50,7 +50,7 @@ describe("buildCards", () => {
     expect(buildCards(cs, DEFAULT_POLICY).map((c) => c.fixed)).toEqual([undefined]);
   });
 
-  test("cards are riskiest first; a sensitive-area card is red and sorts above routine", () => {
+  test("cards are riskiest first; a needs-eyes sensitive-area card is red and sorts above routine", () => {
     const files = parseDiff(
       diff("src/util.ts", "@@ -1,2 +1,2 @@", [" a", "-b", "+c"]) +
         diff("src/auth/login.ts", "@@ -1,2 +1,2 @@", [" a", "-b", "+c"]) +
@@ -80,25 +80,69 @@ describe("buildCards", () => {
 
 describe("colorFloor", () => {
   const base: Pick<Card, "attention" | "areas" | "labels" | "kind"> = { attention: "routine", areas: [], labels: [], kind: "logic" };
-  test("grey only for inert; red for suspicious, or areas/sensitive on a behaviour card; amber for needs-eyes and deps/config/ci", () => {
-    expect(colorFloor({ ...base, attention: "inert" })).toBe("grey");
-    expect(colorFloor(base)).toBe("green");
-    expect(colorFloor({ ...base, attention: "needs-eyes" })).toBe("amber");
-    expect(colorFloor({ ...base, kind: "deps" })).toBe("amber");
-    expect(colorFloor({ ...base, attention: "suspicious" })).toBe("red");
-    expect(colorFloor({ ...base, areas: ["billing"] })).toBe("red");
-    expect(colorFloor({ ...base, labels: ["sensitive"] })).toBe("red");
+  const shapes = [
+    ["behaviour", {}, ["grey", "green", "amber", "red"], ["grey", "amber", "red", "red"]],
+    ["types", { kind: "additive", blockKind: "types" }, ["grey", "green", "amber", "red"], ["grey", "amber", "red", "red"]],
+    ["test path", { kind: "test" }, ["grey", "green", "green", "red"], ["grey", "green", "green", "red"]],
+    ["test block", { blockKind: "test" }, ["grey", "green", "green", "red"], ["grey", "green", "green", "red"]],
+    ["docs path", { kind: "docs" }, ["grey", "green", "green", "red"], ["grey", "green", "green", "red"]],
+    ["docs block", { blockKind: "docs" }, ["grey", "green", "green", "red"], ["grey", "green", "green", "red"]],
+    ["rename", { blockKind: "rename", mechanical: true }, ["grey", "green", "green", "red"], ["grey", "green", "green", "red"]],
+    [
+      "typing refactor",
+      { blockKind: "typing-refactor", mechanical: true },
+      ["grey", "green", "green", "red"],
+      ["grey", "green", "green", "red"],
+    ],
+    ["move", { blockKind: "move", mechanical: true }, ["grey", "green", "green", "red"], ["grey", "green", "green", "red"]],
+    ["deps", { kind: "deps" }, ["grey", "amber", "amber", "red"], ["grey", "amber", "amber", "red"]],
+    ["config", { kind: "config" }, ["grey", "amber", "amber", "red"], ["grey", "amber", "amber", "red"]],
+    ["ci", { kind: "ci" }, ["grey", "amber", "amber", "red"], ["grey", "amber", "amber", "red"]],
+    ["config block", { blockKind: "config" }, ["grey", "green", "amber", "red"], ["grey", "amber", "amber", "red"]],
+  ] as const;
+  describe.each(shapes)("%s", (_, shape, ordinary, sensitive) => {
+    test.each([
+      ["inert", 0],
+      ["routine", 1],
+      ["needs-eyes", 2],
+      ["suspicious", 3],
+    ] as const)("%s with no area, a sensitive area and a sensitive label", (attention, index) => {
+      const card = { ...base, ...shape, attention };
+      expect(colorFloor(card)).toBe(ordinary[index]);
+      expect(colorFloor({ ...card, areas: ["auth"] })).toBe(sensitive[index]);
+      expect(colorFloor({ ...card, labels: ["sensitive"] })).toBe(sensitive[index]);
+    });
   });
-  test("a sensitive area does not redden tests, mechanical edits or docs; config there is amber; types follow attention; suspicious is always red", () => {
-    const auth = { ...base, areas: ["auth"], attention: "needs-eyes" as const };
-    expect(colorFloor({ ...auth, kind: "test" })).toBe("green");
-    expect(colorFloor({ ...auth, blockKind: "test" })).toBe("green");
-    expect(colorFloor({ ...auth, blockKind: "rename", mechanical: true })).toBe("green");
-    expect(colorFloor({ ...auth, kind: "docs" })).toBe("green");
-    expect(colorFloor({ ...auth, blockKind: "config" })).toBe("amber");
-    expect(colorFloor({ ...auth, kind: "additive", blockKind: "types" })).toBe("red");
-    expect(colorFloor({ ...base, attention: "needs-eyes", blockKind: "types" })).toBe("amber");
-    expect(colorFloor({ ...auth, kind: "test", attention: "suspicious" })).toBe("red");
+});
+
+describe("compareCards", () => {
+  const base: Card = {
+    id: "behaviour",
+    title: "behaviour",
+    color: "amber",
+    kind: "logic",
+    areas: [],
+    labels: [],
+    blockIds: ["a"],
+    files: ["src/a.ts"],
+    attention: "routine",
+    score: 0.1,
+    claimIds: [],
+    unmentioned: false,
+    testsTouched: false,
+    questions: [],
+  };
+
+  test.each([
+    ["docs", { kind: "docs" }],
+    ["mechanical", { mechanical: true }],
+    ["behaviour ahead of a configuration switch", {}],
+  ] as const)("attention precedes skim and toggle: %s", (_, shape) => {
+    const attentive: Card = { ...base, ...shape, id: "attentive", attention: "needs-eyes" };
+    const routine: Card = { ...base, id: "routine", kind: "config", blockIds: ["b", "c"], score: 0.9 };
+    expect([routine, attentive].sort(compareCards).map((c) => c.id)).toEqual(["attentive", "routine"]);
+    expect(compareCards(attentive, routine)).toBeLessThan(0);
+    expect(compareCards(routine, attentive)).toBeGreaterThan(0);
   });
 });
 
