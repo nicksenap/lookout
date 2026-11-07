@@ -1,4 +1,4 @@
-# lookout — v2: cards first
+# lookout — plan (v2: cards first; v3: point at the risk)
 
 v1 built the whole north light (cards, claims, door, radius, find+verify, questions). Three production PRs (PR A, PR B, PR C; reports in `/tmp/lookout-eval/`) scored it 3/3/2 out of 5, and every evaluator named the same cause: the cards are wrong before anything downstream runs. v2 narrows to one question — **can a reviewer understand a PR from the card titles and paragraphs alone?** — and measures it before anything else gets attention back.
 
@@ -61,6 +61,41 @@ Then one Decisions `boolean` per paragraph: "does every statement follow from th
 **21. Trim the TUI and JSON.** Remove the claims view, radius row, questions and finding glyphs from the default render (they return under `--evidence`). Card JSON gains `files: string[]` and `suggestedKind`. Header: cards · time · model. Check: TUI tests at narrow/wide pass; story `review-a` reads clean; boundary test unchanged.
 
 **22. Done gate.** Run the evaluator prompt from this session (`/tmp/lookout-eval/` reports hold the baseline) on the 3 PRs plus 3 fresh ones from production repos (the list is kept outside the repo in `~/.cache/lookout/bench/targets.txt`). Record scores in `docs/handoff.md`. Only then decide which of claims, door, find+verify come back, in that order of evidence.
+
+# v3: point at the risk
+
+Step 22 did not pass (grouping 2–4, prose 3–4; `docs/handoff.md`). A probe over five fresh PRs of a production repo (2–56 files, 8–44 s; `docs/handoff.md` "Probe, 2026-11-07") found the prose accurate on every statement checked, and three things wrong that no amount of grouping polish fixes:
+
+| Failure | Where it showed | Root cause in code |
+|---|---|---|
+| Red goes to the wrong card | Two PRs: the only red card is prompt text (`**/prompts/**`, attention `routine`); the enforcement change the reviewer found a bug in is amber, below it | `colorFloor` reddens any behaviour card in a sensitive area regardless of attention; `compareCards` sorts colour first |
+| Tests shatter | 9 files → 14 cards, 7 of them test cards from one test file; 4 files → 6 cards | test blocks group by kind and proximity, never by what they pin; `markTests` knows (`exercises`) but runs after grouping |
+| Trivia gets a card | a one-character ` \| ` → `\|` edit in a decision record, an `updated:` date bump, a lone `import type` | `isFragment` missed the import (type import in a file whose owner card is elsewhere); no inert rule for whitespace/punctuation-only edits in doc files |
+
+And one thing missing: on a repo whose PR bodies are good, cards restate the body. The value is in what the body does not say (a stowaway formatting edit in a feature PR). `--evidence` tried to answer that with a model and got it wrong (a true "EU and US are unchanged" marked ✗ at 0.84; 16/34 cards "unmentioned" on a fully described PR). It stays dormant.
+
+## Done when
+
+On the five probe PRs (ids in `~/.cache/lookout/bench/probe.txt`) and the next five merged PRs of the same repo:
+- the first card is the one a reviewer would read first (the behaviour change with the highest attention, not a path hit) on every PR;
+- no PR has more than one test card per production card it pins, and none has a card that is only an import, a date, or punctuation;
+- every behaviour card that narrows, removes or widens something callers rely on carries a one-line risk reason; no mechanical or docs card does;
+- the header counts the cards the PR body does not mention, and on the probe PRs that count is exactly the stowaways (1 on the 56-file PR, 0 on the rest);
+- `bun run check` green; `bun run story review-a` reads clean.
+
+## Steps
+
+Steps 23–26 are independent slices (one issue each); they touch `cards/build.ts` in different functions, so merge in order 23 → 24 → 25 → 26 and rebase the later ones.
+
+**23. Attention before area.** In `colorFloor`: a sensitive area makes a `routine` behaviour card amber, not red; `needs-eyes` behaviour is red when it is in a sensitive area and amber otherwise; `suspicious` stays red everywhere. Tests, docs, mechanical and plumbing rules unchanged. In `compareCards`, within a colour, attention ranks before the toggle-first and skim keys. The invariant holds: rules set the floor, the model only raises attention. Check: unit cases in `test/cards.test.ts` for each (attention × area × kind) cell; `scripts/tier-survey.ts` over 30 commits of this repo unchanged; on probe PR #3701 the `field-mutation` refusal card is first and the prompt-text card is amber; on #3699 the context-list removal outranks the prompt card.
+
+**24. Tests join the card they pin.** Move `exercises` from `evidence/tests.ts` into grouping: after kind and ownership (steps 16–17) and before splitting, a test block whose added lines name a changed identifier or the file stem of exactly one non-test group joins that group; test blocks that resolve to no group or to several form one test group per directory. `markTests` keeps `covers`/`testsTouched` for the JSON but reads the result rather than recomputing it. Also: a lone `import`/`import type` block joins its file's owner card even when the owner is a different kind (the `chat-deps.ts` miss), and a block whose non-context lines differ from their counterparts only in whitespace or punctuation in a `.md` file is inert. Check: `fixtures/grouping/` targets gain the test blocks as members of the concern they pin, purity does not drop on any of the 6 targets; on probe PR #3699 cards ≤ 7 with one test card; on #3697 ≤ 3; no card in the 5 probe PRs is a lone import; `bun run grouping-bench` recorded in `docs/handoff.md`.
+
+**25. Risk line from the model, inside the invariant.** New `src/cards/risk.ts`: for each behaviour card (not mechanical, test, docs or config) one Decisions call over the card's edits plus the enclosing symbols: `score` "does this change narrow, remove or widen something existing callers or users rely on" and, when ≥ 0.7, one `generateText` sentence naming what and for whom, gated by `unsupportedNames` and the existing consistency check. The sentence becomes `Card.risk`; a card with a risk floors at amber (a raise, so allowed) and `compareCards` ranks risk-bearing cards first within a colour. Cached by card id with a prompt version. TUI: the risk line renders under the title before the paragraph, dimmed when the gate failed. Check: mock-model tests for score below/above threshold and a gated sentence; on probe PR #3701 the refusal card and on #3699 the dashboard removal carry a risk line; no mechanical or docs card in the 5 probe PRs does; adds ≤ 3 s cold on a 20-file PR (runs in parallel with prose).
+
+**26. Body versus diff, deterministic.** `src/cards/mention.ts`: from `changeSet.intent.body`, collect file paths (any token containing `/` that matches a changed file's suffix) and backticked identifiers; a card is *mentioned* when any of its files or changed identifiers appears. No model, no claim statuses. `Review.unmentionedCount` and `Card.mentioned` land in the JSON; the header shows `N not in body` when N > 0; the TUI marks unmentioned cards with a word (`body: no`), not only a colour. Mechanical, docs and test cards are never counted. Replaces the model-driven `unmentioned` under `--evidence` for the default path; the `--evidence` flag is untouched. Check: unit tests over a fixture body; on probe PR #3703 the count is 1 (the Intercom formatting stowaway); on #3697, #3699, #3701, #3705 it is 0.
+
+**27. Re-probe.** Run the five probe PRs and the next five merged PRs; record first-card correctness, card counts, risk-line hits and misses, and the not-in-body count in `docs/handoff.md`. Then write `scripts/review-recall.ts`: for merged PRs with human review comments, map each comment's file:line to a card and count whether the card was non-green or its risk line named the thing. That number replaces the persona gate.
 
 ## What stays true from v1
 

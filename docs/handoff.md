@@ -64,6 +64,21 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged"
 
 ---
 
+## Probe, 2026-11-07 (why v3 is what it is)
+
+Five fresh PRs of one production repo (P1–P5, 2/4/9/29/56 files; ids in `~/.cache/lookout/bench/probe.txt`), `--json`, cold: 8/18/14/18/44 s. Full output was read against the diffs, the PR bodies and the review comments.
+
+- **Prose**: ~20 statements checked, none wrong. One docs card `unverified` (gate working). P1's two cards match the body's own description.
+- **Colour**: P3 and P4's only red card is prompt text (`**/prompts/**` area, attention `routine`). P4's enforcement change (attention `needs-eyes`, and where the one human review comment landed) is amber below it. P2's red (infra enabling writes in prod) is right.
+- **Count**: P3 9 files → 14 cards, 7 test cards from one test file plus a grey one. P2 4 files → 6 cards (one concern split in two red cards, three comment-only cards). P4 29 → 13, P5 56 → 34, both readable.
+- **Trivia cards**: a ` | ` → `|` edit in a decision record, an `updated:` date, a lone `import type` whose owner card is in the same file.
+- **`--evidence`** on P4 and P5: 1 false ✗ ("EU and US are unchanged", true, contradicted at 0.84); 16/34 cards `unmentioned` on a fully described PR; 25 s extra. Stays dormant.
+- **Against the body**: this repo's PR bodies are diff sketches with evidence tables. For P1–P3 the body beats the stack. Lookout earned its place on P5 (a map of 56 files) and by isolating P5's stowaway (an unrelated one-character formatting edit the body does not mention). Usefulness 2/5 on small PRs, 4/5 on the big one.
+
+Decisions: attention outranks a path area (step 23); tests join the card they pin before splitting (24); the model may add a risk line and raise to amber, never lower (25); body-vs-diff is deterministic and replaces model `unmentioned` on the default path (26). Timing is not a target: 44 s with a progress bar is acceptable.
+
+---
+
 ## v1 state (steps 1–13), kept for reference
 
 ## Where we are
