@@ -68,6 +68,34 @@ async function mount(name: string, columns: number, rows: number) {
 
 describe.each([
   [80, 24],
+  [140, 45],
+])("body coverage at %dx%d", (columns, rows) => {
+  test.each([
+    ["review-body", 1],
+    ["review-c", 0],
+  ] as const)("%s shows body coverage only when a card is not mentioned", async (name, count) => {
+    const review = await loadReview(name);
+    expect(review.unmentionedCount).toBe(count);
+    const session = new FixtureSession(review, { dispatchMs: 0 });
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    const screen = lines(app.lastFrame());
+    if (count > 0) {
+      expect(screen[0]).toContain("1 not in body");
+      expect(screen.some((line) => /^[█┃]/.test(line) && line.includes("body: no"))).toBe(true);
+    } else {
+      expect(screen.join("\n")).not.toContain("not in body");
+      expect(screen.join("\n")).not.toContain("body: no");
+    }
+    expect(screen.length).toBe(rows - 1);
+    expect(widest(screen)).toBeLessThanOrEqual(columns);
+    app.unmount();
+  });
+});
+
+describe.each([
+  [80, 24],
   [120, 40],
   [200, 60],
 ])("stack at %dx%d", (columns, rows) => {

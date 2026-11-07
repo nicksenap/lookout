@@ -1,5 +1,6 @@
 import { ask } from "../ask/ask.ts";
 import { buildCards, untouchedAreas } from "../cards/build.ts";
+import { markMentions } from "../cards/mention.ts";
 import { proposeSplits, type Splits } from "../cards/split.ts";
 import { writeCards } from "../cards/write.ts";
 import type { Config } from "../dispatch/config.ts";
@@ -263,13 +264,17 @@ export class LocalSession implements ReviewSession {
     const claims = previous?.claims ?? (this.opts.evidence ? extractClaims(changeSet.intent) : []);
     const door = detectDoor(changeSet, authorDoor(changeSet.intent, claims));
     const classification = classify(changeSet, policy, door.computed === "one-way");
-    const cards = attachDoorSignals(changeSet, markTests(changeSet, buildCards(changeSet, policy, this.splits)), door.signals);
+    const cards = markMentions(
+      changeSet,
+      attachDoorSignals(changeSet, markTests(changeSet, buildCards(changeSet, policy, this.splits)), door.signals),
+    );
     const radius = initialRadius(classification.areas, claims.find((c) => c.section === "radius")?.text);
     const review: Review = {
       changeSet,
       classification,
       verdict: evaluate(classification, policy),
       cards: applyClaims(cards, claims),
+      unmentionedCount: cards.filter((card) => !card.mentioned).length,
       untouched: untouchedAreas(changeSet, policy),
       claims: claims.map((c) => (c.section === "door" ? { ...c, ...judgeDoorClaim(door.author, door) } : c)),
       door,

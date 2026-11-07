@@ -331,6 +331,7 @@ describe("groundClaims", () => {
       score: 0,
       claimIds: [],
       unmentioned: false,
+      mentioned: true,
       testsTouched: false,
       questions: [],
       ...extra,

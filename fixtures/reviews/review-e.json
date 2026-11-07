@@ -113,6 +113,7 @@
       "score": 0.189,
       "claimIds": [],
       "unmentioned": false,
+      "mentioned": true,
       "testsTouched": false,
       "questions": [],
       "blockKind": "config",
@@ -137,5 +138,6 @@
   "dispatches": [],
   "rankedBy": "rules+openai:gpt-6-luna",
   "evidence": true,
-  "exchanges": []
+  "exchanges": [],
+  "unmentionedCount": 0
 }

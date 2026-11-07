@@ -122,10 +122,11 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   const files = filesOf(ctx.review, card);
   const badges = [
     COLOR_LABEL[card.color],
+    card.mentioned ? undefined : "body: no",
     card.kind,
     ...card.labels.filter((l) => l !== "test" || card.kind !== "test"),
     ...card.areas.map((a) => `${a}/*`),
-  ];
+  ].filter(Boolean);
   const evidence = card.fixed ? [] : evidenceBadges(ctx.review, card);
   const right = [plural(card.blockIds.length, "edit"), plural(files.length, "file")].join(" · ");
   const badgeSegs: Segment[] = [
