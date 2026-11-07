@@ -64,6 +64,18 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged"
 
 ---
 
+## Review recall (step 27, baseline on main d0b7a3c)
+
+`bun run recall <repo-dir> [--prs N | --pr A,B,C] [--json]`: for merged PRs with human inline review comments, the share of comments whose card lookout showed amber/red or with a verified risk line. One comment per thread (the first human one); bots are skipped; file-level comments and lines outside every hunk count as unmapped. Inputs are cached in `~/.cache/lookout/recall/`, model calls in the rank cache: a re-run after a rule change takes seconds. This number replaces the persona gate.
+
+Baseline, the probe repo, 15 most recent merged PRs with human inline comments (33 scanned):
+
+| comments | mapped | pointed | missed | unmapped | recall | top-3 share |
+|---|---|---|---|---|---|---|
+| 33 | 32 (31 on an edited line, 1 on context) | 24 (18 amber, 6 red) | 8 | 1 | **0.75** | 0.75 |
+
+All eight misses are green cards: seven are docs cards (design and workflow documents), one a test card. No miss is a green behaviour card. Open: whether a document that defines behaviour (a plan, a workflow an agent follows) should be amber; a blanket docs rule would buy recall and cost the colour its meaning.
+
 ## Re-probe after steps 23–26 (2026-11-07, main e66bd23)
 
 Same five PRs, `--json`, read against the first probe (P1–P5 = 2/4/9/29/56 files):
