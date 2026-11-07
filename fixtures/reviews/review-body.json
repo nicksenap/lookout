@@ -6068,56 +6068,9 @@
   },
   "cards": [
     {
-      "id": "a9371a3c1b54",
-      "title": "dispatch.test.ts +2 more · must, error",
+      "id": "27358701b7b5",
+      "title": "main.ts +13 more · err, Result",
       "color": "red",
-      "kind": "test",
-      "areas": [],
-      "labels": [
-        "test"
-      ],
-      "blockIds": [
-        "24d815a6af8f",
-        "9f727cb21131",
-        "5a1ddd1b19f9",
-        "25f0f3269825",
-        "68dcdda1601c",
-        "987c94b568d1",
-        "cd5e17ce305f",
-        "9fadd4b0f28a",
-        "bdd3e2539a93",
-        "a94eca321bfc",
-        "2e68448d72a9",
-        "9f8ebc2a2ae3",
-        "d638b86ef787",
-        "1872f6f0c56f",
-        "46cb7cdaefac",
-        "03214d4525f8",
-        "6072c52b1735",
-        "a35de0b33278",
-        "385e3e3c7da2"
-      ],
-      "files": [
-        "test/dispatch.test.ts",
-        "test/policy.test.ts",
-        "test/sources.test.ts"
-      ],
-      "attention": "suspicious",
-      "score": 0.728,
-      "claimIds": [],
-      "unmentioned": false,
-      "mentioned": true,
-      "testsTouched": false,
-      "questions": [],
-      "blockKind": "test",
-      "covers": [
-        "50b86de6e77e"
-      ]
-    },
-    {
-      "id": "50b86de6e77e",
-      "title": "main.ts +11 more · err, Result",
-      "color": "amber",
       "kind": "logic",
       "areas": [],
       "labels": [
@@ -6183,6 +6136,17 @@
         "d421a2ba5a26",
         "ce73b93dd416",
         "e6cffca3ea74",
+        "24d815a6af8f",
+        "25f0f3269825",
+        "68dcdda1601c",
+        "987c94b568d1",
+        "9fadd4b0f28a",
+        "bdd3e2539a93",
+        "a94eca321bfc",
+        "9f8ebc2a2ae3",
+        "d638b86ef787",
+        "1872f6f0c56f",
+        "385e3e3c7da2",
         "f64ddc7b1466"
       ],
       "files": [
@@ -6197,16 +6161,52 @@
         "src/sources/git.ts",
         "src/sources/github.ts",
         "src/sources/resolve.ts",
-        "test/dispatch.test.ts"
+        "test/dispatch.test.ts",
+        "test/policy.test.ts",
+        "test/sources.test.ts"
       ],
-      "attention": "needs-eyes",
-      "score": 0.596,
+      "attention": "suspicious",
+      "score": 0.728,
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
       "testsTouched": true,
       "questions": [],
       "blockKind": "behavior"
+    },
+    {
+      "id": "cf4e691ac315",
+      "title": "dispatch.test.ts +2 more",
+      "color": "green",
+      "kind": "test",
+      "areas": [],
+      "labels": [
+        "test"
+      ],
+      "blockIds": [
+        "9f727cb21131",
+        "5a1ddd1b19f9",
+        "cd5e17ce305f",
+        "2e68448d72a9",
+        "46cb7cdaefac",
+        "03214d4525f8",
+        "6072c52b1735",
+        "a35de0b33278"
+      ],
+      "files": [
+        "test/dispatch.test.ts",
+        "test/policy.test.ts",
+        "test/sources.test.ts"
+      ],
+      "attention": "needs-eyes",
+      "score": 0.579,
+      "claimIds": [],
+      "unmentioned": false,
+      "mentioned": true,
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "test",
+      "covers": []
     },
     {
       "id": "4c078e0cac32",

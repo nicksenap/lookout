@@ -3866,13 +3866,14 @@
   },
   "cards": [
     {
-      "id": "496a927d49ca",
-      "title": "tier-survey.ts +5 more · policy, base",
+      "id": "79e6ab8ad591",
+      "title": "tier-survey.ts +6 more · policy, base",
       "color": "amber",
       "kind": "logic",
       "areas": [],
       "labels": [
-        "added"
+        "added",
+        "test"
       ],
       "blockIds": [
         "c37de64686c8",
@@ -3894,7 +3895,9 @@
         "0eedd61cb429",
         "f86149d42fef",
         "cf24e823f071",
-        "a1f98dfb93fe"
+        "a1f98dfb93fe",
+        "9fc05c1acd8c",
+        "cd9787e8adf7"
       ],
       "files": [
         "scripts/tier-survey.ts",
@@ -3902,7 +3905,8 @@
         "src/core/types.ts",
         "src/dispatch/config.ts",
         "src/policy/evaluate.ts",
-        "src/policy/schema.ts"
+        "src/policy/schema.ts",
+        "test/dispatch.test.ts"
       ],
       "attention": "needs-eyes",
       "score": 0.73,
@@ -3940,13 +3944,13 @@
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
-      "testsTouched": true,
+      "testsTouched": false,
       "questions": [],
       "blockKind": "types"
     },
     {
-      "id": "ba8519f20d6e",
-      "title": "Test policy classification and evaluation",
+      "id": "1438a0484412",
+      "title": "dispatch.test.ts +1 more · DEFAULT_POLICY, classify",
       "color": "green",
       "kind": "test",
       "areas": [],
@@ -3955,8 +3959,6 @@
         "test"
       ],
       "blockIds": [
-        "9fc05c1acd8c",
-        "cd9787e8adf7",
         "5454929e3ca4",
         "f2b87b37b7fc"
       ],
@@ -3972,11 +3974,7 @@
       "testsTouched": false,
       "questions": [],
       "blockKind": "test",
-      "covers": [
-        "496a927d49ca",
-        "b246e861bf19"
-      ],
-      "paragraph": "`dispatch.test.ts` now builds each `Review` with `classification` from `classify` and `verdict` from `evaluate`, and supplies `DEFAULT_POLICY` in test configs. New `policy.test.ts` cases cover tier and human-count evaluation, change-kind and area classification, diff classification, schema errors, and global/repository config layering."
+      "covers": []
     },
     {
       "id": "6f018a164a97",
@@ -3996,7 +3994,7 @@
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
-      "testsTouched": true,
+      "testsTouched": false,
       "questions": [],
       "blockKind": "types"
     },
@@ -4018,7 +4016,7 @@
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
-      "testsTouched": true,
+      "testsTouched": false,
       "questions": [],
       "blockKind": "config",
       "paragraph": "Exports `REPO_CONFIG_NAME` with the value `.lookout.toml` from `src/dispatch/config.ts`."

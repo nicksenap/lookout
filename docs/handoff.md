@@ -77,6 +77,23 @@ Five fresh PRs of one production repo (P1–P5, 2/4/9/29/56 files; ids in `~/.ca
 
 Decisions: attention outranks a path area (step 23); tests join the card they pin before splitting (24); the model may add a risk line and raise to amber, never lower (25); body-vs-diff is deterministic and replaces model `unmentioned` on the default path (26). Timing is not a target: 44 s with a progress bar is acceptable.
 
+### Test ownership (issue #18, PR #24 in lookout)
+
+Tests are homed after the split, against final concerns: a test block whose added lines name a changed identifier of exactly one behaviour card joins it; when several cards share the name (a tool both the prompt card and the implementation card mention), the test file's own stem decides among them; still ambiguous or unmatched tests keep the old kind/hunk/shared-identifier grouping. Test-only cards never split. Comment-only blocks in code files and lone `type` imports join their file's owner card across kinds; `.md` edits that differ only in whitespace or punctuation are inert. `testsTouched` and `covers` read the final membership. The pre-split attach and a per-directory fallback were tried first and dropped: pinning against one coarse blob sent tests to arbitrary concerns (PR A split purity .80 → .59) and the directory fallback merged tests of unrelated concerns.
+
+`EXTRA=--split bun run bench ~/.cache/lookout/bench/reviews`, before → after, same saved change sets, revised own 3ddc924 target on both sides (its dispatch fixture edits now sit with the production shape they pin; its whole-file policy test spans several concerns and stays apart):
+
+| target | split cards | split purity |
+|---|---|---|
+| own b015e48 | 10 → 10 | **0.94 → 0.82** |
+| own 3ddc924 | 7 → 7 | 0.67 → 0.63 |
+| own 34fc149 | 7 → 7 | 0.83 → 0.81 |
+| PR A | 11 → 9 | 0.80 → 0.85 |
+| PR B | 6 → 6 | 0.53 → 0.53 |
+| PR C | 9 → 8 | 0.84 → 0.85 |
+
+Accepted with the own b015e48 drop recorded: that commit is an 80-block "return Result everywhere" refactor judged by subsystem, and some of its tests now join a neighbouring subsystem's card. Follow-up: list the mis-pinned test blocks there and see whether the stem rule or the judge is wrong. Live, read-only, with steps 23/25/26 on main: P3 14 → **4 cards** (two behaviour cards each holding their tests, one docs, grey), P2 7 → **4** (two behaviour, one test, one docs; the two same-file behaviour groups share no changed identifier and a model re-merge is out of scope), P5 34 → **19**, no lone-import card, the punctuation-only block is in verified clean.
+
 ---
 
 ## v1 state (steps 1–13), kept for reference

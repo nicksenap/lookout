@@ -512,67 +512,40 @@
   },
   "cards": [
     {
-      "id": "6683392002b4",
-      "title": "Load User Environment Variables",
+      "id": "5b118eb90ad1",
+      "title": "env.ts +2 more · loadUserEnv, env",
       "color": "red",
       "kind": "additive",
       "areas": [],
       "labels": [
         "added",
-        "sensitive"
+        "sensitive",
+        "test"
       ],
       "blockIds": [
         "1ce0399af91a",
         "44f669c88415",
-        "4ea110a6b496"
+        "4ea110a6b496",
+        "d3ed11406a2d",
+        "a3dd63791f18"
       ],
       "files": [
         "src/cli/env.ts",
-        "src/cli/main.ts"
+        "src/cli/main.ts",
+        "test/sources.test.ts"
       ],
       "attention": "needs-eyes",
       "score": 0.739,
       "claimIds": [
         "77161da6d2b4",
-        "0aab16626f91"
+        "0aab16626f91",
+        "66b5e8bfb819"
       ],
       "unmentioned": false,
       "mentioned": true,
       "testsTouched": true,
       "questions": [],
-      "blockKind": "behavior",
-      "paragraph": "`main()` now calls `loadUserEnv()` before parsing CLI arguments. `loadUserEnv()` reads `~/.config/lookout/.env`, accepts `KEY=value` and `export KEY=value` lines, and sets only variables not already present in the environment."
-    },
-    {
-      "id": "eb900294f33a",
-      "title": "Test user environment file loading",
-      "color": "green",
-      "kind": "test",
-      "areas": [],
-      "labels": [
-        "test"
-      ],
-      "blockIds": [
-        "d3ed11406a2d",
-        "a3dd63791f18"
-      ],
-      "files": [
-        "test/sources.test.ts"
-      ],
-      "attention": "routine",
-      "score": 0.294,
-      "claimIds": [
-        "66b5e8bfb819"
-      ],
-      "unmentioned": false,
-      "mentioned": true,
-      "testsTouched": false,
-      "questions": [],
-      "blockKind": "test",
-      "covers": [
-        "6683392002b4"
-      ],
-      "paragraph": "Adds a `user env file` test for `loadUserEnv`, verifying it parses quoted `KEY=value` lines and `export` assignments, ignores comments and malformed lines, preserves existing environment values, and does not throw when the file is missing."
+      "blockKind": "behavior"
     }
   ],
   "untouched": [
@@ -589,7 +562,7 @@
       "section": "summary",
       "status": "supported",
       "confidence": 0.93,
-      "cardId": "6683392002b4"
+      "cardId": "5b118eb90ad1"
     },
     {
       "id": "0aab16626f91",
@@ -597,7 +570,7 @@
       "section": "summary",
       "status": "contradicted",
       "confidence": 0.88,
-      "cardId": "6683392002b4"
+      "cardId": "5b118eb90ad1"
     },
     {
       "id": "33012bf9795c",
@@ -612,7 +585,7 @@
       "section": "evidence",
       "status": "supported",
       "confidence": 0.9,
-      "cardId": "eb900294f33a"
+      "cardId": "5b118eb90ad1"
     },
     {
       "id": "1c75950a7f18",

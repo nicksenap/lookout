@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCards } from "../src/cards/build.ts";
-import { changedIdentifiers, groupBlocks, mechanicalText } from "../src/cards/group.ts";
+import { changedIdentifiers, groupBlocks, joinTests, mechanicalText } from "../src/cards/group.ts";
 import { type Prose, parseProse, prosePrompt, unsupportedNames, writeCards } from "../src/cards/write.ts";
 import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
@@ -62,14 +62,79 @@ describe("groupBlocks", () => {
     expect(groupBlocks(allBlocks(cs(text, ["types"]))).length).toBe(1);
   });
 
-  test("blocks sharing a changed identifier merge within a kind; a different kind stays apart", () => {
+  test("a test naming one changed production group joins it without changing its kind", () => {
     const text =
       diff("src/a.ts", "@@ -1,3 +1,3 @@", [" x", "-const budget = 1;", "+const budgetPeriod = 1;", " y"]) +
       diff("src/b.ts", "@@ -1,3 +1,3 @@", [" x", "-render(a);", "+render(a, budgetPeriod);", " y"]) +
       diff("src/c.test.ts", "@@ -1,3 +1,3 @@", [" x", "-expect(1);", "+expect(budgetPeriod);", " y"]);
-    const groups = groupBlocks(allBlocks(cs(text, ["behavior", "behavior", "test"])));
-    expect(groups.map((g) => g.refs.length).sort()).toEqual([1, 2]);
-    expect(groups.find((g) => g.refs.length === 2)!.kind).toBe("behavior");
+    const groups = joinTests(groupBlocks(allBlocks(cs(text, ["behavior", "behavior", "test"]))));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.refs).toHaveLength(3);
+    expect(groups[0]!.kind).toBe("behavior");
+  });
+
+  test("ambiguous tests retain kind and identifier grouping without bridging production groups", () => {
+    const text =
+      diff("src/alpha.ts", "@@ -1 +1 @@", ["-runAlpha();", "+runAlpha(nextAlpha);"]) +
+      diff("src/beta.ts", "@@ -1 +1 @@", ["-runBeta();", "+runBeta(nextBeta);"]) +
+      diff("test/a.test.ts", "@@ -1 +1 @@", ["-expect(1);", "+expect(nextAlpha + nextBeta);"]) +
+      diff("test/b.test.ts", "@@ -50 +50 @@", ["-expect(1);", "+expect(unrelatedCase);"]) +
+      diff("other/c.test.ts", "@@ -1 +1 @@", ["-expect(1);", "+expect(unrelatedCase);"]);
+    const groups = joinTests(groupBlocks(allBlocks(cs(text, ["behavior", "behavior", "test", "test", "test"]))));
+    expect(groups.map((group) => group.refs.map((ref) => ref.file.path))).toEqual([
+      ["src/alpha.ts"],
+      ["src/beta.ts"],
+      ["test/a.test.ts"],
+      ["test/b.test.ts", "other/c.test.ts"],
+    ]);
+    expect(groups.slice(2).map((group) => group.kind)).toEqual(["test", "test"]);
+  });
+
+  test("a test naming a file stem joins its production group even when no identifier changes", () => {
+    const text =
+      diff("src/rate-limit.ts", "@@ -1 +1 @@", ["-return 10;", "+return 20;"]) +
+      diff("test/client.test.ts", "@@ -1 +1 @@", ["-expect(10);", "+test('rate-limit', () => expect(20));"]);
+    const groups = joinTests(groupBlocks(allBlocks(cs(text, ["behavior", "test"]))));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.kind).toBe("behavior");
+  });
+
+  test("a multiline import with an inline type joins the file owner of a different kind", () => {
+    const text = diff("src/deps.ts", "@@ -1,2 +1,5 @@", [
+      "-import { Client } from './client';",
+      "+import {",
+      "+  type ClientContext,",
+      "+  Client,",
+      "+} from './client';",
+      " x",
+      "@@ -40,2 +43,2 @@",
+      "-return connect();",
+      "+return connect(context);",
+      " y",
+    ]);
+    const groups = groupBlocks(allBlocks(cs(text, ["types", "behavior"])));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.kind).toBe("behavior");
+  });
+
+  test("code documentation joins its behaviour owner without taking ownership of tests", () => {
+    const text =
+      diff("src/client.ts", "@@ -1,2 +1,2 @@", [
+        "-// The old request path.",
+        "+// The new request path.",
+        " x",
+        "@@ -40,2 +40,2 @@",
+        "-return fetch(firstBudget);",
+        "+return fetch(nextBudget);",
+        " y",
+        "@@ -80,2 +80,2 @@",
+        "-return cache(oldKey);",
+        "+return cache(nextKey);",
+        " z",
+      ]) + diff("test/client.test.ts", "@@ -1 +1 @@", ["-expect(1);", "+expect(nextBudget);"]);
+    const groups = joinTests(groupBlocks(allBlocks(cs(text, ["docs", "behavior", "behavior", "test"]))));
+    expect(groups.map((group) => group.refs.map((ref) => ref.block.kind))).toEqual([["docs", "behavior", "test"], ["behavior"]]);
+    expect(groups[0]!.kind).toBe("behavior");
   });
 
   test("an orphan edit (no identifiers) joins the previous block of its hunk", () => {

@@ -2,7 +2,7 @@ import { allBlocks, type BlockRef } from "../core/blocks.ts";
 import { ATTENTION_ORDER, type Attention, type Card, type CardColor, type ChangeSet, COLOR_ORDER } from "../core/types.ts";
 import { areasOf, kindOf } from "../policy/evaluate.ts";
 import type { Policy } from "../policy/schema.ts";
-import { changedIdentifiers, type Group, groupBlocks, isMechanical, mechanicalText } from "./group.ts";
+import { changedIdentifiers, type Group, groupBlocks, isMechanical, joinTests, markTestGroups, mechanicalText } from "./group.ts";
 import type { Splits } from "./split.ts";
 
 const rank = (a: Attention) => ATTENTION_ORDER.indexOf(a);
@@ -24,41 +24,44 @@ export function buildCards(changeSet: ChangeSet, policy: Policy, splits: Splits 
   const inert = refs.filter((r) => r.block.attention === "inert");
 
   const haveKinds = live.length > 0 && live.every((r) => r.block.kind !== undefined);
+  const groups: Group[] = haveKinds
+    ? joinTests(groupBlocks(live).flatMap((group) => applySplit(group, splits)))
+    : [...live.reduce((m, r) => m.set(r.file.path, [...(m.get(r.file.path) ?? []), r]), new Map<string, BlockRef[]>())].map(([, refs]) => ({
+        refs,
+        topIdentifiers: [],
+      }));
   const cards = haveKinds
-    ? groupBlocks(live)
-        .flatMap((g) => applySplit(g, splits))
-        .map((g) => {
-          const card = makeCard(cardId(g.refs.map((r) => r.block.id)), g.hint ?? titleFor(g.refs, g.topIdentifiers), g.refs, policy);
-          if (g.kind) card.blockKind = g.kind;
-          if (g.hint) card.hint = g.hint;
-          if (isMechanical(g.kind)) {
-            const text = mechanicalText(g);
-            card.title = text.title;
-            card.paragraph = text.paragraph;
-            card.mechanical = true;
-          }
-          // The floor depends on the kind the model gave the group, so it is set once that is known.
-          card.color = colorFloor(card);
-          return card;
-        })
-    : [...live.reduce((m, r) => m.set(r.file.path, [...(m.get(r.file.path) ?? []), r]), new Map<string, BlockRef[]>())].map(
-        ([path, group]) => makeCard(cardId(group.map((r) => r.block.id)), path, group, policy),
-      );
-  cards.sort(compareCards);
+    ? groups.map((g) => {
+        const card = makeCard(cardId(g.refs.map((r) => r.block.id)), g.hint ?? titleFor(g.refs, g.topIdentifiers), g.refs, policy);
+        if (g.kind) card.blockKind = g.kind;
+        if (g.hint) card.hint = g.hint;
+        if (isMechanical(g.kind)) {
+          const text = mechanicalText(g);
+          card.title = text.title;
+          card.paragraph = text.paragraph;
+          card.mechanical = true;
+        }
+        // The floor depends on the kind the model gave the group, so it is set once that is known.
+        card.color = colorFloor(card);
+        return card;
+      })
+    : groups.map((group) => makeCard(cardId(group.refs.map((ref) => ref.block.id)), group.refs[0]!.file.path, group.refs, policy));
+  const marked = markTestGroups(groups, cards);
+  marked.sort(compareCards);
 
   if (inert.length > 0)
-    cards.push({
+    marked.push({
       ...makeCard("clean", `verified clean · ${inert.length} edit${inert.length === 1 ? "" : "s"}`, inert, policy),
       color: "grey",
       fixed: "clean",
     });
-  return cards;
+  return marked;
 }
 
 /** Replace a group by its concerns when a split exists for it; every block keeps exactly one home. */
 function applySplit(group: Group, splits: Splits): Group[] {
   const partition = splits.get(cardId(group.refs.map((r) => r.block.id)));
-  if (!partition) return [group];
+  if (!partition || group.kind === "test") return [group];
   const byId = new Map(group.refs.map((r) => [r.block.id, r]));
   return partition.map((concern) => {
     const refs = concern.blockIds.map((id) => byId.get(id)).filter((r): r is BlockRef => r !== undefined);

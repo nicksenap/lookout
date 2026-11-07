@@ -1,4 +1,4 @@
-import { isolateBlock, mapBlocks } from "../core/blocks.ts";
+import { blockLines, isolateBlock, mapBlocks } from "../core/blocks.ts";
 import type { Attention, ChangeSet, EditBlock, FileChange, Hunk } from "../core/types.ts";
 import { type CodeLang, LANGS, type LexResult, lex, type StartState } from "./lexer.ts";
 
@@ -187,7 +187,7 @@ export function languageOf(path: string): Lang | undefined {
 
 // ---------------------------------------------------------------- content
 
-export type ContentClass = "whitespace-only" | "comment-only";
+export type ContentClass = "whitespace-only" | "comment-only" | "punctuation-only";
 
 /** Comments that tools or policy read (`// @tag`, lint/type pragmas, build tags): they count as code. */
 const DIRECTIVE_RE =
@@ -302,11 +302,32 @@ const LABEL_WEIGHTS: Record<string, number> = {
   generated: -0.5,
 };
 
+/** Markdown trivia compares changed lines only; Unicode words and numbers must survive unchanged. */
+function markdownTrivia(file: FileChange, hunk: Hunk, block: EditBlock): ContentClass | undefined {
+  if (!/\.md$/i.test(file.path)) return undefined;
+  const lines = blockLines(hunk, block);
+  const oldText = lines
+    .filter((line) => line.kind === "del")
+    .map((line) => line.text)
+    .join("\n");
+  const newText = lines
+    .filter((line) => line.kind === "add")
+    .map((line) => line.text)
+    .join("\n");
+  const withoutSpace = (text: string) => text.replace(/\s/gu, "");
+  if (withoutSpace(oldText) === withoutSpace(newText)) return "whitespace-only";
+  const withoutTrivia = (text: string) => text.replace(/[\s\p{P}]/gu, "");
+  return withoutTrivia(oldText) === withoutTrivia(newText) ? "punctuation-only" : undefined;
+}
+
 /** Rank one edit block. Content classification sees the whole hunk for lexer context but only this block's change. */
 export function rankBlockByRules(file: FileChange, hunk: Hunk, block: EditBlock): RuleResult {
   const labels = pathLabels(file.path);
   // Creating or deleting a file is itself a change, whatever the block contains.
-  const content = file.status === "added" || file.status === "deleted" ? undefined : classifyContent(file.path, isolateBlock(hunk, block));
+  const content =
+    file.status === "added" || file.status === "deleted"
+      ? undefined
+      : (markdownTrivia(file, hunk, block) ?? classifyContent(file.path, isolateBlock(hunk, block)));
   if (content) labels.push(content);
   if (file.status !== "modified") labels.push(file.status);
 
