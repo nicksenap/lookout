@@ -107,6 +107,27 @@ test("a + line naming only what removed lines name fails, so a removal cannot be
   ]);
 });
 
+test("only a lowercase word in angle brackets is a placeholder; a type name in brackets must be in the edits", () => {
+  const added = "explorer.listExplorerViews(): Promise<View> // viewSaved:id";
+  const source = { edits: `+${added}`, added, removed: "" };
+  expect(sketchProblems("+  explorer.listExplorerViews → viewSaved:<id>", source)).toEqual([]);
+  expect(sketchProblems("+  explorer.listExplorerViews → Promise<View>", source)).toEqual([]);
+  expect(sketchProblems("+  explorer.listExplorerViews → <InventedType>", source)).toEqual([
+    "`+  explorer.listExplorerViews → <InventedType>` names InventedType, which the edits do not show",
+  ]);
+});
+
+test("a sketch drawn without a check is not served from the cache once a check model is available", async () => {
+  const shared = cache();
+  const opts = { modelSpec: "mock:w", cache: shared, writer: writer([good, good]) };
+  const first: Sketch[] = [];
+  await sketchCards(changeSet, [card()], opts, (_id, s) => first.push(s));
+  const second: Sketch[] = [];
+  await sketchCards(changeSet, [card()], { ...opts, model: model([0.9]) }, (_id, s) => second.push(s));
+  expect(first).toEqual([{ sketch: good }]);
+  expect(second).toEqual([{ sketch: good, sketchCheck: 0.9 }]);
+});
+
 test("a 13-line sketch or a line over 100 characters fails", () => {
   const source = sketchSource(changeSet, card());
   const lines = Array.from({ length: 13 }, () => "   loadUserEnv");

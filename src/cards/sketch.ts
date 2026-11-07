@@ -102,8 +102,8 @@ export function parseSketch(text: string): string {
 
 // One-letter names (i, m) say nothing a gate could check.
 const identifiers = (text: string): string[] => (text.match(/[A-Za-z_$][\w$]*/g) ?? []).filter((w) => w.length > 1);
-// `<id>` is a placeholder unless the code names it: `Promise<void>` still has to be in the edits.
-const placeholders = (line: string): string[] => [...line.matchAll(/<([A-Za-z_$][\w$]*)>/g)].map((m) => m[1]!);
+// A lowercase word in angle brackets (`<id>`, `<uuid>`) is a placeholder; `<Config>` names a type and must be in the edits.
+const placeholders = (line: string): string[] => [...line.matchAll(/<([a-z]+)>/g)].map((m) => m[1]!);
 
 /**
  * The rules half of the sketch gate, pure: the offending lines, each with its reason; empty means the
@@ -159,7 +159,8 @@ export async function sketchCards(
   let touched = false;
   await Promise.all(
     todo.map(async (card) => {
-      const key = `${SKETCH_VERSION}:${card.id}`;
+      // Whether a check ran is in the key: a sketch drawn by rules alone is not served as checked once a check model resolves.
+      const key = `${SKETCH_VERSION}:${check ? (opts.checkSpec ?? "check") : "rules"}:${card.id}`;
       const cached = cache.get(opts.modelSpec, key, isSketch);
       const result = cached
         ? { ok: true as const, value: cached }
