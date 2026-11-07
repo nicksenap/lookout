@@ -1,0 +1,58 @@
+diff --git a/src/cards/build.ts b/src/cards/build.ts
+index f462564..2cfefc4 100644
+--- a/src/cards/build.ts
++++ b/src/cards/build.ts
+@@ -119,14 +119,13 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):
+ }
+ 
+ /**
+- * Rule-derived color. The model step (plan pipeline step 8) may only raise a card above
+- * this floor, never lower it; and only rules may call a card grey.
++ * Rule-derived color floor. Rules set the floor; the model may only raise attention,
++ * never lower it; and only rules may call a card grey.
+  *
+- * A sensitive area reddens a card only when the card changes behaviour. Tests, mechanical
+- * edits and docs inside `auth/` stay green (the area badge still shows); config plumbing
+- * there is amber. Measured on a production PR where the old rule painted 5 of 8 cards red
+- * and 3 of those were a test card, a rename and a type import. The tier floors in
+- * `policy/evaluate.ts` are untouched: a touched area still means more humans.
++ * A sensitive area makes routine behaviour amber and needs-eyes behaviour red. Tests,
++ * mechanical edits and docs inside `auth/` stay green (the area badge still shows);
++ * config plumbing there is amber. The tier floors in `policy/evaluate.ts` are untouched:
++ * a touched area still means more humans.
+  */
+ export function colorFloor(
+   card: Pick<Card, "attention" | "areas" | "labels" | "kind"> & Partial<Pick<Card, "blockKind" | "mechanical">>,
+@@ -138,7 +137,7 @@ export function colorFloor(
+   const docs = card.kind === "docs" || card.blockKind === "docs";
+   const config = card.kind === "deps" || card.kind === "config" || card.kind === "ci";
+   const plumbing = config || card.blockKind === "config";
+-  if (sensitive && !test && !docs && !plumbing && !card.mechanical) return "red";
++  if (sensitive && !test && !docs && !plumbing && !card.mechanical) return card.attention === "needs-eyes" ? "red" : "amber";
+   if (sensitive && plumbing) return "amber";
+   if (card.attention === "needs-eyes" && !test && !docs && !card.mechanical) return "amber";
+   if (config) return "amber";
+@@ -146,18 +145,19 @@ export function colorFloor(
+ }
+ 
+ /**
+- * Riskiest first: colour, then behaviour before mechanical and docs, then attention, then the
+- * larger card (more to decide), then score; stable for equal keys.
++ * Riskiest first: colour, then attention, then behaviour before mechanical and docs,
++ * then configuration switches, then the larger card (more to decide), then score;
++ * stable for equal keys.
+  */
+ export function compareCards(a: Card, b: Card): number {
+   const skim = (c: Card) => (c.mechanical || c.kind === "docs" || c.blockKind === "docs" ? 1 : 0);
+-  // A configuration switch is one line that decides whether the rest ships; it reads first among its colour.
++  // A configuration switch decides whether the rest ships; it reads first at equal colour, attention and skim.
+   const toggle = (c: Card) => (c.kind === "config" || c.kind === "ci" || c.kind === "deps" ? 0 : 1);
+   return (
+     COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) ||
++    rank(b.attention) - rank(a.attention) ||
+     skim(a) - skim(b) ||
+     toggle(a) - toggle(b) ||
+-    rank(b.attention) - rank(a.attention) ||
+     b.blockIds.length - a.blockIds.length ||
+     b.score - a.score
+   );

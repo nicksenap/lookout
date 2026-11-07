@@ -26,6 +26,7 @@
     "fixtures:check": "bun scripts/refresh-fixtures.ts > /dev/null && git diff --quiet -- fixtures/reviews || (echo 'fixtures/reviews drifted from the pipeline; run bun run fixtures and commit' && git --no-pager diff --stat -- fixtures/reviews && exit 1)",
     "story": "bun stories/run.ts",
     "bench": "scripts/grouping-bench.sh",
+    "recall": "bun scripts/review-recall.ts",
     "hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
