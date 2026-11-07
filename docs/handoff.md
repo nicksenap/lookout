@@ -64,6 +64,20 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged"
 
 ---
 
+## Re-probe after steps 23–26 (2026-11-07, main e66bd23)
+
+Same five PRs, `--json`, read against the first probe (P1–P5 = 2/4/9/29/56 files):
+
+| | cards | first card | risk lines | not in body | cold |
+|---|---|---|---|---|---|
+| P1 | 2 → 1 | the fix, with its test, amber by risk line | 1/1 | 0 | 6 s |
+| P2 | 6 → 4 | consent-gated EU/US writes, red, needs-eyes | 2/2 behaviour | 1 (the served-tools constant the body names only by its members) | 2 s warm |
+| P3 | 14 → 4 | the context-list removal, amber by risk line, above the prompt card | 2/2 | 0 | 2 s warm |
+| P4 | 13 → 12 | the Convention refusal, red, needs-eyes; the prompt-only card is gone (joined by the tool edits) | 4/4 | 1 (date bump) | 18 s |
+| P5 | 34 → 18 | draft routing, red, suspicious; the Intercom stowaway is inert in grey | 4 of first 6 | 0 | 16 s |
+
+What the first probe called wrong is fixed on these five: the first card is the behaviour change with the highest attention on every PR; no card is a lone import, a date or punctuation (P4's `updated:` bump is still a docs card, now flagged `body: no`); every behaviour card that narrows or widens something carries a risk line and no mechanical, test or docs card does. Open: risk lines are long (one 35-word sentence reads as a paragraph in the TUI at 80 columns); P1's bug fix is amber on the risk line alone, which may be too strong for a two-file fix; own b015e48 split purity .94 → .82 (PR #24). Next: the next five merged PRs, then `scripts/review-recall.ts` (step 27).
+
 ## Probe, 2026-11-07 (why v3 is what it is)
 
 Five fresh PRs of one production repo (P1–P5, 2/4/9/29/56 files; ids in `~/.cache/lookout/bench/probe.txt`), `--json`, cold: 8/18/14/18/44 s. Full output was read against the diffs, the PR bodies and the review comments.
