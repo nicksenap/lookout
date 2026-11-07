@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Experimental_DecisionMockModelV4 } from "ai/test";
 import { buildCards, colorFloor, compareCards, untouchedAreas } from "../src/cards/build.ts";
 import { isBlob } from "../src/cards/split.ts";
+import { writeCards } from "../src/cards/write.ts";
 import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { cardPatches, LocalSession } from "../src/core/session.ts";
@@ -28,6 +29,66 @@ const diff = (path: string, header: string, body: string[]) =>
   `${[`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`, header, ...body].join("\n")}\n`;
 
 describe("buildCards", () => {
+  test.each([false, true])("lockfile-only cards get template prose without a writer (model kinds: %s)", async (haveKinds) => {
+    const files = parseDiff(diff("bun.lock", "@@ -1 +1 @@", ["-oldVersion", "+newVersion"]));
+    const ruled = applyRules({ target: "t", base: "", head: "", files });
+    const cs = haveKinds ? mapBlocks(ruled, ({ block }) => ({ ...block, kind: "behavior" })) : ruled;
+    const cards = buildCards(cs, DEFAULT_POLICY);
+    expect(cards[0]!.title).toBe("Lockfile updated");
+    expect(cards[0]!.paragraph).toBe("`bun.lock` updated.");
+    let calls = 0;
+    await writeCards(
+      cs,
+      cards,
+      {
+        modelSpec: "mock",
+        write: async () => {
+          calls++;
+          return "TITLE: Model prose\nPARAGRAPH: Model prose.";
+        },
+      },
+      () => {},
+    );
+    expect(calls).toBe(0);
+  });
+
+  test("a grouped lockfile template names every file, but a manifest mixed in keeps model prose", () => {
+    const cardsFor = (path: string) => {
+      const files = parseDiff(
+        diff("bun.lock", "@@ -1 +1 @@", ["-oldVersion", "+newVersion"]) + diff(path, "@@ -1 +1 @@", ["-oldVersion", "+newVersion"]),
+      );
+      const cs = mapBlocks(applyRules({ target: "t", base: "", head: "", files }), ({ block }) => ({
+        ...block,
+        kind: "config",
+        attention: "needs-eyes",
+      }));
+      return buildCards(cs, DEFAULT_POLICY);
+    };
+    const lockfiles = cardsFor("nested/yarn.lock");
+    expect(lockfiles).toHaveLength(1);
+    expect(lockfiles[0]!.title).toBe("Lockfiles updated");
+    expect(lockfiles[0]!.paragraph).toBe("`bun.lock`, `nested/yarn.lock` updated.");
+    const mixed = cardsFor("package.json");
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0]!.color).toBe("amber");
+    expect(mixed[0]!.paragraph).toBeUndefined();
+  });
+
+  test.each(["bun.lock", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "Cargo.lock", "poetry.lock", "uv.lock", "go.sum"])(
+    "%s-only cards stay green even with suspicious model attention in a sensitive area",
+    (name) => {
+      const files = parseDiff(diff(`src/auth/${name}`, "@@ -1 +1 @@", ["-oldPackage", "+newPackage"]));
+      const cs = mapBlocks(applyRules({ target: "t", base: "", head: "", files }), ({ block }) => ({
+        ...block,
+        kind: "behavior",
+        attention: "suspicious",
+      }));
+      const card = buildCards(cs, DEFAULT_POLICY)[0]!;
+      expect(card.color).toBe("green");
+      expect(card.attention).toBe("suspicious");
+    },
+  );
+
   test("every block is in exactly one card; inert blocks are in the clean card, which is last", async () => {
     const cs = applyRules(await fixture("user-env"));
     const cards = buildCards(cs, DEFAULT_POLICY);
@@ -147,6 +208,24 @@ describe("compareCards", () => {
     testsTouched: false,
     questions: [],
   };
+
+  test("lockfile-only cards sort with skim material despite model attention; mixed cards keep their dependency priority", () => {
+    const lockfile: Card = { ...base, id: "lockfile", color: "green", kind: "deps", files: ["bun.lock"], attention: "suspicious" };
+    const behaviour: Card = { ...base, id: "behaviour", color: "green" };
+    const docs: Card = { ...base, id: "docs", color: "green", kind: "docs", files: ["README.md"] };
+    const mechanical: Card = { ...base, id: "mechanical", color: "green", mechanical: true };
+    const clean: Card = { ...base, id: "clean", color: "grey", fixed: "clean", attention: "inert" };
+    expect([lockfile, docs, mechanical, behaviour, clean].sort(compareCards).map((card) => card.id)).toEqual([
+      "behaviour",
+      "lockfile",
+      "docs",
+      "mechanical",
+      "clean",
+    ]);
+    const mixed: Card = { ...lockfile, id: "mixed", files: ["package.json", "bun.lock"], attention: "routine" };
+    expect(colorFloor(mixed)).toBe("amber");
+    expect([docs, behaviour, mixed].sort(compareCards).map((card) => card.id)).toEqual(["mixed", "behaviour", "docs"]);
+  });
 
   test.each([
     ["docs", { kind: "docs" }],
