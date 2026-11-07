@@ -57,8 +57,6 @@ export function mapComment(changeSet: ChangeSet, anchor: CommentAnchor): { block
   return nearest && { blockId: nearest.id, on: distance(nearest) === 0 ? "edit" : "context" };
 }
 
-if (import.meta.main) await main();
-
 async function main() {
   const args = process.argv.slice(2);
   const repoDir = args[0];
@@ -202,3 +200,6 @@ function printTable(rows: ReturnType<typeof scorePr>[], summary: ReturnType<type
     `\nrecall ${summary.pointed}/${summary.mapped} = ${summary.recall ?? "-"}, top-3 share ${summary.top3Share ?? "-"}, unmapped ${summary.unmapped} (${summary.prs} PRs, ${summary.comments} comments)`,
   );
 }
+
+// Last, so every module-level constant above is initialised before main reads it.
+if (import.meta.main) await main();
