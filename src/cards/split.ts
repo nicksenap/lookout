@@ -4,6 +4,7 @@ import type { Card, ChangeSet } from "../core/types.ts";
 import { RankCache } from "../rank/cache.ts";
 import { type Env, resolveWriter, writeText } from "../rank/model.ts";
 import { cardId } from "./build.ts";
+import { isTestBlock } from "./group.ts";
 
 /** Partition of a blob card's block ids into titled concerns, keyed by the blob's card id. */
 export type Splits = Map<string, Concern[]>;
@@ -17,7 +18,7 @@ export const BLOB_FILES = 3;
 
 /** A behaviour card too big to read as one decision. */
 export function isBlob(changeSet: ChangeSet, card: Card): boolean {
-  if (card.fixed || card.mechanical) return false;
+  if (card.fixed || card.mechanical || card.kind === "test" || card.blockKind === "test") return false;
   if (card.blockIds.length > BLOB_BLOCKS) return true;
   const ids = new Set(card.blockIds);
   return (
@@ -148,7 +149,15 @@ export async function proposeSplits(
   cards: Card[],
   opts: SplitOptions,
 ): Promise<{ splits: Splits; warning?: string }> {
-  const blobs = cards.filter((c) => isBlob(changeSet, c));
+  const refs = allBlocks(changeSet);
+  const tests = new Set(refs.filter(isTestBlock).map((ref) => ref.block.id));
+  // Initial cards already have test members; split only production ids so the final concerns decide their home.
+  const blobs = cards
+    .map((card) => {
+      const blockIds = card.blockIds.filter((id) => !tests.has(id));
+      return { ...card, id: cardId(blockIds), blockIds };
+    })
+    .filter((card) => isBlob(changeSet, card));
   const splits: Splits = new Map();
   if (blobs.length === 0) return { splits };
   const cache = opts.cache ?? new RankCache();
@@ -159,7 +168,6 @@ export async function proposeSplits(
     const model = resolved.model;
     write = (prompt) => writeText(model, prompt, 90_000);
   }
-  const refs = allBlocks(changeSet);
   let warning: string | undefined;
   let touched = false;
   const splitOne = async (card: Pick<Card, "id" | "blockIds">): Promise<Concern[] | undefined> => {

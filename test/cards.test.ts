@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Experimental_DecisionMockModelV4 } from "ai/test";
 import { buildCards, colorFloor, compareCards, untouchedAreas } from "../src/cards/build.ts";
-import { allBlocks } from "../src/core/blocks.ts";
+import { isBlob } from "../src/cards/split.ts";
+import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { cardPatches, LocalSession } from "../src/core/session.ts";
 import type { ReviewEvent } from "../src/core/store.ts";
@@ -43,6 +44,19 @@ describe("buildCards", () => {
       expect(cards.at(-1)).toBe(clean);
       expect(clean!.color).toBe("grey");
     } else expect(clean).toBeUndefined();
+  });
+
+  test("an unresolved test group remains one card even when it exceeds the blob limit", () => {
+    const files = parseDiff(
+      Array.from({ length: 9 }, (_, index) =>
+        diff(`test/case-${index}.test.ts`, "@@ -1 +1 @@", ["-expect(1);", "+expect(sharedCase);"]),
+      ).join(""),
+    );
+    const cs = mapBlocks(applyRules({ target: "t", base: "", head: "", files }), ({ block }) => ({ ...block, kind: "test" }));
+    const cards = buildCards(cs, DEFAULT_POLICY);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.covers).toEqual([]);
+    expect(isBlob(cs, cards[0]!)).toBe(false);
   });
 
   test("no inert blocks → no clean card", () => {

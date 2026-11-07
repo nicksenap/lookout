@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Experimental_DecisionMockModelV4 } from "ai/test";
-import { buildCards } from "../src/cards/build.ts";
+import { buildCards, cardId } from "../src/cards/build.ts";
+import { stemOf } from "../src/cards/group.ts";
+import { allBlocks, mapBlocks } from "../src/core/blocks.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import { LocalSession } from "../src/core/session.ts";
 import type { ReviewEvent } from "../src/core/store.ts";
@@ -23,7 +25,7 @@ import {
   parseClaimList,
 } from "../src/evidence/claims.ts";
 import { attachDoorSignals, detectDoor, doorSignals } from "../src/evidence/door.ts";
-import { markTests, stemOf } from "../src/evidence/tests.ts";
+import { markTests } from "../src/evidence/tests.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { RankCache } from "../src/rank/cache.ts";
 import { claimCardId, claimStatusId } from "../src/rank/model.ts";
@@ -369,14 +371,42 @@ describe("tests touched", () => {
     expect(stemOf("src/policy/index.ts")).toBe("policy");
   });
 
-  test("a test card covers the cards whose files it imports or shares a stem/dir with; others are untouched", async () => {
-    const cs = applyRules(await fixture("user-env"));
-    const cards = markTests(cs, buildCards(cs, DEFAULT_POLICY));
-    const by = (title: string) => cards.find((c) => c.title === title)!;
-    expect(by("src/cli/env.ts").testsTouched).toBe(true); // test/sources.test.ts imports ../src/cli/env.ts
-    expect(by("src/cli/main.ts").testsTouched).toBe(false);
-    expect(by("test/sources.test.ts").covers).toEqual([by("src/cli/env.ts").id]);
-    expect(by("test/sources.test.ts").testsTouched).toBe(false);
+  test("tests resolve against the split production concerns rather than the coarse blob", () => {
+    const ranked = applyRules({
+      target: "t",
+      base: "",
+      head: "",
+      files: parseDiff(
+        diff("src/client.ts", "@@ -1 +1 @@", ["-return fetch();", "+return clientUpdate(nextBudget);"]) +
+          diff("src/cache.ts", "@@ -1 +1 @@", ["-return cache();", "+return clientUpdate(nextKey);"]) +
+          diff("test/client.test.ts", "@@ -1 +1 @@", ["-expect(1);", "+expect(nextBudget);"]),
+      ),
+    });
+    const cs = mapBlocks(ranked, ({ block }) => ({ ...block, kind: block.labels.includes("test") ? "test" : "behavior" }));
+    const joined = markTests(cs, buildCards(cs, DEFAULT_POLICY));
+    expect(joined).toHaveLength(1);
+    expect(joined[0]!.testsTouched).toBe(true);
+    const [code, cache, testBlock] = allBlocks(cs).map((ref) => ref.block.id);
+    const split = markTests(
+      cs,
+      buildCards(
+        cs,
+        DEFAULT_POLICY,
+        new Map([
+          [
+            cardId([code!, cache!]),
+            [
+              { title: "Client", blockIds: [code!] },
+              { title: "Cache", blockIds: [cache!] },
+            ],
+          ],
+        ]),
+      ),
+    );
+    expect(split).toHaveLength(2);
+    expect(split.find((card) => card.blockIds.includes(code!))!.blockIds).toEqual([code!, testBlock!]);
+    expect(split.find((card) => card.blockIds.includes(code!))!.testsTouched).toBe(true);
+    expect(split.find((card) => card.blockIds.includes(cache!))!.testsTouched).toBe(false);
   });
 
   test("a change with no test card leaves every card untouched", () => {

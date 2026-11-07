@@ -1,5 +1,5 @@
 import { type BlockRef, blockLines } from "../core/blocks.ts";
-import type { BlockKind } from "../core/types.ts";
+import type { BlockKind, Card } from "../core/types.ts";
 import { isImport } from "../rank/mechanical.ts";
 
 const MECHANICAL: readonly BlockKind[] = ["typing-refactor", "rename", "move"];
@@ -54,12 +54,16 @@ export const isOrphan = (r: BlockRef): boolean =>
  * the model gave it. Measured on three production PRs where these formed cards of their
  * own (a lone request model as a card, "Rename in x.ts" for two `export` lines).
  */
+const isCodeDocs = (ref: BlockRef) =>
+  !ref.block.labels.includes("docs") && (ref.block.kind === "docs" || ref.block.labels.includes("comment-only"));
+
 export function isFragment(r: BlockRef): boolean {
+  if (isCodeDocs(r)) return true;
   const lines = blockLines(r.hunk, r.block)
     .filter((l) => l.kind !== "context" && l.text.trim() !== "")
     .map((l) => l.text);
   if (lines.length === 0) return false;
-  if (lines.every(isImport)) return true;
+  if (lines.every((line) => isImport(line) || /^\s*type\s+[A-Za-z_$][\w$]*\s*,?\s*$/.test(line))) return true;
   if (
     lines.every((l) =>
       /^\s*(export\s*\{[^}]*\}\s*;?\s*(from\s+['"][^'"]+['"]\s*;?)?|export\s+\*\s+from\s+['"][^'"]+['"]\s*;?|export\s*\{\s*|\}\s*;?|[A-Za-z_$][\w$]*,?)\s*$/.test(
@@ -81,7 +85,7 @@ export function isFragment(r: BlockRef): boolean {
 const isImportLike = (r: BlockRef): boolean =>
   blockLines(r.hunk, r.block)
     .filter((l) => l.kind !== "context" && l.text.trim() !== "")
-    .every((l) => isImport(l.text) || /^\s*(export\s*\{|\}\s*from\b|export\s+\*)/.test(l.text));
+    .every((l) => isImport(l.text) || /^\s*(type\s+[A-Za-z_$][\w$]*\s*,?\s*$|export\s*\{|\}\s*from\b|export\s+\*)/.test(l.text));
 
 export interface Group {
   refs: BlockRef[];
@@ -101,7 +105,74 @@ export interface Group {
  * blocks mention). Blocks with no identifiers of their own (a moved brace) join the
  * previous block of their hunk.
  */
+const dirOf = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
+const baseOf = (path: string) => path.slice(path.lastIndexOf("/") + 1);
+
+/** `src/foo/bar.test.ts` → `bar`; `src/foo/index.ts` → `foo`; `test_bar.py` → `bar`. */
+export function stemOf(path: string): string {
+  const base = baseOf(path).replace(/\.[^.]+$/, "");
+  const stem = base.replace(/\.(test|spec|stories|story|d)$/i, "").replace(/(\.|_|-)?(test|tests|spec|specs)$|^test_|^tests?[-_]/i, "");
+  return /^(index|mod|__init__|main)$/i.test(stem) ? baseOf(dirOf(path)) || stem : stem;
+}
+
+export const isTestBlock = (ref: BlockRef) => ref.block.kind === "test" || ref.block.labels.includes("test");
+
+/** Kind and ownership before splitting; tests are kept apart until production concerns are known. */
 export function groupBlocks(refs: BlockRef[], opts: { rareShare?: number; neighbourLines?: number } = {}): Group[] {
+  return [
+    ...groupByOwnership(
+      refs.filter((ref) => !isTestBlock(ref)),
+      opts,
+    ),
+    ...groupByOwnership(refs.filter(isTestBlock), opts).map((group) => ({ ...group, kind: "test" as const })),
+  ];
+}
+
+/** Home tests against final split concerns, not the coarse blob that happened to contain their names. */
+export function joinTests(groups: Group[]): Group[] {
+  const code = groups.filter((group) => group.kind !== "test");
+  const candidates = code.filter((group) => !isMechanical(group.kind) && group.kind !== "docs");
+  const names = candidates.map(
+    (group) => new Set(group.refs.filter((ref) => !isCodeDocs(ref)).flatMap((ref) => [...changedIdentifiers(ref)])),
+  );
+  const stems = candidates.map((group) => new Set(group.refs.map((ref) => stemOf(ref.file.path))));
+  const remaining = groups
+    .filter((group) => group.kind === "test")
+    .map((group) => {
+      const refs = group.refs.filter((ref) => {
+        const added = blockLines(ref.hunk, ref.block)
+          .filter((line) => line.kind === "add")
+          .map((line) => line.text)
+          .join("\n");
+        const identifierOwners = candidates.filter((_, index) => exercises(added, names[index]!));
+        const owners = identifierOwners.length > 0 ? identifierOwners : candidates.filter((_, index) => exercises(added, stems[index]!));
+        if (owners.length !== 1) return true;
+        owners[0]!.refs.push(ref);
+        return false;
+      });
+      return { ...group, refs };
+    })
+    .filter((group) => group.refs.length > 0);
+  return [...code, ...remaining];
+}
+
+/** Added test lines must name a changed identifier or a complete file stem, not just share a directory. */
+function exercises(added: string, names: Set<string>): boolean {
+  return [...names].some((name) => new RegExp(`(?:^|[^\\w$])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|[^\\w$])`, "m").test(added));
+}
+
+/** JSON test metadata reads membership after split repair; unresolved test groups cover nothing. */
+export function markTestGroups(groups: Group[], cards: Card[]): Card[] {
+  const testIds = new Set(groups.flatMap((group) => group.refs.filter(isTestBlock).map((ref) => ref.block.id)));
+  return cards.map((card) => {
+    const tests = card.blockIds.filter((id) => testIds.has(id));
+    const onlyTests = tests.length > 0 && tests.length === card.blockIds.length;
+    if (onlyTests) return { ...card, testsTouched: false, covers: [] };
+    return { ...card, testsTouched: tests.length > 0 };
+  });
+}
+
+function groupByOwnership(refs: BlockRef[], opts: { rareShare?: number; neighbourLines?: number }): Group[] {
   const rareShare = opts.rareShare ?? 1;
   const neighbourLines = opts.neighbourLines ?? 8;
   const ids = refs.map(changedIdentifiers);

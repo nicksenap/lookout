@@ -4756,13 +4756,14 @@
   },
   "cards": [
     {
-      "id": "7e5315680ac3",
-      "title": "inert-audit.ts +7 more · block, hunk",
+      "id": "a5a703f380d5",
+      "title": "inert-audit.ts +9 more · block, hunk",
       "color": "amber",
       "kind": "logic",
       "areas": [],
       "labels": [
-        "added"
+        "added",
+        "test"
       ],
       "blockIds": [
         "405f36860b83",
@@ -4802,7 +4803,13 @@
         "7f0cfd53b5d1",
         "a40599d9c777",
         "03415796b2ee",
-        "de57b34e440c"
+        "de57b34e440c",
+        "008f1854031d",
+        "ae7dbd84136d",
+        "a982b65c4911",
+        "6b13229b80a7",
+        "4c0ca3f3d98e",
+        "51f8301ea145"
       ],
       "files": [
         "scripts/inert-audit.ts",
@@ -4812,7 +4819,9 @@
         "src/core/types.ts",
         "src/rank/model.ts",
         "src/rank/rank.ts",
-        "src/rank/rules.ts"
+        "src/rank/rules.ts",
+        "test/blocks.test.ts",
+        "test/model.test.ts"
       ],
       "attention": "needs-eyes",
       "score": 0.738,
@@ -4822,41 +4831,6 @@
       "testsTouched": true,
       "questions": [],
       "blockKind": "behavior"
-    },
-    {
-      "id": "5644666f2732",
-      "title": "Test edit-block splitting and ranking",
-      "color": "green",
-      "kind": "test",
-      "areas": [],
-      "labels": [
-        "added",
-        "test"
-      ],
-      "blockIds": [
-        "008f1854031d",
-        "ae7dbd84136d",
-        "a982b65c4911",
-        "6b13229b80a7",
-        "4c0ca3f3d98e",
-        "51f8301ea145"
-      ],
-      "files": [
-        "test/blocks.test.ts",
-        "test/model.test.ts"
-      ],
-      "attention": "routine",
-      "score": 0.425,
-      "claimIds": [],
-      "unmentioned": false,
-      "mentioned": true,
-      "testsTouched": false,
-      "questions": [],
-      "blockKind": "test",
-      "covers": [
-        "7e5315680ac3"
-      ],
-      "paragraph": "Tests verify that hunks split into edit blocks with correct ranges and stable IDs, and that `isolateBlock`, `blockText`, and `deriveHunk` handle block content and aggregate rankings. Model-ranking tests now expect questions and attention scores per edit block, while checking that each hunk inherits its highest-ranked block."
     },
     {
       "id": "7bc35c9c049f",

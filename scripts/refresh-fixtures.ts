@@ -21,6 +21,7 @@ for await (const f of new Glob("*.json").scan(dir)) {
     rebuilt.reduce((best, c) =>
       overlap(c.blockIds, previous.get(oldId)!.blockIds) > overlap(best.blockIds, previous.get(oldId)!.blockIds) ? c : best,
     ).id;
+  const claims = review.claims.map((cl) => (cl.cardId && previous.has(cl.cardId) ? { ...cl, cardId: successor(cl.cardId) } : cl));
   const cards = markMentions(
     changeSet,
     rebuilt.map((c) => {
@@ -29,17 +30,17 @@ for await (const f of new Glob("*.json").scan(dir)) {
         .filter((o) => !o.fixed)
         .sort((a, b) => overlap(b.blockIds, c.blockIds) - overlap(a.blockIds, c.blockIds))[0];
       const from = exact ?? nearest;
-      const inherited = from ? { claimIds: from.claimIds, testsTouched: from.testsTouched, questions: from.questions } : {};
-      const covers = from?.covers?.map(successor).filter((id) => !rebuilt.find((x) => x.id === id)!.kind.startsWith("test"));
+      const inherited = {
+        claimIds: claims.filter((claim) => claim.cardId === c.id).map((claim) => claim.id),
+        questions: from?.questions ?? [],
+      };
       return {
         ...c,
         ...inherited,
-        ...(covers?.length ? { covers: [...new Set(covers)] } : {}),
         ...(exact ? { title: exact.title, paragraph: exact.paragraph } : {}),
       };
     }),
   );
-  const claims = review.claims.map((cl) => (cl.cardId && previous.has(cl.cardId) ? { ...cl, cardId: successor(cl.cardId) } : cl));
   const kept = cards.filter((c) => previous.has(c.id)).length;
   // Saved fixtures carry claims and questions, so they are evidence runs.
   await Bun.write(

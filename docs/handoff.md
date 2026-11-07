@@ -77,6 +77,27 @@ Five fresh PRs of one production repo (P1–P5, 2/4/9/29/56 files; ids in `~/.ca
 
 Decisions: attention outranks a path area (step 23); tests join the card they pin before splitting (24); the model may add a risk line and raise to amber, never lower (25); body-vs-diff is deterministic and replaces model `unmentioned` on the default path (26). Timing is not a target: 44 s with a progress bar is acceptable.
 
+### Test ownership follow-up (issue #18 in lookout)
+
+The planner revised the original pre-split/per-directory approach after measuring regressions. Final approach: split production blocks first, then home each test block against the final concerns. Exactly one changed-identifier match wins; only with no identifier match is a unique file-stem match used. Ambiguous/unmatched tests retain kind/hunk/shared-identifier grouping. Test-only cards never split. Code comments/docs-kind blocks and inline `type` import members join their file owner; `.md` whitespace/punctuation-only edits are inert (Unicode wording and number changes stay live). `testsTouched` and `covers` now read final membership, not another evidence heuristic.
+
+The splitter sees only production ids, including when initial cards already contain tests. Its prompt is unchanged. The fixture refresh keeps fresh test metadata and remaps claims to merged cards rather than inheriting stale associations. Own review-a/review-c/review-d card membership changed; review-b's dispatch fixture blocks were judged with the production shape they pin. Review-a/review-d targets already include their test members; the whole-file policy test in review-b spans several concerns and stays separate. All saved reviews were refreshed after rebasing onto the other three features.
+
+`bun run bench ~/.cache/lookout/bench/reviews`, raw and `EXTRA=--split`, on the **same baseline saved change sets**, with the revised own review-b target on both sides. External data was regenerated read-only and stays outside git. Entries are before → after; baseline restores the original grouping code.
+
+| target | raw cards | raw purity | split cards | split ARI | split purity | split largest |
+|---|---|---|---|---|---|---|
+| own b015e48 | 3 → 3 | 0.38 → 0.34 | 10 → 10 | 0.575 → 0.368 | **0.94 → 0.81** | 18 → 19 |
+| own 3ddc924 | 5 → 5 | 0.52 → 0.52 | 7 → 7 | 0.258 → 0.258 | 0.67 → 0.67 | 11 → 11 |
+| own 34fc149 | 4 → 3 | 0.38 → 0.30 | 7 → 7 | 0.675 → 0.675 | 0.83 → 0.83 | 11 → 11 |
+| PR A | 3 → 2 | 0.51 → 0.32 | 11 → 9 | 0.334 → 0.565 | 0.80 → 0.88 | 15 → 17 |
+| PR B | 4 → 3 | 0.35 → 0.35 | 6 → 6 | 0.177 → 0.197 | 0.53 → 0.53 | 5 → 5 |
+| PR C | 3 → 2 | 0.30 → 0.24 | 9 → 8 | 0.655 → 0.694 | 0.84 → 0.84 | 16 → 17 |
+
+**Not an accepted grouping gate:** own b015e48 purity still drops. The planner explicitly requested stopping structural iterations and opening a draft PR for that decision, not tuning targets to hide it.
+
+Final read-only live probes (card lists attached to the draft PR): P3 has **10 cards including grey / 6 live test cards** (baseline 14 / 7), so neither the original ≤7/one-test gate nor the revised ≤6 gate passes. P2 has **4 cards / one test card** (baseline 7 / 3): the planner's revised ≤4 gate passes, the original ≤3 does not. P5 has **19 cards including grey** (baseline 34), no lone-import card, and its punctuation block is in verified clean. Color/order/body/risk changes on main are included in the final probe, not changed here.
+
 ---
 
 ## v1 state (steps 1–13), kept for reference

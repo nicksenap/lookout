@@ -3909,7 +3909,7 @@
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
-      "testsTouched": true,
+      "testsTouched": false,
       "questions": [
         {
           "id": "intent",
@@ -3940,7 +3940,7 @@
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
-      "testsTouched": true,
+      "testsTouched": false,
       "questions": [],
       "blockKind": "types"
     },
@@ -3972,10 +3972,7 @@
       "testsTouched": false,
       "questions": [],
       "blockKind": "test",
-      "covers": [
-        "496a927d49ca",
-        "b246e861bf19"
-      ],
+      "covers": [],
       "paragraph": "`dispatch.test.ts` now builds each `Review` with `classification` from `classify` and `verdict` from `evaluate`, and supplies `DEFAULT_POLICY` in test configs. New `policy.test.ts` cases cover tier and human-count evaluation, change-kind and area classification, diff classification, schema errors, and global/repository config layering."
     },
     {
@@ -3996,7 +3993,7 @@
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
-      "testsTouched": true,
+      "testsTouched": false,
       "questions": [],
       "blockKind": "types"
     },
@@ -4018,7 +4015,7 @@
       "claimIds": [],
       "unmentioned": false,
       "mentioned": true,
-      "testsTouched": true,
+      "testsTouched": false,
       "questions": [],
       "blockKind": "config",
       "paragraph": "Exports `REPO_CONFIG_NAME` with the value `.lookout.toml` from `src/dispatch/config.ts`."
