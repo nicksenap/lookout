@@ -137,7 +137,8 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
     const label = card.riskUnverified ? "risk unverified" : "risk";
     for (const l of wrap(`${label}: ${card.risk}`, inner)) lines.push(row([{ text: l, dim: card.riskUnverified }]));
   }
-  if (card.paragraph && card.unverified) {
+  if (card.sketch) for (const segs of sketchLines(card, inner)) lines.push(row(segs));
+  else if (card.paragraph && card.unverified) {
     // The gate failed twice: the text is shown, but dimmed and labelled so nobody reads it as checked.
     lines.push(row([{ text: fit("paragraph unverified · read the diff", inner), color: theme.card.amber }]));
     for (const l of wrap(card.paragraph, inner)) lines.push(row([{ text: l, dim: true }]));
@@ -151,6 +152,22 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   const last = cardExchanges(ctx.review, card).at(-1);
   if (last) for (const segs of exchangeLines(last, inner, ctx.frame)) lines.push(row(segs));
   return lines;
+}
+
+/**
+ * The card's sketch, one row per line, never wrapped: a wrapped tree reads as two nodes. `+`/`-` keep
+ * their glyphs so a stripped frame reads the same; an unverified sketch is dimmed under a word label.
+ */
+export function sketchLines(card: Card, w: number): Segment[][] {
+  const head: Segment[][] = card.sketchUnverified ? [[{ text: fit("sketch unverified · read the diff", w), color: theme.card.amber }]] : [];
+  return [
+    ...head,
+    ...card
+      .sketch!.split("\n")
+      .map((l): Segment[] => [
+        { text: fit(l, w), color: l[0] === "+" ? theme.add : l[0] === "-" ? theme.del : undefined, dim: card.sketchUnverified },
+      ]),
+  ];
 }
 
 /** Expanded card: its door signals and test coverage, then the diff of its hunks with other cards' edits faded. */
@@ -184,6 +201,11 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
       for (const l of hunkRows(h, ids, w)) push(l);
     }
     push([{ text: "" }]);
+  }
+  // With a sketch above, the paragraph comes last: the shape first, the code, then the words.
+  if (card.sketch && card.paragraph) {
+    push([{ text: card.unverified ? "paragraph unverified · read the diff" : "paragraph", color, bold: true }]);
+    for (const l of wrap(card.paragraph, w)) push([{ text: l, dim: card.unverified }]);
   }
   return lines;
 }

@@ -2,6 +2,7 @@ import { ask } from "../ask/ask.ts";
 import { buildCards, compareCards, untouchedAreas } from "../cards/build.ts";
 import { bodyHasNames, markMentions } from "../cards/mention.ts";
 import { riskCards } from "../cards/risk.ts";
+import { sketchCards } from "../cards/sketch.ts";
 import { proposeSplits, type Splits } from "../cards/split.ts";
 import { writeCards } from "../cards/write.ts";
 import type { Config } from "../dispatch/config.ts";
@@ -351,7 +352,7 @@ export class LocalSession implements ReviewSession {
     const toWrite = current.cards.filter((c) => !c.fixed && !c.mechanical && !c.paragraph).length;
     let written = 0;
     if (toWrite > 0) this.progress({ phase: "writing", done: 0, total: toWrite });
-    const [wrote, extracted, risk] = await Promise.all([
+    const [wrote, extracted, risk, sketched] = await Promise.all([
       writeCards(
         current.changeSet,
         current.cards,
@@ -394,7 +395,21 @@ export class LocalSession implements ReviewSession {
           }
         },
       ),
+      sketchCards(
+        current.changeSet,
+        current.cards,
+        { modelSpec: this.opts.config.model.write, checkSpec: this.opts.config.model.decide, env: this.opts.env, cache: modelOpts.cache },
+        (id, sketch) => {
+          const patch: Partial<Card> = { ...sketch };
+          this.store.update((r) => ({ ...r, cards: r.cards.map((c) => (c.id === id ? { ...c, ...patch } : c)) }), {
+            type: "card.updated",
+            id,
+            patch,
+          });
+        },
+      ),
     ]);
+    if (sketched.warning) this.warn(sketched.warning);
     if (risk.warning) this.warn(risk.warning);
     if (wrote.warning) this.warn(wrote.warning);
     if (extracted?.warning) this.warn(extracted.warning);

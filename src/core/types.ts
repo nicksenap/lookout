@@ -176,6 +176,12 @@ export interface Card {
   riskCheck?: number;
   /** Risk failed its gate: visible but cannot raise colour. */
   riskUnverified?: boolean;
+  /** The program's shape with +/- on it, at most 12 diff-shaped lines; cards of more than two blocks only. */
+  sketch?: string;
+  /** Decisions' probability that every line of the sketch follows from the card's edits. */
+  sketchCheck?: number;
+  /** The sketch failed its gate twice: shown dimmed and labelled, not trusted. */
+  sketchUnverified?: boolean;
   /** The fixed card that collects every inert block. */
   fixed?: "clean";
   // ---- evidence (plan step 12)

@@ -249,6 +249,59 @@ describe.each([
   });
 });
 
+describe.each([
+  [80, 24],
+  [140, 45],
+])("sketches at %dx%d", (columns, rows) => {
+  test("the stack shows the sketch instead of the paragraph; expanded shows sketch, diff, then paragraph; unverified has a word label", async () => {
+    const review = await loadReview("review-a");
+    const small = review.cards.find((c) => c.id === "4c078e0cac32")!;
+    const long = `   ${"wideCall".repeat(30)}`;
+    review.cards = [
+      {
+        ...small,
+        id: "sketched",
+        title: "Sketched change",
+        sketch: " runDispatch\n+  spawnAgent\n-  oldSpawn",
+        paragraph: "The paragraph words.",
+      },
+      {
+        ...small,
+        id: "unchecked",
+        title: "Unchecked sketch",
+        sketch: `+  inventedCall\n${long}`,
+        sketchUnverified: true,
+        paragraph: "Second words.",
+      },
+    ];
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    const stack = lines(app.lastFrame());
+    const title = stack.findIndex((l) => l.includes("Sketched change"));
+    expect(stack.slice(title + 1, title + 4).map((l) => l.slice(2).trimEnd())).toEqual([" runDispatch", "+  spawnAgent", "-  oldSpawn"]);
+    expect(stack.join("\n")).not.toContain("The paragraph words.");
+    const unchecked = stack.findIndex((l) => l.includes("Unchecked sketch"));
+    expect(stack[unchecked + 1]).toContain("sketch unverified · read the diff");
+    // A long line is cut with an ellipsis on one row, never wrapped onto the next.
+    expect(stack[unchecked + 3]).toMatch(/wideCall.*…$/);
+    expect(stack[unchecked + 4] ?? "").not.toContain("wideCall");
+    expect(widest(stack)).toBeLessThanOrEqual(columns);
+    await press(app, "\r");
+    const expanded = lines(app.lastFrame());
+    const at = (frame: string[], text: string) => frame.findIndex((l) => l.includes(text));
+    expect(at(expanded, "+  spawnAgent")).toBeGreaterThan(0);
+    expect(at(expanded, "diff ·")).toBeGreaterThan(at(expanded, "+  spawnAgent"));
+    expect(widest(expanded)).toBeLessThanOrEqual(columns);
+    // The paragraph closes the expanded card, below the hunks; at 80x24 it is below the fold.
+    await press(app, "G");
+    const bottom = lines(app.lastFrame());
+    expect(at(bottom, "The paragraph words.")).toBeGreaterThan(Math.max(at(bottom, "@@"), at(bottom, "dispatch/runner.ts")));
+    app.unmount();
+  });
+});
+
 describe("stack contents", () => {
   test("cards are riskiest first and the untouched line closes the stack", async () => {
     const { screen } = await mount("review-a", 120, 50);
