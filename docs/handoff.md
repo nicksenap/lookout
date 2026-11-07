@@ -78,6 +78,18 @@ Same five PRs, `--json`, read against the first probe (P1–P5 = 2/4/9/29/56 fil
 
 What the first probe called wrong is fixed on these five: the first card is the behaviour change with the highest attention on every PR; no card is a lone import, a date or punctuation (P4's `updated:` bump is still a docs card, now flagged `body: no`); every behaviour card that narrows or widens something carries a risk line and no mechanical, test or docs card does. Open: risk lines are long (one 35-word sentence reads as a paragraph in the TUI at 80 columns); P1's bug fix is amber on the risk line alone, which may be too strong for a two-file fix; own b015e48 split purity .94 → .82 (PR #24). Next: the next five merged PRs, then `scripts/review-recall.ts` (step 27).
 
+## Out-of-sample probe, 2026-11-07 (main e66bd23)
+
+13 merged PRs none of the v3 tuning touched: 8 from the probe repo (2–17 files), 5 from a frontend monorepo (3–28 files, prose PR bodies without backticks). 58 cards, 30 behaviour. Cold 5–26 s.
+
+- **Risk lines fire on 13/30 behaviour cards (43 %), 0 unverified.** Not saturating; every one read was a true narrowing/widening (hooks returning a different id, a nullable widened, trial defaults changing which tools users can always-allow). On the 17-file "guidance only when tools available" PR and the three-card context-API PR no line fired, which is right.
+- **First card right on 10/13.** Wrong three, all rules, filed: `docs/migrations/*.md` matched the migration door path and a docs card went red and first (issue #25); `truncate` as a JSX class name matched `DESTRUCTIVE_SQL` and a mechanical move card went amber (#25); a `bun.lock`-only card is `deps`/amber/needs-eyes above tests (#26). Door signals must obey the docs/mechanical exemption `colorFloor` already has.
+- **Defensible but worth watching:** a deleted race test is red/`suspicious` and first on the scheduled-task UX fix. A reviewer would want to see it; a test card above the behaviour card is new.
+- **`not in body` is noisy on prose bodies:** 6/12 on the 28-file refactor, 4/6 on the toolbar PR, whose bodies describe the change in sentences with no paths or backticks. The matcher wants identifiers; those bodies have none. Either match title words against the body (weak) or show the count only when the body has at least one path or backticked name (honest). Decide before the header count is trusted.
+- Prose: no wrong statement found in ~25 read. One paragraph on a lockfile card over-states ("Linux package installation is affected").
+
+Verdict: direction confirmed out of sample; the three misses are rule bugs, not design. Next after #25/#26: `scripts/review-recall.ts` (step 27).
+
 ## Probe, 2026-11-07 (why v3 is what it is)
 
 Five fresh PRs of one production repo (P1–P5, 2/4/9/29/56 files; ids in `~/.cache/lookout/bench/probe.txt`), `--json`, cold: 8/18/14/18/44 s. Full output was read against the diffs, the PR bodies and the review comments.
