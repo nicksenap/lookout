@@ -70,6 +70,64 @@ describe.each([
   [80, 24],
   [140, 45],
 ])("body coverage at %dx%d", (columns, rows) => {
+  test("stack and expanded badges show only colour, kind, areas and body coverage", async () => {
+    const review = await loadReview("review-a");
+    review.cards = [
+      {
+        ...review.cards[0]!,
+        color: "red",
+        kind: "logic",
+        areas: ["auth"],
+        mentioned: false,
+        labels: ["sensitive", "added", "test", "lockfile", "generated"],
+        testsTouched: true,
+        covers: [review.cards[1]!.id],
+        doorSignals: [{ kind: "migration", path: "db/migrations/001.sql", text: "migration file changed" }],
+      },
+    ];
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    const check = () => {
+      const badge = lines(app.lastFrame()).find((line) => line.startsWith("█ RED"))!;
+      expect(badge).toContain("RED  logic · auth/* · body: no");
+      expect(badge).toContain("migration file changed");
+      expect(badge).not.toMatch(/sensitive|added|test|lockfile|generated|covers|one-way/);
+    };
+    check();
+    await press(app, "\r");
+    check();
+    app.unmount();
+  });
+
+  test("help keeps tier, humans, card count and model on its last content line", async () => {
+    const { app, session, screen } = await mount("review-a", columns, rows);
+    const review = session.snapshot();
+    await press(app, "?");
+    const bottom = screen().findIndex((line) => line.includes("└"));
+    expect(screen()[bottom - 1]).toContain("MEDIUM · 1 human · 4 cards · rules+openai:gpt-6-luna");
+    await press(app, "\t", "j");
+    const glossaryBottom = screen().findIndex((line) => line.includes("└"));
+    expect(screen()[glossaryBottom - 1]).toContain(review.rankedBy);
+    app.unmount();
+  });
+
+  test("a prose-only body hides the count even with an unmentioned card", async () => {
+    const review = await loadReview("review-body");
+    const session = new FixtureSession({
+      ...review,
+      changeSet: { ...review.changeSet, intent: { title: "Return recoverable errors", body: "Return recoverable errors as results." } },
+      bodyHasNames: false,
+    });
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    expect(lines(app.lastFrame())[0]).not.toContain("not in body");
+    expect(lines(app.lastFrame()).some((line) => line.includes("body: no"))).toBe(true);
+    app.unmount();
+  });
+
   test.each([
     ["review-body", 1],
     ["review-c", 0],
@@ -96,15 +154,16 @@ describe.each([
 
 describe.each([
   [80, 24],
-  [120, 40],
+  [140, 45],
   [200, 60],
 ])("stack at %dx%d", (columns, rows) => {
-  test("fixed height, no line wider than the terminal, header has the verdict, cards have bars", async () => {
+  test("fixed height, no line wider than the terminal, header has only the title, cards have bars", async () => {
     const { screen } = await mount("review-a", columns, rows);
     const s = screen();
     expect(s.length).toBe(rows - 1);
     expect(widest(s)).toBeLessThanOrEqual(columns);
-    expect(s[0]).toMatch(/MEDIUM · 1 human · \d+ cards/);
+    expect(s[0]).toContain("b015e48^..b015e48");
+    expect(s[0]).not.toMatch(/LOW|MEDIUM|HIGH|human|card|rules|gpt-|one-way/);
     expect(s.filter((l) => l.startsWith("┃")).length).toBeGreaterThan(3);
     expect(s.at(-1)).toContain("j/k card");
   });
@@ -216,7 +275,7 @@ describe("stack contents", () => {
     void app;
   });
 
-  test("the header shows the model; claim glyphs, questions and findings never render; one-way shows on its card", async () => {
+  test("claim glyphs, questions and findings never render", async () => {
     const review = await loadReview("review-c");
     const session = new FixtureSession({ ...review, rankedBy: "rules+openai:gpt-6-luna" }, { dispatchMs: 0 });
     sessions.push(session);
@@ -224,7 +283,7 @@ describe("stack contents", () => {
     await painted(app);
     await tick();
     const s = lines(app.lastFrame());
-    expect(s[0]).toContain("gpt-6-luna");
+    expect(s[0]).not.toContain("gpt-6-luna");
     expect(s[0]).not.toContain("claim");
     expect(s.some((l) => l.includes("✗ contradicted") || l.includes("☐ ") || l.includes("P1 "))).toBe(false);
     expect(s.at(-1)).not.toContain("c claims");

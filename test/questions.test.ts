@@ -25,6 +25,7 @@ async function review(): Promise<Review> {
     dispatches: [],
     rankedBy: "rules",
     unmentionedCount: 0,
+    bodyHasNames: false,
     evidence: true,
     exchanges: [],
   };

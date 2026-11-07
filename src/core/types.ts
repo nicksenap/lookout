@@ -300,6 +300,8 @@ export interface Review {
   cards: Card[];
   /** Deterministic body coverage; separate from the evidence layer's claim-based unmentioned. */
   unmentionedCount: number;
+  /** The body contains a changed-file path or a backticked/fenced identifier the matcher can use. */
+  bodyHasNames: boolean;
   /** Policy areas no file of the change touches. */
   untouched: string[];
   claims: Claim[];

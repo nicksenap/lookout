@@ -6273,5 +6273,6 @@
   "rankedBy": "rules+openai:gpt-6-luna",
   "evidence": true,
   "exchanges": [],
-  "unmentionedCount": 1
+  "unmentionedCount": 1,
+  "bodyHasNames": true
 }

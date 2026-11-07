@@ -1,6 +1,6 @@
 import { ask } from "../ask/ask.ts";
 import { buildCards, compareCards, untouchedAreas } from "../cards/build.ts";
-import { markMentions } from "../cards/mention.ts";
+import { bodyHasNames, markMentions } from "../cards/mention.ts";
 import { riskCards } from "../cards/risk.ts";
 import { proposeSplits, type Splits } from "../cards/split.ts";
 import { writeCards } from "../cards/write.ts";
@@ -276,6 +276,7 @@ export class LocalSession implements ReviewSession {
       verdict: evaluate(classification, policy),
       cards: applyClaims(cards, claims),
       unmentionedCount: cards.filter((card) => !card.mentioned).length,
+      bodyHasNames: bodyHasNames(changeSet),
       untouched: untouchedAreas(changeSet, policy),
       claims: claims.map((c) => (c.section === "door" ? { ...c, ...judgeDoorClaim(door.author, door) } : c)),
       door,

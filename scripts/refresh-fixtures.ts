@@ -4,7 +4,7 @@
 // Usage: bun scripts/refresh-fixtures.ts
 import { Glob } from "bun";
 import { buildCards } from "../src/cards/build.ts";
-import { markMentions } from "../src/cards/mention.ts";
+import { bodyHasNames, markMentions } from "../src/cards/mention.ts";
 import type { Review } from "../src/core/types.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
 import { guardKinds } from "../src/rank/mechanical.ts";
@@ -45,7 +45,7 @@ for await (const f of new Glob("*.json").scan(dir)) {
   // Saved fixtures carry claims and questions, so they are evidence runs.
   await Bun.write(
     `${dir}/${f}`,
-    `${JSON.stringify({ ...review, changeSet, cards, unmentionedCount: cards.filter((card) => !card.mentioned).length, claims, evidence: true, exchanges: review.exchanges ?? [] }, null, 2)}\n`,
+    `${JSON.stringify({ ...review, changeSet, cards, unmentionedCount: cards.filter((card) => !card.mentioned).length, bodyHasNames: bodyHasNames(changeSet), claims, evidence: true, exchanges: review.exchanges ?? [] }, null, 2)}\n`,
   );
   console.log(`${f}: ${review.cards.length} → ${cards.length} cards, ${kept} kept their prose`);
 }

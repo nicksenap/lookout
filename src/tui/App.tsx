@@ -303,22 +303,19 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     ...visible,
     ...Array.from({ length: Math.max(0, bodyH - visible.length) }, (): Line => ({ segments: [{ text: "" }] })),
   ];
-  const body = help ? (({ lines, left, top }) => overlay(padded, lines, left, top, w))(helpBox(help, w, bodyH)) : padded;
+  const diagnostics = [
+    review.verdict.tier.toUpperCase(),
+    plural(review.verdict.requiredHumans, "human"),
+    plural(cards.length, "card"),
+    review.rankedBy,
+  ].join(" · ");
+  const body = help ? (({ lines, left, top }) => overlay(padded, lines, left, top, w))(helpBox(help, w, bodyH, diagnostics)) : padded;
 
   const v = review.verdict;
   const title = review.changeSet.intent?.title ? `${review.changeSet.target} · ${review.changeSet.intent.title}` : review.changeSet.target;
-  // Model name without its provider, and how long the pipeline has run; the stack is readable while that counter still moves.
-  const model = review.rankedBy
-    .replace(/^rules\+?/, "")
-    .split(":")
-    .pop();
+  // The stack is readable while the elapsed counter still moves.
   const headerRight = [
-    v.tier.toUpperCase(),
-    plural(v.requiredHumans, "human"),
-    plural(cards.length, "card"),
-    review.unmentionedCount > 0 ? `${review.unmentionedCount} not in body` : "",
-    review.door.computed === "one-way" ? "one-way" : "",
-    model ? model : "rules only",
+    review.bodyHasNames && review.unmentionedCount > 0 ? `${review.unmentionedCount} not in body` : "",
     pending ? `${theme.spinner[frame % theme.spinner.length]} ${Math.round((Date.now() - openedAt.current) / 1000)}s` : "",
   ]
     .filter(Boolean)
