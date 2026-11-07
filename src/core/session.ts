@@ -1,6 +1,7 @@
 import { ask } from "../ask/ask.ts";
-import { buildCards, untouchedAreas } from "../cards/build.ts";
+import { buildCards, compareCards, untouchedAreas } from "../cards/build.ts";
 import { markMentions } from "../cards/mention.ts";
+import { riskCards } from "../cards/risk.ts";
 import { proposeSplits, type Splits } from "../cards/split.ts";
 import { writeCards } from "../cards/write.ts";
 import type { Config } from "../dispatch/config.ts";
@@ -19,7 +20,7 @@ import { initialRadius } from "../evidence/radius.ts";
 import { markTests } from "../evidence/tests.ts";
 import { classify, evaluate } from "../policy/evaluate.ts";
 import { answer, pickQuestions } from "../questions/pick.ts";
-import type { RankCache } from "../rank/cache.ts";
+import { RankCache } from "../rank/cache.ts";
 import { rankWithModel } from "../rank/rank.ts";
 import { applyRules } from "../rank/rules.ts";
 import { attachScopes } from "../rank/scope.ts";
@@ -331,7 +332,7 @@ export class LocalSession implements ReviewSession {
       return this.askQuestions();
     }
     const write = this.opts.write ? { write: this.opts.write } : {};
-    const modelOpts = { env: this.opts.env, ...write, ...(this.opts.cache ? { cache: this.opts.cache } : {}) };
+    const modelOpts = { env: this.opts.env, ...write, cache: this.opts.cache ?? new RankCache() };
     // Oversized cards are split before any prose is written, so paragraphs describe the concerns a reviewer reads.
     const split = await proposeSplits(after.changeSet, after.cards, {
       modelSpec: this.opts.config.model.write,
@@ -349,7 +350,7 @@ export class LocalSession implements ReviewSession {
     const toWrite = current.cards.filter((c) => !c.fixed && !c.mechanical && !c.paragraph).length;
     let written = 0;
     if (toWrite > 0) this.progress({ phase: "writing", done: 0, total: toWrite });
-    const [wrote, extracted] = await Promise.all([
+    const [wrote, extracted, risk] = await Promise.all([
       writeCards(
         current.changeSet,
         current.cards,
@@ -374,7 +375,26 @@ export class LocalSession implements ReviewSession {
       this.opts.evidence && needsModelExtraction(current.changeSet.intent, current.claims)
         ? extractClaimsWithModel(current.changeSet.intent!, { modelSpec: this.opts.config.model.write, ...modelOpts })
         : undefined,
+      riskCards(
+        current.changeSet,
+        current.cards,
+        {
+          modelSpec: this.opts.config.model.write,
+          checkSpec: this.opts.config.model.decide,
+          env: this.opts.env,
+          cache: modelOpts.cache,
+        },
+        (id, patch) => {
+          const before = this.snapshot();
+          const cards = before.cards.map((c) => (c.id === id ? { ...c, ...patch } : c)).sort(compareCards);
+          this.store.update((r) => ({ ...r, cards }), { type: "card.updated", id, patch });
+          if (cards.some((c, k) => c.id !== before.cards[k]!.id)) {
+            this.store.emit({ type: "cards.replaced", cards, untouched: before.untouched });
+          }
+        },
+      ),
     ]);
+    if (risk.warning) this.warn(risk.warning);
     if (wrote.warning) this.warn(wrote.warning);
     if (extracted?.warning) this.warn(extracted.warning);
     if (extracted && extracted.claims.length > 0) {

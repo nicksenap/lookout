@@ -156,6 +156,7 @@ export function compareCards(a: Card, b: Card): number {
   const toggle = (c: Card) => (c.kind === "config" || c.kind === "ci" || c.kind === "deps" ? 0 : 1);
   return (
     COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) ||
+    Number(Boolean(b.risk)) - Number(Boolean(a.risk)) ||
     rank(b.attention) - rank(a.attention) ||
     skim(a) - skim(b) ||
     toggle(a) - toggle(b) ||
