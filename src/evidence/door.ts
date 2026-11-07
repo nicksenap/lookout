@@ -7,9 +7,13 @@ import { type Card, type CardColor, type ChangeSet, COLOR_ORDER, type Door, type
  * export or route, a changed API contract. Rules only; the author's word is compared, never trusted.
  */
 const MIGRATION_PATH = /(^|\/)migrations?\/|\.sql$/i;
+const DOCS_MARKDOWN_PATH = /^docs\/.*\.md$/i;
 const CONTRACT_PATH = /openapi|swagger|\.proto$|\.graphqls?$|\.avsc$|(^|\/)schema\.json$/i;
 const DESTRUCTIVE_SQL =
-  /\b(DROP\s+(TABLE|COLUMN|INDEX|SCHEMA|DATABASE|TYPE)|ALTER\s+TABLE\b.*\bDROP\b|TRUNCATE\b|DELETE\s+FROM)\b|\.(dropTable|dropColumn|dropIndex|removeColumn|renameColumn|renameTable)\s*\(/i;
+  /\b(DROP\s+(TABLE|COLUMN|INDEX|SCHEMA|DATABASE|TYPE)|ALTER\s+TABLE\b.*\bDROP\b|DELETE\s+FROM)\b|\.(dropTable|dropColumn|dropIndex|removeColumn|renameColumn|renameTable)\s*\(/i;
+const TRUNCATE_SQL = /\bTRUNCATE\s+(TABLE\s+)?\w/i;
+/** Same-line literals only: a bare keyword also appears in JSX classes and documentation. */
+const QUOTED_TEXT = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
 const SQL_WRITE = /\b(INSERT\s+INTO|UPDATE\s+[\w."]+\s+SET|MERGE\s+INTO)\b/i;
 /** ORM-style writes are only a signal where the file or line looks like data access; `.update(` alone is everywhere. */
 const ORM_WRITE =
@@ -67,14 +71,14 @@ export function doorSignals(changeSet: ChangeSet): DoorSignal[] {
       }
       return open ?? fromHeader;
     };
-    if (MIGRATION_PATH.test(path)) push({ kind: "migration", path, text: "migration file changed" });
+    if (MIGRATION_PATH.test(path) && !DOCS_MARKDOWN_PATH.test(path)) push({ kind: "migration", path, text: "migration file changed" });
     if (CONTRACT_PATH.test(path) && lines.some((l) => l.kind === "del")) push({ kind: "contract", path, text: "API contract changed" });
     for (const [offset, l] of lines.entries()) {
       const text = l.text.trim();
       if (l.kind === "add") {
         // Test code deletes fixtures and writes rows on purpose; only production edits are door signals.
         if (r.block.labels.includes("test")) continue;
-        if (DESTRUCTIVE_SQL.test(text))
+        if (isDestructiveSql(path, text))
           push({ kind: "destructive-sql", path, line: l.newLine, side: "new", text: `destructive SQL: ${text.slice(0, 60)}` });
         else if (KV_WRITE.test(text))
           push({ kind: "data-write", path, line: l.newLine, side: "new", text: "updates stored items in place" });
@@ -108,8 +112,9 @@ export function detectDoor(changeSet: ChangeSet, author: DoorKind | undefined): 
 /**
  * Attach each signal to the card whose block it came from (by path and line, else by path), and
  * let the signal raise the card's colour: a card that rewrites stored data, drops a public export
- * or route, or changes a contract is at least amber, and red when it also needs eyes. Rules only
- * raise here; nothing lowers.
+ * or route, or changes a contract is at least amber, and red when it also needs eyes. Docs, tests
+ * and mechanical cards keep their existing floor and show the signal only as a label. Rules
+ * only raise here; nothing lowers.
  */
 export function attachDoorSignals(changeSet: ChangeSet, cards: Card[], signals: DoorSignal[]): Card[] {
   if (signals.length === 0) return cards.map(({ doorSignals: _, ...c }) => c);
@@ -136,11 +141,19 @@ export function attachDoorSignals(changeSet: ChangeSet, cards: Card[], signals: 
       });
       const { doorSignals: _, ...rest } = card;
       if (own.length === 0) return rest;
+      if (rest.mechanical || rest.kind === "docs" || rest.blockKind === "docs" || rest.kind === "test" || rest.blockKind === "test")
+        return { ...rest, doorSignals: own };
       const floor: CardColor = rest.attention === "needs-eyes" || rest.attention === "suspicious" ? "red" : "amber";
       const color = COLOR_ORDER.indexOf(floor) > COLOR_ORDER.indexOf(rest.color) ? floor : rest.color;
       return { ...rest, color, doorSignals: own };
     })
     .sort(compareCards);
+}
+
+function isDestructiveSql(path: string, text: string): boolean {
+  if (DESTRUCTIVE_SQL.test(text)) return true;
+  if (/\.sql$/i.test(path)) return TRUNCATE_SQL.test(text);
+  return text.match(QUOTED_TEXT)?.some((s) => TRUNCATE_SQL.test(s)) ?? false;
 }
 
 const inRange = (range: { start: number; end: number } | undefined, line: number) =>
