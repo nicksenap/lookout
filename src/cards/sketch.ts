@@ -73,7 +73,7 @@ export function sketchPrompt(changeSet: ChangeSet, card: Card): string {
   return `You are sketching ONE logical change of a code review for a senior engineer, the way a PR author sketches a change in a PR summary: the program's shape with +/- on it, not prose.
 Draw ${sketchShape(card)}.
 Rules:
-- At most ${SKETCH_MAX_LINES} lines, each at most ${SKETCH_MAX_WIDTH} characters. Indent with spaces to show nesting.
+- Aim for 6-10 lines and never more than ${SKETCH_MAX_LINES}, each at most ${SKETCH_MAX_WIDTH} characters: the few calls, keys or files a reviewer must see, not every one. Indent with spaces to show nesting.
 - Start a line with "+" for what the change adds, "-" for what it removes, a space for kept context that frames them.
 - Name functions, keys, components and files exactly as in the edits; only names the edits or their context lines show. Use "→" for "returns" or "leads to", <name> for a placeholder.
 - No prose lines, no explanation, no heading, no code fence.
@@ -205,7 +205,10 @@ async function drawSketch(
       ? `A checker rejected these lines:\n${problems.map((p) => `- ${p}`).join("\n")}`
       : "A checker could not verify that every line follows from the edits.";
     const rewrite = await attemptAsync(() =>
-      writeText(writer, `${prompt}\n\n${why}\nRedraw it: drop or correct those lines, keep the rest. Previous sketch:\n${sketch}`),
+      writeText(
+        writer,
+        `${prompt}\n\n${why}\nRedraw it in at most ${SKETCH_MAX_LINES} lines: drop or correct those lines, and merge or drop context lines to fit. Previous sketch:\n${sketch}`,
+      ),
     );
     const next = rewrite.ok ? parseSketch(rewrite.value) : "";
     if (!next) return failed;
