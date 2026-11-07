@@ -66,7 +66,7 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under "unchanged"
 
 ## Review recall (step 27, baseline on main d0b7a3c)
 
-`bun run recall <repo-dir> [--prs N | --pr A,B,C] [--json]`: for merged PRs with human inline review comments, the share of comments whose card lookout showed amber/red or with a verified risk line. One comment per thread (the first human one); bots and file-level comments are skipped. Inputs are cached in `~/.cache/lookout/recall/`, model calls in the rank cache: a re-run after a rule change takes seconds. This number replaces the persona gate.
+`bun run recall <repo-dir> [--prs N | --pr A,B,C] [--json]`: for merged PRs with human inline review comments, the share of comments whose card lookout showed amber/red or with a verified risk line. One comment per thread (the first human one); bots are skipped; file-level comments and lines outside every hunk count as unmapped. Inputs are cached in `~/.cache/lookout/recall/`, model calls in the rank cache: a re-run after a rule change takes seconds. This number replaces the persona gate.
 
 Baseline, the probe repo, 15 most recent merged PRs with human inline comments (33 scanned):
 

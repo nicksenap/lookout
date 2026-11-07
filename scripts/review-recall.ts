@@ -2,7 +2,7 @@
 // Usage: bun scripts/review-recall.ts <repo-dir> [--prs N | --pr A,B,C] [--json]
 // For merged PRs with human inline review comments, runs the real pipeline, maps each comment's path:line
 // to a block and its card, and counts it `pointed` when the card is amber/red or carries a verified risk line.
-// One comment per review thread (the first human one); bots and file-level comments are not anchors.
+// One comment per review thread (the first human one); bots are skipped, file-level comments count as unmapped.
 // Inputs (change set + comments) are cached under ~/.cache/lookout/recall, model calls in RankCache, so a
 // re-run after a rule change recomputes the cards without refetching or re-asking the model.
 // Comment text stays on this machine: only the first 100 chars of a missed comment are printed.
@@ -32,11 +32,15 @@ interface Cached {
   changeSet?: ChangeSet;
 }
 
-/** One review comment, scored. `excerpt` is the first 100 chars, for the printout only. */
-type Scored = CommentAnchor & { excerpt: string } & (
-    | { status: "unmapped" }
-    | { status: "pointed" | "missed"; on: "edit" | "context"; card: string; color: CardColor; top3: boolean }
-  );
+interface Mapped {
+  on: "edit" | "context";
+  card: string;
+  color: CardColor;
+  top3: boolean;
+}
+/** One review comment, scored. Only a missed one carries text: its first 100 chars. */
+type Scored = CommentAnchor &
+  ({ status: "unmapped" } | (Mapped & { status: "pointed" }) | (Mapped & { status: "missed"; excerpt: string }));
 
 const BOTS = new Set(["copilot-pull-request-reviewer", "github-actions", "dependabot"]);
 const CACHE_DIR = join(DEFAULT_CACHE_DIR, "recall");
@@ -111,6 +115,8 @@ async function main() {
     rows.push(scorePr(n, review, cached.comments));
     if (!json) console.error(`#${n} done (${rows.length}/${wanted})`);
   }
+  if (rows.length < wanted)
+    console.error(`only ${rows.length} of ${wanted} PRs had human inline comments among ${candidates.length} scanned`);
   const summary = summarise(rows);
   if (json) console.log(JSON.stringify({ repo, prs: rows, summary }, null, 2));
   else printTable(rows, summary);
@@ -136,8 +142,14 @@ function humanComments(ndjson: string): ReviewComment[] {
       return true;
     })
     .map((c) => {
-      const line = c.subject_type === "file" ? undefined : ((c.line ?? c.original_line) as number | null);
-      return { path: c.path as string, side: c.side === "LEFT" ? "old" : "new", body: String(c.body ?? ""), ...(line ? { line } : {}) };
+      // Outdated comments have no `line`; `original_line` numbers an older commit and may land a few lines off.
+      const line = c.subject_type === "file" ? undefined : (c.line ?? c.original_line);
+      return {
+        path: c.path as string,
+        side: c.side === "LEFT" ? "old" : "new",
+        body: String(c.body ?? ""),
+        ...(typeof line === "number" ? { line } : {}),
+      };
     });
 }
 
@@ -146,17 +158,13 @@ function scorePr(number: number, review: Review, comments: ReviewComment[]) {
     const mapped = mapComment(review.changeSet, c);
     const index = mapped ? review.cards.findIndex((card) => card.blockIds.includes(mapped.blockId)) : -1;
     const card = review.cards[index];
-    const anchor = { path: c.path, line: c.line, side: c.side, excerpt: c.body.replace(/\s+/g, " ").trim().slice(0, 100) };
+    const anchor = { path: c.path, line: c.line, side: c.side };
     if (!mapped || !card) return { ...anchor, status: "unmapped" };
     const pointed = card.color === "amber" || card.color === "red" || (card.risk !== undefined && !card.riskUnverified);
-    return {
-      ...anchor,
-      status: pointed ? "pointed" : "missed",
-      on: mapped.on,
-      card: card.title,
-      color: card.color,
-      top3: index < 3,
-    };
+    const hit = { ...anchor, on: mapped.on, card: card.title, color: card.color, top3: index < 3 };
+    return pointed
+      ? { ...hit, status: "pointed" }
+      : { ...hit, status: "missed", excerpt: c.body.replace(/\s+/g, " ").trim().slice(0, 100) };
   });
   const count = (s: string) => results.filter((r) => r.status === s).length;
   return {
