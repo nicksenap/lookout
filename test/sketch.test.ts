@@ -87,6 +87,12 @@ test("a name absent from the edits and their context is rewritten once, quoting 
   expect(calls).toHaveLength(0);
 });
 
+test("an indented +/- mark moves to the first column, so the gate and the colours see it", async () => {
+  const indented = " main\n   + loadUserEnv()\n   parseArgs";
+  const { patches } = await run([card()], writer([indented]));
+  expect(patches[0]!.sketch).toBe(" main\n+    loadUserEnv()\n   parseArgs");
+});
+
 test("a failed consistency check rewrites once; a verified redraw is kept", async () => {
   const language = writer([good, good]);
   const { patches } = await run([card()], language, model([0.6, 0.8]));

@@ -74,7 +74,7 @@ export function sketchPrompt(changeSet: ChangeSet, card: Card): string {
 Draw ${sketchShape(card)}.
 Rules:
 - Aim for 6-10 lines and never more than ${SKETCH_MAX_LINES}, each at most ${SKETCH_MAX_WIDTH} characters: the few calls, keys or files a reviewer must see, not every one. Indent with spaces to show nesting.
-- Start a line with "+" for what the change adds, "-" for what it removes, a space for kept context that frames them.
+- Start a line with "+" for what the change adds, "-" for what it removes, a space for kept context that frames them. The mark is the first character of the line, before the indentation: "+    call", not "    + call".
 - Name functions, keys, components and files exactly as in the edits; only names the edits or their context lines show. Use "→" for "returns" or "leads to", <name> for a placeholder.
 - No prose lines, no explanation, no heading, no code fence.
 
@@ -91,13 +91,17 @@ ${editsOf(changeSet, card)}`;
 
 /** Strip code fences and blank lines a writer adds despite the prompt; keep indentation. An unmarked line is context and gets the space column (the writer's output is trimmed, so the first line loses it). */
 export function parseSketch(text: string): string {
-  return text
-    .split("\n")
-    .filter((l) => !/^\s*```/.test(l))
-    .map((l) => l.trimEnd())
-    .filter((l) => l.trim() !== "")
-    .map((l) => (/^[+\- ]/.test(l) ? l : ` ${l}`))
-    .join("\n");
+  return (
+    text
+      .split("\n")
+      .filter((l) => !/^\s*```/.test(l))
+      .map((l) => l.trimEnd())
+      .filter((l) => l.trim() !== "")
+      // Writers often indent the mark with the tree (`   + call`); a diff puts it in the first column.
+      .map((l) => l.replace(/^(\s+)([+-]) /, "$2$1 "))
+      .map((l) => (/^[+\- ]/.test(l) ? l : ` ${l}`))
+      .join("\n")
+  );
 }
 
 // One-letter names (i, m) say nothing a gate could check.
