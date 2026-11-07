@@ -416,6 +416,19 @@ describe("tests touched", () => {
 });
 
 describe("door", () => {
+  test("Markdown under docs/migrations is not a migration, but a database migration is", () => {
+    const cs = applyRules({
+      target: "t",
+      base: "",
+      head: "",
+      files: parseDiff(
+        diff("docs/migrations/review-plan.md", "@@ -0,0 +1,1 @@", ["+Document the review migration."]) +
+          diff("db/migrations/0001.sql", "@@ -0,0 +1,1 @@", ["+CREATE TABLE reviews (id INTEGER);"]),
+      ),
+    });
+    expect(doorSignals(cs).map((s) => [s.kind, s.path])).toEqual([["migration", "db/migrations/0001.sql"]]);
+  });
+
   test("migrations, destructive SQL, removed public exports and routes are one-way signals; test code and internal renames are not", () => {
     const files = parseDiff(
       diff("db/migrations/0042_drop_legacy.sql", "@@ -0,0 +1,2 @@", [
@@ -446,6 +459,58 @@ describe("door", () => {
     const cards = attachDoorSignals(cs, buildCards(cs, DEFAULT_POLICY), door.signals);
     expect(cards.find((c) => c.title.includes("api/index"))!.doorSignals!.map((s) => s.kind)).toEqual(["removed-export", "removed-route"]);
     expect(cards.find((c) => c.title.includes("model.ts"))!.doorSignals).toBeUndefined();
+  });
+
+  test("TRUNCATE requires a table in SQL or a same-line string, not JSX classes or prose", () => {
+    const cs = applyRules({
+      target: "t",
+      base: "",
+      head: "",
+      files: parseDiff(
+        diff("src/tui/card.tsx", "@@ -0,0 +1,1 @@", ['+const title = <span className="truncate" title="Review">Review</span>;']) +
+          diff("docs/sql.md", "@@ -0,0 +1,1 @@", ["+TRUNCATE TABLE reviews removes all rows."]) +
+          diff("src/prose.ts", "@@ -0,0 +1,1 @@", ['+// "Review" describes TRUNCATE TABLE reviews.']) +
+          diff("db/reset.sql", "@@ -0,0 +1,1 @@", ["+TRUNCATE TABLE reviews;"]) +
+          diff("src/reset.ts", "@@ -0,0 +1,1 @@", ['+await db.execute("TRUNCATE TABLE reviews");']) +
+          diff("src/reset-template.ts", "@@ -0,0 +1,1 @@", ["+await db.execute(`TRUNCATE reviews`);"]) +
+          diff("src/reset-single.ts", "@@ -0,0 +1,1 @@", ["+await db.execute('TRUNCATE reviews');"]),
+      ),
+    });
+    expect(
+      doorSignals(cs)
+        .filter((s) => s.kind === "destructive-sql")
+        .map((s) => s.path),
+    ).toEqual(["db/reset.sql", "src/reset.ts", "src/reset-template.ts", "src/reset-single.ts"]);
+  });
+
+  test("door labels preserve exempt card floors and still raise behaviour cards", () => {
+    const cs = applyRules({
+      target: "t",
+      base: "",
+      head: "",
+      files: parseDiff(diff("db/reset.sql", "@@ -0,0 +1,1 @@", ["+TRUNCATE TABLE reviews;"])),
+    });
+    const signals = doorSignals(cs);
+    const base: Card = {
+      ...buildCards(cs, DEFAULT_POLICY)[0]!,
+      kind: "logic",
+      blockKind: "behavior",
+      color: "green",
+      attention: "routine",
+    };
+    const cases: { card: Card; color: Card["color"] }[] = [
+      { card: { ...base, kind: "docs", attention: "needs-eyes" }, color: "green" },
+      { card: { ...base, blockKind: "docs" }, color: "green" },
+      { card: { ...base, kind: "test", attention: "needs-eyes" }, color: "green" },
+      { card: { ...base, blockKind: "test" }, color: "green" },
+      { card: { ...base, mechanical: true }, color: "green" },
+      { card: { ...base, mechanical: true, color: "grey", attention: "inert" }, color: "grey" },
+      { card: { ...base, kind: "test", color: "red", attention: "suspicious" }, color: "red" },
+      { card: base, color: "amber" },
+      { card: { ...base, attention: "needs-eyes" }, color: "red" },
+    ];
+    expect(cases.map(({ card }) => attachDoorSignals(cs, [card], signals)[0]!.color)).toEqual(cases.map((c) => c.color));
+    for (const { card } of cases) expect(attachDoorSignals(cs, [card], signals)[0]!.doorSignals).toEqual(signals);
   });
 
   test("a plain edit is a two-way door", () => {
