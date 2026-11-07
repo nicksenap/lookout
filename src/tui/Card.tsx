@@ -101,14 +101,9 @@ export function filesOf(review: Review, card: Card): string[] {
   return review.changeSet.files.filter((f) => f.hunks.some((h) => h.blocks.some((b) => ids.has(b.id)))).map((f) => f.path);
 }
 
-/** Words on the badge line a stripped frame still reads: a one-way signal, test coverage. */
-export function evidenceBadges(review: Review, card: Card): string[] {
-  const out: string[] = [];
-  if (card.doorSignals?.length) out.push(`one-way · ${card.doorSignals[0]!.kind}`);
-  if (card.covers?.length)
-    out.push(`covers ${card.covers.map((id) => `card ${review.cards.findIndex((c) => c.id === id) + 1}`).join(", ")}`);
-  else if (card.testsTouched) out.push("tests touched");
-  return out;
+/** The first door signal explains the badge without policy jargon. */
+export function evidenceBadges(card: Card): string[] {
+  return card.doorSignals?.length ? [card.doorSignals[0]!.text] : [];
 }
 
 /** A card as it appears in the stack: badge line, title, paragraph or summary. */
@@ -120,14 +115,10 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   const row = (segs: Segment[]): Line => ({ segments: [bar, ...segs], card: index });
 
   const files = filesOf(ctx.review, card);
-  const badges = [
-    COLOR_LABEL[card.color],
-    card.mentioned ? undefined : "body: no",
-    card.kind,
-    ...card.labels.filter((l) => l !== "test" || card.kind !== "test"),
-    ...card.areas.map((a) => `${a}/*`),
-  ].filter(Boolean);
-  const evidence = card.fixed ? [] : evidenceBadges(ctx.review, card);
+  const badges = [COLOR_LABEL[card.color], card.kind, ...card.areas.map((a) => `${a}/*`), card.mentioned ? undefined : "body: no"].filter(
+    Boolean,
+  );
+  const evidence = card.fixed ? [] : evidenceBadges(card);
   const right = [plural(card.blockIds.length, "edit"), plural(files.length, "file")].join(" · ");
   const badgeSegs: Segment[] = [
     { text: badges[0]!, color, bold: true },
