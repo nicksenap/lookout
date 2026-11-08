@@ -1,0 +1,2029 @@
+{
+  "changeSet": {
+    "target": "b41b795^..b41b795",
+    "base": "7134db6653acddd23582c5702bc92bfaaded47c0",
+    "head": "b41b795d96ec523a53451aa74561c1f4439f41d1",
+    "files": [
+      {
+        "path": "docs/handoff.md",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "f796ce8bf9b8",
+            "path": "docs/handoff.md",
+            "header": "@@ -64,6 +64,18 @@ Mechanical leaks: 0 on all six (v1: 26 behaviour blocks hidden under \"unchanged\"",
+            "oldStart": 64,
+            "oldLines": 6,
+            "newStart": 64,
+            "newLines": 18,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 64,
+                "newLine": 64
+              },
+              {
+                "kind": "context",
+                "text": "---",
+                "oldLine": 65,
+                "newLine": 65
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 66,
+                "newLine": 66
+              },
+              {
+                "kind": "add",
+                "text": "## Review recall (step 27, baseline on main d0b7a3c)",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "`bun run recall <repo-dir> [--prs N | --pr A,B,C] [--json]`: for merged PRs with human inline review comments, the share of comments whose card lookout showed amber/red or with a verified risk line. One comment per thread (the first human one); bots are skipped; file-level comments and lines outside every hunk count as unmapped. Inputs are cached in `~/.cache/lookout/recall/`, model calls in the rank cache: a re-run after a rule change takes seconds. This number replaces the persona gate.",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "Baseline, the probe repo, 15 most recent merged PRs with human inline comments (33 scanned):",
+                "newLine": 71
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 72
+              },
+              {
+                "kind": "add",
+                "text": "| comments | mapped | pointed | missed | unmapped | recall | top-3 share |",
+                "newLine": 73
+              },
+              {
+                "kind": "add",
+                "text": "|---|---|---|---|---|---|---|",
+                "newLine": 74
+              },
+              {
+                "kind": "add",
+                "text": "| 33 | 32 (31 on an edited line, 1 on context) | 24 (18 amber, 6 red) | 8 | 1 | **0.75** | 0.75 |",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "All eight misses are green cards: seven are docs cards (design and workflow documents), one a test card. No miss is a green behaviour card. Open: whether a document that defines behaviour (a plan, a workflow an agent follows) should be amber; a blanket docs rule would buy recall and cost the colour its meaning.",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 78
+              },
+              {
+                "kind": "context",
+                "text": "## Re-probe after steps 23–26 (2026-11-07, main e66bd23)",
+                "oldLine": 67,
+                "newLine": 79
+              },
+              {
+                "kind": "context",
+                "text": "",
+                "oldLine": 68,
+                "newLine": 80
+              },
+              {
+                "kind": "context",
+                "text": "Same five PRs, `--json`, read against the first probe (P1–P5 = 2/4/9/29/56 files):",
+                "oldLine": 69,
+                "newLine": 81
+              }
+            ],
+            "blocks": [
+              {
+                "id": "5def9f514643",
+                "hunkId": "f796ce8bf9b8",
+                "path": "docs/handoff.md",
+                "from": 3,
+                "to": 15,
+                "labels": [
+                  "docs"
+                ],
+                "attention": "routine",
+                "score": 0.292,
+                "newRange": {
+                  "start": 67,
+                  "end": 78
+                },
+                "kind": "docs"
+              }
+            ],
+            "labels": [
+              "docs"
+            ],
+            "attention": "routine",
+            "score": 0.292
+          }
+        ]
+      },
+      {
+        "path": "fixtures/recall.diff",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "14a5e27f0b94",
+            "path": "fixtures/recall.diff",
+            "header": "@@ -0,0 +1,58 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 58,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "diff --git a/src/cards/build.ts b/src/cards/build.ts",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "index f462564..2cfefc4 100644",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "--- a/src/cards/build.ts",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "+++ b/src/cards/build.ts",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "@@ -119,14 +119,13 @@ function makeCard(id: string, title: string, group: BlockRef[], policy: Policy):",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": " }",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": " ",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": " /**",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "- * Rule-derived color. The model step (plan pipeline step 8) may only raise a card above",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "- * this floor, never lower it; and only rules may call a card grey.",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "+ * Rule-derived color floor. Rules set the floor; the model may only raise attention,",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "+ * never lower it; and only rules may call a card grey.",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "  *",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "- * A sensitive area reddens a card only when the card changes behaviour. Tests, mechanical",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "- * edits and docs inside `auth/` stay green (the area badge still shows); config plumbing",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "- * there is amber. Measured on a production PR where the old rule painted 5 of 8 cards red",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "- * and 3 of those were a test card, a rename and a type import. The tier floors in",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "- * `policy/evaluate.ts` are untouched: a touched area still means more humans.",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "+ * A sensitive area makes routine behaviour amber and needs-eyes behaviour red. Tests,",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "+ * mechanical edits and docs inside `auth/` stay green (the area badge still shows);",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "+ * config plumbing there is amber. The tier floors in `policy/evaluate.ts` are untouched:",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "+ * a touched area still means more humans.",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "  */",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": " export function colorFloor(",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "   card: Pick<Card, \"attention\" | \"areas\" | \"labels\" | \"kind\"> & Partial<Pick<Card, \"blockKind\" | \"mechanical\">>,",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "@@ -138,7 +137,7 @@ export function colorFloor(",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "   const docs = card.kind === \"docs\" || card.blockKind === \"docs\";",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "   const config = card.kind === \"deps\" || card.kind === \"config\" || card.kind === \"ci\";",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "   const plumbing = config || card.blockKind === \"config\";",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "-  if (sensitive && !test && !docs && !plumbing && !card.mechanical) return \"red\";",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "+  if (sensitive && !test && !docs && !plumbing && !card.mechanical) return card.attention === \"needs-eyes\" ? \"red\" : \"amber\";",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "   if (sensitive && plumbing) return \"amber\";",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "   if (card.attention === \"needs-eyes\" && !test && !docs && !card.mechanical) return \"amber\";",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "   if (config) return \"amber\";",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "@@ -146,18 +145,19 @@ export function colorFloor(",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": " }",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": " ",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": " /**",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "- * Riskiest first: colour, then behaviour before mechanical and docs, then attention, then the",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "- * larger card (more to decide), then score; stable for equal keys.",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "+ * Riskiest first: colour, then attention, then behaviour before mechanical and docs,",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "+ * then configuration switches, then the larger card (more to decide), then score;",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "+ * stable for equal keys.",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "  */",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": " export function compareCards(a: Card, b: Card): number {",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "   const skim = (c: Card) => (c.mechanical || c.kind === \"docs\" || c.blockKind === \"docs\" ? 1 : 0);",
+                "newLine": 46
+              },
+              {
+                "kind": "add",
+                "text": "-  // A configuration switch is one line that decides whether the rest ships; it reads first among its colour.",
+                "newLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "+  // A configuration switch decides whether the rest ships; it reads first at equal colour, attention and skim.",
+                "newLine": 48
+              },
+              {
+                "kind": "add",
+                "text": "   const toggle = (c: Card) => (c.kind === \"config\" || c.kind === \"ci\" || c.kind === \"deps\" ? 0 : 1);",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": "   return (",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": "     COLOR_ORDER.indexOf(b.color) - COLOR_ORDER.indexOf(a.color) ||",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": "+    rank(b.attention) - rank(a.attention) ||",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "     skim(a) - skim(b) ||",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": "     toggle(a) - toggle(b) ||",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": "-    rank(b.attention) - rank(a.attention) ||",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": "     b.blockIds.length - a.blockIds.length ||",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "     b.score - a.score",
+                "newLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "   );",
+                "newLine": 58
+              }
+            ],
+            "blocks": [
+              {
+                "id": "73bffbf287fd",
+                "hunkId": "14a5e27f0b94",
+                "path": "fixtures/recall.diff",
+                "from": 0,
+                "to": 58,
+                "labels": [
+                  "test",
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.513,
+                "newRange": {
+                  "start": 1,
+                  "end": 58
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "test",
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.513
+          }
+        ]
+      },
+      {
+        "path": "package.json",
+        "status": "modified",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "bc8fd4631b01",
+            "path": "package.json",
+            "header": "@@ -26,6 +26,7 @@",
+            "oldStart": 26,
+            "oldLines": 6,
+            "newStart": 26,
+            "newLines": 7,
+            "lines": [
+              {
+                "kind": "context",
+                "text": "    \"fixtures:check\": \"bun scripts/refresh-fixtures.ts > /dev/null && git diff --quiet -- fixtures/reviews || (echo 'fixtures/reviews drifted from the pipeline; run bun run fixtures and commit' && git --no-pager diff --stat -- fixtures/reviews && exit 1)\",",
+                "oldLine": 26,
+                "newLine": 26
+              },
+              {
+                "kind": "context",
+                "text": "    \"story\": \"bun stories/run.ts\",",
+                "oldLine": 27,
+                "newLine": 27
+              },
+              {
+                "kind": "context",
+                "text": "    \"bench\": \"scripts/grouping-bench.sh\",",
+                "oldLine": 28,
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "    \"recall\": \"bun scripts/review-recall.ts\",",
+                "newLine": 29
+              },
+              {
+                "kind": "context",
+                "text": "    \"hooks\": \"git config core.hooksPath .githooks\"",
+                "oldLine": 29,
+                "newLine": 30
+              },
+              {
+                "kind": "context",
+                "text": "  },",
+                "oldLine": 30,
+                "newLine": 31
+              },
+              {
+                "kind": "context",
+                "text": "  \"dependencies\": {",
+                "oldLine": 31,
+                "newLine": 32
+              }
+            ],
+            "blocks": [
+              {
+                "id": "bd92ddab8ef8",
+                "hunkId": "bc8fd4631b01",
+                "path": "package.json",
+                "from": 3,
+                "to": 4,
+                "labels": [],
+                "attention": "routine",
+                "score": 0.077,
+                "newRange": {
+                  "start": 29,
+                  "end": 29
+                },
+                "kind": "config",
+                "scope": [
+                  "scripts"
+                ]
+              }
+            ],
+            "labels": [],
+            "attention": "routine",
+            "score": 0.077
+          }
+        ]
+      },
+      {
+        "path": "scripts/review-recall.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "7161423cd220",
+            "path": "scripts/review-recall.ts",
+            "header": "@@ -0,0 +1,213 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 213,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "// Step 27: of the places a human reviewer stopped, how many did lookout point at? Read-only against <repo-dir>.",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "// Usage: bun scripts/review-recall.ts <repo-dir> [--prs N | --pr A,B,C] [--json]",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "// For merged PRs with human inline review comments, runs the real pipeline, maps each comment's path:line",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "// to a block and its card, and counts it `pointed` when the card is amber/red or carries a verified risk line.",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "// One comment per review thread (the first human one); bots are skipped, file-level comments count as unmapped.",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "// Inputs (change set + comments) are cached under ~/.cache/lookout/recall, model calls in RankCache, so a",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "// re-run after a rule change recomputes the cards without refetching or re-asking the model.",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "// Comment text stays on this machine: only the first 100 chars of a missed comment are printed.",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "import { existsSync, mkdirSync } from \"node:fs\";",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "import { join } from \"node:path\";",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "import { loadUserEnv } from \"../src/cli/env.ts\";",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "import { LocalSession } from \"../src/core/session.ts\";",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "import type { CardColor, ChangeSet, DiffLine, EditBlock, Review } from \"../src/core/types.ts\";",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "import { loadConfig } from \"../src/dispatch/config.ts\";",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "import { DEFAULT_CACHE_DIR } from \"../src/rank/cache.ts\";",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "import { run } from \"../src/sources/exec.ts\";",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "import { loadPullRequest } from \"../src/sources/github.ts\";",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "export interface CommentAnchor {",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "  path: string;",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "  /** Absent for a file-level comment. */",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "  line?: number;",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "  side: \"old\" | \"new\";",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "interface ReviewComment extends CommentAnchor {",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "  body: string;",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "interface Cached {",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "  comments: ReviewComment[];",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "  changeSet?: ChangeSet;",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "interface Mapped {",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": "  on: \"edit\" | \"context\";",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "  card: string;",
+                "newLine": 37
+              },
+              {
+                "kind": "add",
+                "text": "  color: CardColor;",
+                "newLine": 38
+              },
+              {
+                "kind": "add",
+                "text": "  top3: boolean;",
+                "newLine": 39
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 40
+              },
+              {
+                "kind": "add",
+                "text": "/** One review comment, scored. Only a missed one carries text: its first 100 chars. */",
+                "newLine": 41
+              },
+              {
+                "kind": "add",
+                "text": "type Scored = CommentAnchor &",
+                "newLine": 42
+              },
+              {
+                "kind": "add",
+                "text": "  ({ status: \"unmapped\" } | (Mapped & { status: \"pointed\" }) | (Mapped & { status: \"missed\"; excerpt: string }));",
+                "newLine": 43
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 44
+              },
+              {
+                "kind": "add",
+                "text": "const BOTS = new Set([\"copilot-pull-request-reviewer\", \"github-actions\", \"dependabot\"]);",
+                "newLine": 45
+              },
+              {
+                "kind": "add",
+                "text": "const CACHE_DIR = join(DEFAULT_CACHE_DIR, \"recall\");",
+                "newLine": 46
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 47
+              },
+              {
+                "kind": "add",
+                "text": "/**",
+                "newLine": 48
+              },
+              {
+                "kind": "add",
+                "text": " * The block a review comment points at: the block holding its line, or on a context line the nearest",
+                "newLine": 49
+              },
+              {
+                "kind": "add",
+                "text": " * block of the same hunk (ties go to the earlier one). `undefined` for a file-level comment or a line",
+                "newLine": 50
+              },
+              {
+                "kind": "add",
+                "text": " * outside every hunk.",
+                "newLine": 51
+              },
+              {
+                "kind": "add",
+                "text": " */",
+                "newLine": 52
+              },
+              {
+                "kind": "add",
+                "text": "export function mapComment(changeSet: ChangeSet, anchor: CommentAnchor): { blockId: string; on: \"edit\" | \"context\" } | undefined {",
+                "newLine": 53
+              },
+              {
+                "kind": "add",
+                "text": "  if (anchor.line === undefined) return undefined;",
+                "newLine": 54
+              },
+              {
+                "kind": "add",
+                "text": "  const lineOf = (l: DiffLine) => (anchor.side === \"new\" ? l.newLine : l.oldLine);",
+                "newLine": 55
+              },
+              {
+                "kind": "add",
+                "text": "  const file = changeSet.files.find((f) => f.path === anchor.path || f.oldPath === anchor.path);",
+                "newLine": 56
+              },
+              {
+                "kind": "add",
+                "text": "  const hit = file?.hunks.map((hunk) => ({ hunk, at: hunk.lines.findIndex((l) => lineOf(l) === anchor.line) })).find((h) => h.at >= 0);",
+                "newLine": 57
+              },
+              {
+                "kind": "add",
+                "text": "  if (!hit) return undefined;",
+                "newLine": 58
+              },
+              {
+                "kind": "add",
+                "text": "  const distance = (b: EditBlock) => (hit.at < b.from ? b.from - hit.at : Math.max(0, hit.at - b.to + 1));",
+                "newLine": 59
+              },
+              {
+                "kind": "add",
+                "text": "  const nearest = hit.hunk.blocks.reduce<EditBlock | undefined>((best, b) => (!best || distance(b) < distance(best) ? b : best), undefined);",
+                "newLine": 60
+              },
+              {
+                "kind": "add",
+                "text": "  return nearest && { blockId: nearest.id, on: distance(nearest) === 0 ? \"edit\" : \"context\" };",
+                "newLine": 61
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 62
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 63
+              },
+              {
+                "kind": "add",
+                "text": "async function main() {",
+                "newLine": 64
+              },
+              {
+                "kind": "add",
+                "text": "  const args = process.argv.slice(2);",
+                "newLine": 65
+              },
+              {
+                "kind": "add",
+                "text": "  const repoDir = args[0];",
+                "newLine": 66
+              },
+              {
+                "kind": "add",
+                "text": "  if (!repoDir || repoDir.startsWith(\"-\"))",
+                "newLine": 67
+              },
+              {
+                "kind": "add",
+                "text": "    throw new Error(\"usage: bun scripts/review-recall.ts <repo-dir> [--prs N | --pr A,B,C] [--json]\");",
+                "newLine": 68
+              },
+              {
+                "kind": "add",
+                "text": "  const flag = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);",
+                "newLine": 69
+              },
+              {
+                "kind": "add",
+                "text": "  const json = args.includes(\"--json\");",
+                "newLine": 70
+              },
+              {
+                "kind": "add",
+                "text": "  loadUserEnv();",
+                "newLine": 71
+              },
+              {
+                "kind": "add",
+                "text": "  const config = loadConfig(undefined, repoDir);",
+                "newLine": 72
+              },
+              {
+                "kind": "add",
+                "text": "  if (!config.ok) throw new Error(config.error);",
+                "newLine": 73
+              },
+              {
+                "kind": "add",
+                "text": "  const gh = async (cmd: string[]) => {",
+                "newLine": 74
+              },
+              {
+                "kind": "add",
+                "text": "    const res = await run([\"gh\", ...cmd], repoDir);",
+                "newLine": 75
+              },
+              {
+                "kind": "add",
+                "text": "    if (!res.ok) throw new Error(res.error);",
+                "newLine": 76
+              },
+              {
+                "kind": "add",
+                "text": "    return res.value;",
+                "newLine": 77
+              },
+              {
+                "kind": "add",
+                "text": "  };",
+                "newLine": 78
+              },
+              {
+                "kind": "add",
+                "text": "  const repo = (await gh([\"repo\", \"view\", \"--json\", \"nameWithOwner\", \"-q\", \".nameWithOwner\"])).trim();",
+                "newLine": 79
+              },
+              {
+                "kind": "add",
+                "text": "  const [owner, name] = repo.split(\"/\") as [string, string];",
+                "newLine": 80
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 81
+              },
+              {
+                "kind": "add",
+                "text": "  const load = async (n: number): Promise<Cached> => {",
+                "newLine": 82
+              },
+              {
+                "kind": "add",
+                "text": "    const file = Bun.file(join(CACHE_DIR, `${owner}-${name}-${n}.json`));",
+                "newLine": 83
+              },
+              {
+                "kind": "add",
+                "text": "    if (await file.exists()) return (await file.json()) as Cached;",
+                "newLine": 84
+              },
+              {
+                "kind": "add",
+                "text": "    const comments = humanComments(await gh([\"api\", `repos/${repo}/pulls/${n}/comments`, \"--paginate\", \"--jq\", COMMENT_JQ]));",
+                "newLine": 85
+              },
+              {
+                "kind": "add",
+                "text": "    const changeSet = comments.length ? await loadPullRequest({ owner, repo: name, number: n }, `${repo}#${n}`) : undefined;",
+                "newLine": 86
+              },
+              {
+                "kind": "add",
+                "text": "    if (changeSet && !changeSet.ok) throw new Error(changeSet.error);",
+                "newLine": 87
+              },
+              {
+                "kind": "add",
+                "text": "    const cached = { comments, ...(changeSet?.ok ? { changeSet: changeSet.value } : {}) };",
+                "newLine": 88
+              },
+              {
+                "kind": "add",
+                "text": "    if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });",
+                "newLine": 89
+              },
+              {
+                "kind": "add",
+                "text": "    await Bun.write(file, JSON.stringify(cached));",
+                "newLine": 90
+              },
+              {
+                "kind": "add",
+                "text": "    return cached;",
+                "newLine": 91
+              },
+              {
+                "kind": "add",
+                "text": "  };",
+                "newLine": 92
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 93
+              },
+              {
+                "kind": "add",
+                "text": "  const explicit = flag(\"--pr\")?.split(\",\").map(Number);",
+                "newLine": 94
+              },
+              {
+                "kind": "add",
+                "text": "  const wanted = explicit?.length ?? Number(flag(\"--prs\") ?? 10);",
+                "newLine": 95
+              },
+              {
+                "kind": "add",
+                "text": "  // Scan newest merged first and stop at `wanted` PRs that have human inline comments.",
+                "newLine": 96
+              },
+              {
+                "kind": "add",
+                "text": "  const candidates =",
+                "newLine": 97
+              },
+              {
+                "kind": "add",
+                "text": "    explicit ??",
+                "newLine": 98
+              },
+              {
+                "kind": "add",
+                "text": "    (",
+                "newLine": 99
+              },
+              {
+                "kind": "add",
+                "text": "      JSON.parse(",
+                "newLine": 100
+              },
+              {
+                "kind": "add",
+                "text": "        await gh([\"pr\", \"list\", \"--repo\", repo, \"--state\", \"merged\", \"--limit\", String(wanted * 6), \"--json\", \"number,mergedAt\"]),",
+                "newLine": 101
+              },
+              {
+                "kind": "add",
+                "text": "      ) as { number: number; mergedAt: string }[]",
+                "newLine": 102
+              },
+              {
+                "kind": "add",
+                "text": "    )",
+                "newLine": 103
+              },
+              {
+                "kind": "add",
+                "text": "      .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))",
+                "newLine": 104
+              },
+              {
+                "kind": "add",
+                "text": "      .map((p) => p.number);",
+                "newLine": 105
+              },
+              {
+                "kind": "add",
+                "text": "  const rows: ReturnType<typeof scorePr>[] = [];",
+                "newLine": 106
+              },
+              {
+                "kind": "add",
+                "text": "  for (const n of candidates) {",
+                "newLine": 107
+              },
+              {
+                "kind": "add",
+                "text": "    if (rows.length >= wanted) break;",
+                "newLine": 108
+              },
+              {
+                "kind": "add",
+                "text": "    const cached = await load(n);",
+                "newLine": 109
+              },
+              {
+                "kind": "add",
+                "text": "    if (!cached.changeSet || cached.comments.length === 0) continue;",
+                "newLine": 110
+              },
+              {
+                "kind": "add",
+                "text": "    const session = new LocalSession({ config: config.value, changeSet: cached.changeSet, repo: repoDir });",
+                "newLine": 111
+              },
+              {
+                "kind": "add",
+                "text": "    await session.ready();",
+                "newLine": 112
+              },
+              {
+                "kind": "add",
+                "text": "    const review = session.snapshot();",
+                "newLine": 113
+              },
+              {
+                "kind": "add",
+                "text": "    if (review.warning) console.error(`#${n}: ${review.warning}`);",
+                "newLine": 114
+              },
+              {
+                "kind": "add",
+                "text": "    rows.push(scorePr(n, review, cached.comments));",
+                "newLine": 115
+              },
+              {
+                "kind": "add",
+                "text": "    if (!json) console.error(`#${n} done (${rows.length}/${wanted})`);",
+                "newLine": 116
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 117
+              },
+              {
+                "kind": "add",
+                "text": "  if (rows.length < wanted)",
+                "newLine": 118
+              },
+              {
+                "kind": "add",
+                "text": "    console.error(`only ${rows.length} of ${wanted} PRs had human inline comments among ${candidates.length} scanned`);",
+                "newLine": 119
+              },
+              {
+                "kind": "add",
+                "text": "  const summary = summarise(rows);",
+                "newLine": 120
+              },
+              {
+                "kind": "add",
+                "text": "  if (json) console.log(JSON.stringify({ repo, prs: rows, summary }, null, 2));",
+                "newLine": 121
+              },
+              {
+                "kind": "add",
+                "text": "  else printTable(rows, summary);",
+                "newLine": 122
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 123
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 124
+              },
+              {
+                "kind": "add",
+                "text": "// One JSON object per comment, only the fields the score needs.",
+                "newLine": 125
+              },
+              {
+                "kind": "add",
+                "text": "const COMMENT_JQ =",
+                "newLine": 126
+              },
+              {
+                "kind": "add",
+                "text": "  \".[] | {id, reply: .in_reply_to_id, path, line, original_line, side, subject_type, login: .user.login, type: .user.type, body}\";",
+                "newLine": 127
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 128
+              },
+              {
+                "kind": "add",
+                "text": "/** Validate gh's NDJSON once here; keep the first human comment of each thread. */",
+                "newLine": 129
+              },
+              {
+                "kind": "add",
+                "text": "function humanComments(ndjson: string): ReviewComment[] {",
+                "newLine": 130
+              },
+              {
+                "kind": "add",
+                "text": "  const seen = new Set<number>();",
+                "newLine": 131
+              },
+              {
+                "kind": "add",
+                "text": "  return ndjson",
+                "newLine": 132
+              },
+              {
+                "kind": "add",
+                "text": "    .split(\"\\n\")",
+                "newLine": 133
+              },
+              {
+                "kind": "add",
+                "text": "    .filter((l) => l.trim() !== \"\")",
+                "newLine": 134
+              },
+              {
+                "kind": "add",
+                "text": "    .map((l) => JSON.parse(l) as Record<string, unknown>)",
+                "newLine": 135
+              },
+              {
+                "kind": "add",
+                "text": "    .filter((c) => {",
+                "newLine": 136
+              },
+              {
+                "kind": "add",
+                "text": "      const login = String(c.login ?? \"\");",
+                "newLine": 137
+              },
+              {
+                "kind": "add",
+                "text": "      if (c.type === \"Bot\" || login.endsWith(\"[bot]\") || BOTS.has(login) || typeof c.path !== \"string\") return false;",
+                "newLine": 138
+              },
+              {
+                "kind": "add",
+                "text": "      const thread = Number(c.reply ?? c.id);",
+                "newLine": 139
+              },
+              {
+                "kind": "add",
+                "text": "      if (seen.has(thread)) return false;",
+                "newLine": 140
+              },
+              {
+                "kind": "add",
+                "text": "      seen.add(thread);",
+                "newLine": 141
+              },
+              {
+                "kind": "add",
+                "text": "      return true;",
+                "newLine": 142
+              },
+              {
+                "kind": "add",
+                "text": "    })",
+                "newLine": 143
+              },
+              {
+                "kind": "add",
+                "text": "    .map((c) => {",
+                "newLine": 144
+              },
+              {
+                "kind": "add",
+                "text": "      // Outdated comments have no `line`; `original_line` numbers an older commit and may land a few lines off.",
+                "newLine": 145
+              },
+              {
+                "kind": "add",
+                "text": "      const line = c.subject_type === \"file\" ? undefined : (c.line ?? c.original_line);",
+                "newLine": 146
+              },
+              {
+                "kind": "add",
+                "text": "      return {",
+                "newLine": 147
+              },
+              {
+                "kind": "add",
+                "text": "        path: c.path as string,",
+                "newLine": 148
+              },
+              {
+                "kind": "add",
+                "text": "        side: c.side === \"LEFT\" ? \"old\" : \"new\",",
+                "newLine": 149
+              },
+              {
+                "kind": "add",
+                "text": "        body: String(c.body ?? \"\"),",
+                "newLine": 150
+              },
+              {
+                "kind": "add",
+                "text": "        ...(typeof line === \"number\" ? { line } : {}),",
+                "newLine": 151
+              },
+              {
+                "kind": "add",
+                "text": "      };",
+                "newLine": 152
+              },
+              {
+                "kind": "add",
+                "text": "    });",
+                "newLine": 153
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 154
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 155
+              },
+              {
+                "kind": "add",
+                "text": "function scorePr(number: number, review: Review, comments: ReviewComment[]) {",
+                "newLine": 156
+              },
+              {
+                "kind": "add",
+                "text": "  const results = comments.map((c): Scored => {",
+                "newLine": 157
+              },
+              {
+                "kind": "add",
+                "text": "    const mapped = mapComment(review.changeSet, c);",
+                "newLine": 158
+              },
+              {
+                "kind": "add",
+                "text": "    const index = mapped ? review.cards.findIndex((card) => card.blockIds.includes(mapped.blockId)) : -1;",
+                "newLine": 159
+              },
+              {
+                "kind": "add",
+                "text": "    const card = review.cards[index];",
+                "newLine": 160
+              },
+              {
+                "kind": "add",
+                "text": "    const anchor = { path: c.path, line: c.line, side: c.side };",
+                "newLine": 161
+              },
+              {
+                "kind": "add",
+                "text": "    if (!mapped || !card) return { ...anchor, status: \"unmapped\" };",
+                "newLine": 162
+              },
+              {
+                "kind": "add",
+                "text": "    const pointed = card.color === \"amber\" || card.color === \"red\" || (card.risk !== undefined && !card.riskUnverified);",
+                "newLine": 163
+              },
+              {
+                "kind": "add",
+                "text": "    const hit = { ...anchor, on: mapped.on, card: card.title, color: card.color, top3: index < 3 };",
+                "newLine": 164
+              },
+              {
+                "kind": "add",
+                "text": "    return pointed",
+                "newLine": 165
+              },
+              {
+                "kind": "add",
+                "text": "      ? { ...hit, status: \"pointed\" }",
+                "newLine": 166
+              },
+              {
+                "kind": "add",
+                "text": "      : { ...hit, status: \"missed\", excerpt: c.body.replace(/\\s+/g, \" \").trim().slice(0, 100) };",
+                "newLine": 167
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 168
+              },
+              {
+                "kind": "add",
+                "text": "  const count = (s: string) => results.filter((r) => r.status === s).length;",
+                "newLine": 169
+              },
+              {
+                "kind": "add",
+                "text": "  return {",
+                "newLine": 170
+              },
+              {
+                "kind": "add",
+                "text": "    number,",
+                "newLine": 171
+              },
+              {
+                "kind": "add",
+                "text": "    cards: review.cards.length,",
+                "newLine": 172
+              },
+              {
+                "kind": "add",
+                "text": "    comments: results.length,",
+                "newLine": 173
+              },
+              {
+                "kind": "add",
+                "text": "    mapped: results.length - count(\"unmapped\"),",
+                "newLine": 174
+              },
+              {
+                "kind": "add",
+                "text": "    pointed: count(\"pointed\"),",
+                "newLine": 175
+              },
+              {
+                "kind": "add",
+                "text": "    missed: count(\"missed\"),",
+                "newLine": 176
+              },
+              {
+                "kind": "add",
+                "text": "    unmapped: count(\"unmapped\"),",
+                "newLine": 177
+              },
+              {
+                "kind": "add",
+                "text": "    top3: results.filter((r) => r.status !== \"unmapped\" && r.top3).length,",
+                "newLine": 178
+              },
+              {
+                "kind": "add",
+                "text": "    results,",
+                "newLine": 179
+              },
+              {
+                "kind": "add",
+                "text": "  };",
+                "newLine": 180
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 181
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 182
+              },
+              {
+                "kind": "add",
+                "text": "function summarise(rows: ReturnType<typeof scorePr>[]) {",
+                "newLine": 183
+              },
+              {
+                "kind": "add",
+                "text": "  const sum = (k: \"comments\" | \"mapped\" | \"pointed\" | \"missed\" | \"unmapped\" | \"top3\") => rows.reduce((s, r) => s + r[k], 0);",
+                "newLine": 184
+              },
+              {
+                "kind": "add",
+                "text": "  const ratio = (a: number, b: number) => (b ? Number((a / b).toFixed(2)) : null);",
+                "newLine": 185
+              },
+              {
+                "kind": "add",
+                "text": "  return {",
+                "newLine": 186
+              },
+              {
+                "kind": "add",
+                "text": "    prs: rows.length,",
+                "newLine": 187
+              },
+              {
+                "kind": "add",
+                "text": "    comments: sum(\"comments\"),",
+                "newLine": 188
+              },
+              {
+                "kind": "add",
+                "text": "    mapped: sum(\"mapped\"),",
+                "newLine": 189
+              },
+              {
+                "kind": "add",
+                "text": "    pointed: sum(\"pointed\"),",
+                "newLine": 190
+              },
+              {
+                "kind": "add",
+                "text": "    missed: sum(\"missed\"),",
+                "newLine": 191
+              },
+              {
+                "kind": "add",
+                "text": "    unmapped: sum(\"unmapped\"),",
+                "newLine": 192
+              },
+              {
+                "kind": "add",
+                "text": "    /** pointed / mapped */",
+                "newLine": 193
+              },
+              {
+                "kind": "add",
+                "text": "    recall: ratio(sum(\"pointed\"), sum(\"mapped\")),",
+                "newLine": 194
+              },
+              {
+                "kind": "add",
+                "text": "    /** Mapped comments whose card was among the first three. */",
+                "newLine": 195
+              },
+              {
+                "kind": "add",
+                "text": "    top3Share: ratio(sum(\"top3\"), sum(\"mapped\")),",
+                "newLine": 196
+              },
+              {
+                "kind": "add",
+                "text": "  };",
+                "newLine": 197
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 198
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 199
+              },
+              {
+                "kind": "add",
+                "text": "function printTable(rows: ReturnType<typeof scorePr>[], summary: ReturnType<typeof summarise>) {",
+                "newLine": 200
+              },
+              {
+                "kind": "add",
+                "text": "  const cols = [\"cards\", \"comments\", \"mapped\", \"pointed\", \"missed\", \"unmapped\", \"top3\"] as const;",
+                "newLine": 201
+              },
+              {
+                "kind": "add",
+                "text": "  console.log([\"PR\".padEnd(7), ...cols.map((c) => c.padStart(9))].join(\"\"));",
+                "newLine": 202
+              },
+              {
+                "kind": "add",
+                "text": "  for (const r of rows) {",
+                "newLine": 203
+              },
+              {
+                "kind": "add",
+                "text": "    console.log([`#${r.number}`.padEnd(7), ...cols.map((c) => String(r[c]).padStart(9))].join(\"\"));",
+                "newLine": 204
+              },
+              {
+                "kind": "add",
+                "text": "    for (const m of r.results) if (m.status === \"missed\") console.log(`         missed [${m.color}] ${m.card} — ${m.excerpt}`);",
+                "newLine": 205
+              },
+              {
+                "kind": "add",
+                "text": "  }",
+                "newLine": 206
+              },
+              {
+                "kind": "add",
+                "text": "  console.log(",
+                "newLine": 207
+              },
+              {
+                "kind": "add",
+                "text": "    `\\nrecall ${summary.pointed}/${summary.mapped} = ${summary.recall ?? \"-\"}, top-3 share ${summary.top3Share ?? \"-\"}, unmapped ${summary.unmapped} (${summary.prs} PRs, ${summary.comments} comments)`,",
+                "newLine": 208
+              },
+              {
+                "kind": "add",
+                "text": "  );",
+                "newLine": 209
+              },
+              {
+                "kind": "add",
+                "text": "}",
+                "newLine": 210
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 211
+              },
+              {
+                "kind": "add",
+                "text": "// Last, so every module-level constant above is initialised before main reads it.",
+                "newLine": 212
+              },
+              {
+                "kind": "add",
+                "text": "if (import.meta.main) await main();",
+                "newLine": 213
+              }
+            ],
+            "blocks": [
+              {
+                "id": "2cf38810b34a",
+                "hunkId": "7161423cd220",
+                "path": "scripts/review-recall.ts",
+                "from": 0,
+                "to": 213,
+                "labels": [
+                  "added"
+                ],
+                "attention": "needs-eyes",
+                "score": 0.832,
+                "newRange": {
+                  "start": 1,
+                  "end": 213
+                },
+                "kind": "behavior"
+              }
+            ],
+            "labels": [
+              "added"
+            ],
+            "attention": "needs-eyes",
+            "score": 0.832
+          }
+        ]
+      },
+      {
+        "path": "test/recall.test.ts",
+        "status": "added",
+        "binary": false,
+        "hunks": [
+          {
+            "id": "e9fbd88686c8",
+            "path": "test/recall.test.ts",
+            "header": "@@ -0,0 +1,37 @@",
+            "oldStart": 0,
+            "oldLines": 0,
+            "newStart": 1,
+            "newLines": 37,
+            "lines": [
+              {
+                "kind": "add",
+                "text": "import { describe, expect, test } from \"bun:test\";",
+                "newLine": 1
+              },
+              {
+                "kind": "add",
+                "text": "import { mapComment } from \"../scripts/review-recall.ts\";",
+                "newLine": 2
+              },
+              {
+                "kind": "add",
+                "text": "import { allBlocks } from \"../src/core/blocks.ts\";",
+                "newLine": 3
+              },
+              {
+                "kind": "add",
+                "text": "import { parseDiff } from \"../src/core/diff.ts\";",
+                "newLine": 4
+              },
+              {
+                "kind": "add",
+                "text": "import type { ChangeSet } from \"../src/core/types.ts\";",
+                "newLine": 5
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 6
+              },
+              {
+                "kind": "add",
+                "text": "// 43f4835 in this repo, src/cards/build.ts: compareCards gains `rank(...)` as new line 158 and loses it at old line 160.",
+                "newLine": 7
+              },
+              {
+                "kind": "add",
+                "text": "const changeSet: ChangeSet = {",
+                "newLine": 8
+              },
+              {
+                "kind": "add",
+                "text": "  target: \"43f4835\",",
+                "newLine": 9
+              },
+              {
+                "kind": "add",
+                "text": "  base: \"\",",
+                "newLine": 10
+              },
+              {
+                "kind": "add",
+                "text": "  head: \"\",",
+                "newLine": 11
+              },
+              {
+                "kind": "add",
+                "text": "  files: parseDiff(await Bun.file(`${import.meta.dir}/../fixtures/recall.diff`).text()),",
+                "newLine": 12
+              },
+              {
+                "kind": "add",
+                "text": "};",
+                "newLine": 13
+              },
+              {
+                "kind": "add",
+                "text": "const path = \"src/cards/build.ts\";",
+                "newLine": 14
+              },
+              {
+                "kind": "add",
+                "text": "const blockAt = (side: \"newRange\" | \"oldRange\", line: number) =>",
+                "newLine": 15
+              },
+              {
+                "kind": "add",
+                "text": "  allBlocks(changeSet).find((r) => r.block[side]?.start === line && r.block[side]?.end === line)!.block.id;",
+                "newLine": 16
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 17
+              },
+              {
+                "kind": "add",
+                "text": "describe(\"review comment to block\", () => {",
+                "newLine": 18
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a comment on an added line maps to the block holding it\", () => {",
+                "newLine": 19
+              },
+              {
+                "kind": "add",
+                "text": "    expect(mapComment(changeSet, { path, line: 158, side: \"new\" })).toEqual({ blockId: blockAt(\"newRange\", 158), on: \"edit\" });",
+                "newLine": 20
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 21
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 22
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a comment on a removed line maps by the old side\", () => {",
+                "newLine": 23
+              },
+              {
+                "kind": "add",
+                "text": "    expect(mapComment(changeSet, { path, line: 160, side: \"old\" })).toEqual({ blockId: blockAt(\"oldRange\", 160), on: \"edit\" });",
+                "newLine": 24
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 25
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 26
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a comment on a context line maps to the nearest block in its hunk\", () => {",
+                "newLine": 27
+              },
+              {
+                "kind": "add",
+                "text": "    // New 159 is `skim(a) - skim(b)`, one line below the added `rank(...)` and two above the removed one.",
+                "newLine": 28
+              },
+              {
+                "kind": "add",
+                "text": "    expect(mapComment(changeSet, { path, line: 159, side: \"new\" })).toEqual({ blockId: blockAt(\"newRange\", 158), on: \"context\" });",
+                "newLine": 29
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 30
+              },
+              {
+                "kind": "add",
+                "text": "",
+                "newLine": 31
+              },
+              {
+                "kind": "add",
+                "text": "  test(\"a comment outside every hunk, on another file or on the whole file is unmapped\", () => {",
+                "newLine": 32
+              },
+              {
+                "kind": "add",
+                "text": "    expect(mapComment(changeSet, { path, line: 10, side: \"new\" })).toBeUndefined();",
+                "newLine": 33
+              },
+              {
+                "kind": "add",
+                "text": "    expect(mapComment(changeSet, { path: \"src/cards/other.ts\", line: 158, side: \"new\" })).toBeUndefined();",
+                "newLine": 34
+              },
+              {
+                "kind": "add",
+                "text": "    expect(mapComment(changeSet, { path, side: \"new\" })).toBeUndefined();",
+                "newLine": 35
+              },
+              {
+                "kind": "add",
+                "text": "  });",
+                "newLine": 36
+              },
+              {
+                "kind": "add",
+                "text": "});",
+                "newLine": 37
+              }
+            ],
+            "blocks": [
+              {
+                "id": "4c2154c4eed3",
+                "hunkId": "e9fbd88686c8",
+                "path": "test/recall.test.ts",
+                "from": 0,
+                "to": 37,
+                "labels": [
+                  "test",
+                  "added"
+                ],
+                "attention": "routine",
+                "score": 0.363,
+                "newRange": {
+                  "start": 1,
+                  "end": 37
+                },
+                "kind": "test"
+              }
+            ],
+            "labels": [
+              "test",
+              "added"
+            ],
+            "attention": "routine",
+            "score": 0.363
+          }
+        ]
+      }
+    ]
+  },
+  "classification": {
+    "kind": "additive",
+    "areas": [],
+    "maxAttention": "needs-eyes",
+    "sensitivePaths": [],
+    "oneWay": false,
+    "counts": {
+      "files": 5,
+      "blocks": 5,
+      "inert": 0
+    }
+  },
+  "verdict": {
+    "tier": "medium",
+    "requiredHumans": 1,
+    "reasons": [
+      "a block needs eyes: at least medium",
+      "additive change → low"
+    ]
+  },
+  "cards": [
+    {
+      "id": "c8506806ddcc",
+      "title": "Review Recall and Risk Ordering",
+      "color": "amber",
+      "kind": "additive",
+      "areas": [],
+      "labels": [
+        "added",
+        "test"
+      ],
+      "blockIds": [
+        "2cf38810b34a",
+        "73bffbf287fd",
+        "4c2154c4eed3"
+      ],
+      "files": [
+        "scripts/review-recall.ts",
+        "fixtures/recall.diff",
+        "test/recall.test.ts"
+      ],
+      "attention": "needs-eyes",
+      "score": 0.832,
+      "claimIds": [],
+      "unmentioned": false,
+      "mentioned": true,
+      "testsTouched": true,
+      "questions": [],
+      "blockKind": "behavior",
+      "paragraph": "Review cards now mark routine changes in sensitive areas amber rather than red, and reviewers can run `scripts/review-recall.ts` to see whether cards surfaced issues raised in human inline comments. `colorFloor` uses `card.attention === \"needs-eyes\"` to set red versus amber, `compareCards` ranks attention before skim, and `mapComment` maps comment lines to blocks while `scorePr` counts amber/red cards or verified risk lines as pointed."
+    },
+    {
+      "id": "d695f9749fc5",
+      "title": "Configure the local review-recall script",
+      "color": "amber",
+      "kind": "deps",
+      "areas": [],
+      "labels": [],
+      "blockIds": [
+        "bd92ddab8ef8"
+      ],
+      "files": [
+        "package.json"
+      ],
+      "attention": "routine",
+      "score": 0.077,
+      "claimIds": [],
+      "unmentioned": false,
+      "mentioned": true,
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "config",
+      "paragraph": "The `package.json` `scripts.recall` key adds `bun scripts/review-recall.ts`, which `bun run recall` reads in the local development environment. Undoing this removes the `recall` line."
+    },
+    {
+      "id": "08fa02ed1706",
+      "title": "Document the review-recall baseline and its open classification question",
+      "color": "green",
+      "kind": "docs",
+      "areas": [],
+      "labels": [
+        "docs"
+      ],
+      "blockIds": [
+        "5def9f514643"
+      ],
+      "files": [
+        "docs/handoff.md"
+      ],
+      "attention": "routine",
+      "score": 0.292,
+      "claimIds": [],
+      "unmentioned": false,
+      "mentioned": true,
+      "testsTouched": false,
+      "questions": [],
+      "blockKind": "docs",
+      "paragraph": "The `bun run recall <repo-dir> [--prs N | --pr A,B,C] [--json]` section describes how comments are counted and cached, and reports a baseline recall of **0.75** across 33 comments from 15 merged PRs. It says all eight misses were green cards—seven docs cards and one test card—and leaves open whether documents that define behaviour should be amber."
+    }
+  ],
+  "unmentionedCount": 0,
+  "bodyHasNames": false,
+  "untouched": [
+    "auth",
+    "billing",
+    "data",
+    "infra",
+    "prompts"
+  ],
+  "claims": [],
+  "door": {
+    "computed": "two-way",
+    "signals": []
+  },
+  "radius": {
+    "areas": []
+  },
+  "dispatches": [],
+  "rankedBy": "rules+openai:gpt-6-luna",
+  "evidence": true,
+  "exchanges": [],
+  "map": {
+    "text": "+ main\n     load\n     LocalSession.ready\n     scorePr\n         mapComment\n         card.color or verified risk\n     summarise\n     printTable / console.log\n+ package.json recall scripts review\n+ docs/handoff.md Review recall baseline",
+    "check": 0.99,
+    "nodes": {
+      "c8506806ddcc": 2,
+      "d695f9749fc5": 8,
+      "08fa02ed1706": 9
+    }
+  }
+}
