@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Experimental_DecisionMockModelV4, MockLanguageModelV4 } from "ai/test";
 import { buildCards } from "../src/cards/build.ts";
-import { mapCards, mapProblems, mapSource } from "../src/cards/map.ts";
+import { mapCards, mapProblems, mapSource, parseConcerns } from "../src/cards/map.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import type { Card, ChangeMap, ChangeSet } from "../src/core/types.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
@@ -148,4 +148,84 @@ test("a map line may run to 120 columns, past the 100 a card sketch gets; a long
   const at = (n: number) => `${good}\n   loadUserEnv${" ".repeat(n - 18)}→ env`;
   expect(mapProblems(at(110), source)).toEqual([]);
   expect(mapProblems(at(130), source)).toHaveLength(1);
+});
+
+// Nine cards: each fixture card three times over, so the stack is past six and the map groups it into concerns.
+const many: Card[] = cards.flatMap((c) =>
+  ["", " again", " once more"].map((s, k) => ({ ...c, id: `${c.id}${k}`, title: `${c.title}${s}` })),
+);
+const grouping = JSON.stringify({
+  concerns: [
+    { title: "Load the user env file", cards: [1, 2, 3, 7, 8, 9] },
+    { title: "Test the loader", cards: [4, 5, 6] },
+  ],
+});
+const concernMap = [
+  " Load the user env file",
+  "+  loadUserEnv(path = USER_ENV_PATH, env = process.env)",
+  "   main",
+  "+    loadUserEnv()",
+  " Test the loader",
+  "+  describe user env file",
+].join("\n");
+
+test("past six cards, a first call groups them into concerns and the map draws one top-level node per concern", async () => {
+  const shared = cache();
+  const language = writer([grouping, concernMap]);
+  const { maps } = await run(language, model([0.9]), shared, many);
+  expect(language.doGenerateCalls).toHaveLength(2);
+  expect(JSON.stringify(language.doGenerateCalls[1]!.prompt)).toContain("1. Load the user env file: cards 1, 2, 3, 7, 8, 9");
+  expect(maps.map((m) => m.text)).toEqual([concernMap]);
+  expect(maps[0]!.concerns).toEqual([
+    { title: "Load the user env file", cardIds: [1, 2, 3, 7, 8, 9].map((n) => many[n - 1]!.id) },
+    { title: "Test the loader", cardIds: [4, 5, 6].map((n) => many[n - 1]!.id) },
+  ]);
+  // Both steps are cached by the card-id set.
+  const again = writer([]);
+  await run(again, model([0.9]), shared, many);
+  expect(again.doGenerateCalls).toHaveLength(0);
+});
+
+test("concern grouping keeps every card once: foreign ids dropped, a repeat keeps its first concern, the unplaced and singletons join the concern sharing their files", () => {
+  const answer = JSON.stringify({
+    concerns: [
+      { title: "loader", cards: [1, 2, 99, "x"] },
+      { title: "tests", cards: [4, 5, 2] },
+      { title: "lonely test", cards: [6] },
+      { title: "startup", cards: [7, 8, 9] },
+    ],
+  });
+  // Card 3 is unplaced and shares files with 1 and 2; card 6 is alone and shares its file with 4 and 5.
+  expect(parseConcerns(answer, many)).toEqual([
+    { title: "loader", cardIds: [1, 2, 3].map((n) => many[n - 1]!.id) },
+    { title: "tests", cardIds: [4, 5, 6].map((n) => many[n - 1]!.id) },
+    { title: "startup", cardIds: [7, 8, 9].map((n) => many[n - 1]!.id) },
+  ]);
+  expect(parseConcerns("no json", many)).toBeUndefined();
+  expect(parseConcerns(JSON.stringify({ concerns: [{ title: "all", cards: [1, 2, 3, 4, 5, 6, 7, 8, 9] }] }), many)).toBeUndefined();
+});
+
+test("more than six concerns merge, smallest first, into the concern sharing their files", () => {
+  const sixteen = [...many, ...many.slice(0, 7).map((c) => ({ ...c, id: `${c.id}x` }))];
+  const answer = JSON.stringify({
+    concerns: Array.from({ length: 8 }, (_, k) => ({ title: `c${k}`, cards: [2 * k + 1, 2 * k + 2] })),
+  });
+  const parsed = parseConcerns(answer, sixteen)!;
+  expect(parsed).toHaveLength(6);
+  expect(parsed.flatMap((c) => c.cardIds).sort()).toEqual(sixteen.map((c) => c.id).sort());
+});
+
+test("a seventh top-level line is a problem; the top level is the map's least-indented lines", () => {
+  const source = mapSource(changeSet, cards);
+  const flat = Array.from({ length: 7 }, () => "+    loadUserEnv()").join("\n");
+  expect(mapProblems(`${good}\n${flat.replaceAll("+    ", "+  ")}`, source)).toEqual([]);
+  expect(mapProblems(`${flat}\n+    describe user env file`, source)).toEqual(["the map has 8 top-level lines; at most 6"]);
+});
+
+test("a card named only above the first top-level line is not in the map", () => {
+  const source = mapSource(changeSet, cards);
+  const orphan = ["+  describe user env file", " main", "+  USER_ENV_PATH"].join("\n");
+  expect(mapProblems(orphan, source)).toEqual([
+    'the card "Test the loader against a temp directory" is not in the map; name it by its title words, a file or a name from its edits',
+  ]);
 });
