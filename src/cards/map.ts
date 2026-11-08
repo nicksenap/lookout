@@ -19,7 +19,7 @@ import { shapeOf } from "./write.ts";
 export const MAP_MAX_LINES = 20;
 const MAP_GATE = 0.7;
 // Cache key version: bumped with the prompt so a sharper prompt is never answered from an old cache.
-const MAP_VERSION = "map-v1";
+const MAP_VERSION = "map-v2";
 const QUESTION =
   "Does every line of this change map follow from the cards? Lines starting with + name what the change adds, lines starting with - what it removes, other lines are unchanged context the cards show.";
 
@@ -150,8 +150,9 @@ export function mapPrompt(changeSet: ChangeSet, cards: Card[]): string {
   return `You are drawing the change map of a code review for a senior engineer: ONE diff-shaped sketch of the whole change, the way a PR author sketches it in a PR summary, whose nodes are the review's cards listed below.
 Draw ${sketchShape({ kind: "logic", files })}.
 Rules:
-- At most ${MAP_MAX_LINES} lines, each at most ${SKETCH_MAX_WIDTH} characters: one node per card plus the few context lines that frame them. Indent with spaces to show nesting.
-- Every card appears as one node or +/- line, in the order given, named by one of its files, a name from its sketch or names, or a word of its title. Mechanical cards may share one line, and docs cards another, as long as that line names each of them.
+- At most ${MAP_MAX_LINES} lines, each at most ${SKETCH_MAX_WIDTH} characters. Indent with spaces to show nesting.
+- One level above the cards: each card is ONE line (the top node of its sketch, or the one thing it adds or removes), and the few unmarked context lines show how the cards fit together (which function calls which, which file holds what). Never copy a card's sketch.
+- Every card appears, in the order given, named by one of its files or one or two names from its sketch, names or title. A line is a node, not a list of words. Mechanical cards may share one line, and docs cards another, as long as that line names each of them.
 - Start a line with "+" for what the change adds, "-" for what it removes, a space for kept context. The mark is the first character of the line, before the indentation: "+    call", not "    + call".
 - Use only names the cards show (files, sketches, names, title words). Use "→" for "returns" or "leads to", <name> for a placeholder.
 - No prose lines, no card numbers, no heading, no code fence.
