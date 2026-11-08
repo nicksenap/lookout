@@ -64,7 +64,7 @@ const run = async (language: MockLanguageModelV4, decision = model([]), shared =
 
 test("a map that names every card and only names the diff is kept, with each card's node line", async () => {
   const language = writer([`\`\`\`diff\n${good}\n\`\`\``]);
-  const { maps, res } = await run(language, model([0.9]));
+  const { maps } = await run(language, model([0.9]));
   expect(maps).toHaveLength(1);
   expect(maps[0]!.text).toBe(good);
   expect(maps[0]!.check).toBe(0.9);
@@ -73,7 +73,6 @@ test("a map that names every card and only names the diff is kept, with each car
   expect(maps[0]!.nodes[id("src/cli/main.ts")]).toBe(0);
   expect(maps[0]!.nodes[id("src/cli/env.ts")]).toBe(2);
   expect(maps[0]!.nodes[id("test/sources.test.ts")]).toBe(3);
-  expect(res.map).toEqual(maps[0]);
   expect(language.doGenerateCalls).toHaveLength(1);
 });
 
@@ -87,10 +86,30 @@ test("a map missing a card is rewritten once, quoting the card", async () => {
 
 test("a map still missing a card after the rewrite is dropped: no map, no callback", async () => {
   const language = writer([missing, missing]);
-  const { maps, res } = await run(language);
+  const { maps } = await run(language);
   expect(maps).toEqual([]);
-  expect(res.map).toBeUndefined();
   expect(language.doGenerateCalls).toHaveLength(2);
+});
+
+test("a rewrite call that fails is a warning, not a verdict: the next run draws again", async () => {
+  const shared = cache();
+  let calls = 0;
+  const flaky = new MockLanguageModelV4({
+    doGenerate: async () => {
+      if (++calls > 1) throw new Error("network down");
+      return {
+        content: [{ type: "text", text: missing }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
+        warnings: [],
+      };
+    },
+  });
+  const first = await run(flaky, model([]), shared);
+  expect(first.maps).toEqual([]);
+  expect(first.res.warning).toContain("network down");
+  const { maps } = await run(writer([good]), model([0.9]), shared);
+  expect(maps.map((m) => m.text)).toEqual([good]);
 });
 
 test("a map failing the consistency check twice is kept, marked unverified", async () => {

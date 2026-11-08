@@ -198,38 +198,72 @@ export async function sketchCards(
   return warning ? { warning } : {};
 }
 
+/** A draft after the gate: the one that passed, or the last one that still fails. */
+export interface Gated {
+  text: string;
+  check?: number;
+  /** Rule problems the final draft still has; empty when it passed or only the check failed. */
+  problems: string[];
+  /** The final draft failed the rules or the check. */
+  failed: boolean;
+  /** The rewrite call itself failed, so the draft never got its second chance. */
+  rewriteError?: string;
+}
+
 /**
- * Rules first (free, and the rewrite can quote the offending lines), then Decisions. Both share one
- * rewrite; still failing, the sketch is kept but unverified. A failed check call leaves it ungated.
+ * Draw, gate, rewrite once; shared by card sketches and the change map. Rules first (free, and the
+ * rewrite can quote the offending lines), then the Decisions check; both share one rewrite. A failed
+ * check call leaves the draft ungated. `undefined` when the writer returned nothing.
  */
+export async function gateDraft(
+  first: string,
+  rules: (text: string) => string[],
+  check: ((text: string) => Promise<number>) | undefined,
+  rewrite: (previous: string, problems: string[]) => Promise<string>,
+): Promise<Gated | undefined> {
+  let text = first;
+  if (!text) return undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const problems = rules(text);
+    const checked = problems.length || !check ? undefined : await attemptAsync(() => check(text));
+    const scored = checked?.ok ? { check: checked.value } : {};
+    const failed = problems.length > 0 || (checked?.ok === true && checked.value < SKETCH_GATE);
+    if (!failed || attempt === 1) return { text, ...scored, problems, failed };
+    const next = await attemptAsync(() => rewrite(text, problems));
+    if (!next.ok) return { text, ...scored, problems, failed, rewriteError: next.error };
+    if (!next.value) return { text, ...scored, problems, failed };
+    text = next.value;
+  }
+  throw new Error("rewrite budget exceeded");
+}
+
+/** Still failing after the rewrite, the sketch is kept but unverified. */
 async function drawSketch(
   writer: LanguageModel,
   check: AttentionModel | undefined,
   prompt: string,
   source: SketchSource,
 ): Promise<Sketch | undefined> {
-  let sketch = parseSketch(await writeText(writer, prompt));
-  if (!sketch) return undefined;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const problems = sketchProblems(sketch, source);
-    const checked =
-      problems.length || !check ? undefined : await attemptAsync(() => checkAnswerWithModel(check, source.edits, QUESTION, sketch));
-    if (!problems.length && (!checked?.ok || checked.value >= SKETCH_GATE))
-      return { sketch, ...(checked?.ok ? { sketchCheck: checked.value } : {}) };
-    const failed: Sketch = { sketch, ...(checked?.ok ? { sketchCheck: checked.value } : {}), sketchUnverified: true };
-    if (attempt === 1) return failed;
-    const why = problems.length
-      ? `A checker rejected these lines:\n${problems.map((p) => `- ${p}`).join("\n")}`
-      : "A checker could not verify that every line follows from the edits.";
-    const rewrite = await attemptAsync(() =>
-      writeText(
-        writer,
-        `${prompt}\n\n${why}\nRedraw it in at most ${SKETCH_MAX_LINES} lines: drop or correct those lines, and merge or drop context lines to fit. Previous sketch:\n${sketch}`,
-      ),
-    );
-    const next = rewrite.ok ? parseSketch(rewrite.value) : "";
-    if (!next) return failed;
-    sketch = next;
-  }
-  throw new Error("sketch rewrite budget exceeded");
+  const gated = await gateDraft(
+    parseSketch(await writeText(writer, prompt)),
+    (sketch) => sketchProblems(sketch, source),
+    check ? (sketch) => checkAnswerWithModel(check, source.edits, QUESTION, sketch) : undefined,
+    async (previous, problems) => {
+      const why = problems.length
+        ? `A checker rejected these lines:\n${problems.map((p) => `- ${p}`).join("\n")}`
+        : "A checker could not verify that every line follows from the edits.";
+      return parseSketch(
+        await writeText(
+          writer,
+          `${prompt}\n\n${why}\nRedraw it in at most ${SKETCH_MAX_LINES} lines: drop or correct those lines, and merge or drop context lines to fit. Previous sketch:\n${previous}`,
+        ),
+      );
+    },
+  );
+  if (!gated) return undefined;
+  return {
+    sketch: gated.text,
+    ...(gated.check !== undefined ? { sketchCheck: gated.check } : {}),
+    ...(gated.failed ? { sketchUnverified: true } : {}),
+  };
 }

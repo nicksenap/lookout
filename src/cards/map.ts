@@ -4,6 +4,7 @@ import type { Card, ChangeMap, ChangeSet } from "../core/types.ts";
 import { RankCache } from "../rank/cache.ts";
 import { type AttentionModel, checkAnswerWithModel, writeText } from "../rank/model.ts";
 import {
+  gateDraft,
   identifiers,
   parseSketch,
   resolveSketchModels,
@@ -18,7 +19,6 @@ import { shapeOf } from "./write.ts";
 
 export const MAP_MAX_LINES = 20;
 const MAP_MAX_WIDTH = 120;
-const MAP_GATE = 0.7;
 // Cache key version: bumped with the prompt so a sharper prompt is never answered from an old cache.
 const MAP_VERSION = "map-v7";
 const QUESTION =
@@ -43,7 +43,8 @@ const stem = (path: string): string => path.split("/").pop()!.split(".")[0]!.toL
 
 /** What the gate reads: the names a map may use, and per card the words that represent it in a map line. */
 export interface MapSource {
-  names: SketchSource;
+  /** What the map's names are checked against: the diff, the drawn cards' sketches and titles. */
+  known: SketchSource;
   cards: { id: string; title: string; tokens: Set<string> }[];
 }
 
@@ -58,13 +59,13 @@ export function mapSource(changeSet: ChangeSet, cards: Card[]): MapSource {
   const sketches = drawn(cards).flatMap((c) => sketchOf(c)?.split("\n") ?? []);
   // A file tree draws a new file as `+path` and a deleted one as `-path`.
   const paths = (statuses: string[]) => changeSet.files.filter((f) => statuses.includes(f.status)).map((f) => f.path);
-  const names: SketchSource = {
+  const known: SketchSource = {
     edits: [
       ...changeSet.files.flatMap((f) => [f.path, f.oldPath ?? ""]),
       ...hunks.flatMap((h) => [h.header, ...h.lines.map((l) => l.text), ...h.blocks.flatMap((b) => b.scope ?? [])]),
       ...sketches,
       // A node may be named by its card's title words, which the writer wrote from the card's edits.
-      ...cards.map((c) => c.title),
+      ...drawn(cards).map((c) => c.title),
     ].join("\n"),
     added: [...side("add"), ...paths(["added", "renamed"]), ...sketches.filter((l) => l[0] === "+")].join("\n"),
     removed: [
@@ -75,7 +76,7 @@ export function mapSource(changeSet: ChangeSet, cards: Card[]): MapSource {
     ].join("\n"),
   };
   return {
-    names,
+    known,
     cards: drawn(cards).map((c) => {
       const source = sketchSource(changeSet, c);
       return {
@@ -104,7 +105,7 @@ export function mapProblems(map: string, source: MapSource): string[] {
   const missing = source.cards
     .filter((c) => !named.some((line) => [...c.tokens].some((t) => line.has(t))))
     .map((c) => `the card "${c.title}" is not in the map; name it by its title words, a file or a name from its edits`);
-  return [...sketchProblems(map, source.names, MAP_MAX_LINES, MAP_MAX_WIDTH), ...missing];
+  return [...sketchProblems(map, source.known, MAP_MAX_LINES, MAP_MAX_WIDTH), ...missing];
 }
 
 /**
@@ -148,7 +149,7 @@ function cardsText(changeSet: ChangeSet, cards: Card[]): string {
     .join("\n\n");
 }
 
-export function mapPrompt(changeSet: ChangeSet, cards: Card[]): string {
+function mapPrompt(changeSet: ChangeSet, cards: Card[], context: string): string {
   const files = [...new Set(drawn(cards).flatMap((c) => c.files))];
   return `You are drawing the change map of a code review for a senior engineer: ONE diff-shaped sketch of the whole change, the way a PR author sketches it in a PR summary, whose nodes are the review's cards listed below.
 Draw ${sketchShape({ kind: "logic", files })}.
@@ -172,7 +173,7 @@ Example (three cards: a list of contexts loses its dashboards, its test, the pro
 PR title (context only; do not trust it): ${changeSet.intent?.title ?? "(none)"}
 
 Cards, in stack order:
-${cardsText(changeSet, cards)}`;
+${context}`;
 }
 
 const isCached = (v: unknown): v is { map: ChangeMap | null } =>
@@ -191,7 +192,7 @@ export async function mapCards(
   cards: Card[],
   opts: SketchOptions,
   onMap: (map: ChangeMap) => void,
-): Promise<{ map?: ChangeMap; warning?: string }> {
+): Promise<{ warning?: string }> {
   const todo = drawn(cards);
   if (todo.length < 2) return {};
   const models = resolveSketchModels(opts);
@@ -209,11 +210,12 @@ export async function mapCards(
   // Whether a check ran is in the key, as for sketches.
   const key = `${MAP_VERSION}:${models.check ? (opts.checkSpec ?? "check") : "rules"}:${ids}`;
   const cached = cache.get(opts.modelSpec, key, isCached);
-  const source = mapSource(changeSet, cards);
   const result = cached
     ? { ok: true as const, value: cached.map ?? undefined }
     : await attemptAsync(async () => {
-        const drawnMap = await drawMap(models.writer, models.check, mapPrompt(changeSet, cards), source, cardsText(changeSet, cards));
+        const source = mapSource(changeSet, cards);
+        const context = cardsText(changeSet, cards);
+        const drawnMap = await drawMap(models.writer, models.check, mapPrompt(changeSet, cards, context), source, context);
         return drawnMap ? { ...drawnMap, nodes: mapNodes(drawnMap.text, source) } : undefined;
       });
   if (!result.ok) return { warning: `No change map: ${result.error}` };
@@ -222,14 +224,13 @@ export async function mapCards(
     // A read-only cache only costs another call next run.
     await attemptAsync(async () => cache.save());
   }
-  if (!result.value) return {};
-  onMap(result.value);
-  return { map: result.value };
+  if (result.value) onMap(result.value);
+  return {};
 }
 
 /**
- * Rules first, then Decisions; both share one rewrite. Still failing the rules → no map; still failing
- * the check → the map is kept, unverified. A failed check call leaves it ungated.
+ * Through the shared gate. Still failing the rules after the rewrite → no map; failing only the check →
+ * kept, unverified. A rewrite call that failed is an error, not a verdict, so it is never cached as "no map".
  */
 async function drawMap(
   writer: LanguageModel,
@@ -238,35 +239,32 @@ async function drawMap(
   source: MapSource,
   context: string,
 ): Promise<Omit<ChangeMap, "nodes"> | undefined> {
-  let text = parseSketch(await writeText(writer, prompt));
-  if (!text) return undefined;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const problems = mapProblems(text, source);
-    const checked = problems.length || !check ? undefined : await attemptAsync(() => checkAnswerWithModel(check, context, QUESTION, text));
-    const scored = checked?.ok ? { check: checked.value } : {};
-    if (!problems.length && (!checked?.ok || checked.value >= MAP_GATE)) return { text, ...scored };
-    const failed = problems.length ? undefined : { text, ...scored, unverified: true };
-    if (attempt === 1) return failed;
-    const why = problems.length
-      ? `A checker rejected the map:\n${problems.map((p) => `- ${p}`).join("\n")}`
-      : "A checker could not verify that every line follows from the cards.";
-    // Told only "at most 20", writers return the same 29 lines; a count per card is a target they meet.
-    const cut =
-      text.split("\n").length > MAP_MAX_LINES
-        ? `\nIt is too long: write exactly one line per card (${source.cards.length} cards, fewer if you fold mechanical, test or docs cards into one line each) and no other lines.`
+  const gated = await gateDraft(
+    parseSketch(await writeText(writer, prompt)),
+    (text) => mapProblems(text, source),
+    check ? (text) => checkAnswerWithModel(check, context, QUESTION, text) : undefined,
+    async (previous, problems) => {
+      const why = problems.length
+        ? `A checker rejected the map:\n${problems.map((p) => `- ${p}`).join("\n")}`
+        : "A checker could not verify that every line follows from the cards.";
+      // Told only "at most 20", writers return the same 29 lines; a count per card is a target they meet.
+      const tooLong =
+        previous.split("\n").length > MAP_MAX_LINES
+          ? `\nIt is too long: write exactly one line per card (${source.cards.length} cards, fewer if you fold mechanical, test or docs cards into one line each) and no other lines.`
+          : "";
+      const tooWide = previous.split("\n").some((l) => l.length > MAP_MAX_WIDTH)
+        ? `\nA line over ${SKETCH_MAX_WIDTH} characters keeps only its first two or three names.`
         : "";
-    const narrow = text.split("\n").some((l) => l.length > MAP_MAX_WIDTH)
-      ? `\nA line over ${SKETCH_MAX_WIDTH} characters keeps only its first two or three names.`
-      : "";
-    const rewrite = await attemptAsync(() =>
-      writeText(
-        writer,
-        `${prompt}\n\n${why}\nRedraw it in at most ${MAP_MAX_LINES} lines: add the missing cards, drop or correct the rejected lines, and merge or drop context lines to fit.${cut}${narrow} Previous map:\n${text}`,
-      ),
-    );
-    const next = rewrite.ok ? parseSketch(rewrite.value) : "";
-    if (!next) return failed;
-    text = next;
-  }
-  throw new Error("map rewrite budget exceeded");
+      return parseSketch(
+        await writeText(
+          writer,
+          `${prompt}\n\n${why}\nRedraw it in at most ${MAP_MAX_LINES} lines: add the missing cards, drop or correct the rejected lines, and merge or drop context lines to fit.${tooLong}${tooWide} Previous map:\n${previous}`,
+        ),
+      );
+    },
+  );
+  if (!gated) return undefined;
+  if (gated.problems.length && gated.rewriteError) throw new Error(gated.rewriteError);
+  if (gated.problems.length) return undefined;
+  return { text: gated.text, ...(gated.check !== undefined ? { check: gated.check } : {}), ...(gated.failed ? { unverified: true } : {}) };
 }

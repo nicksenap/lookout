@@ -562,14 +562,19 @@ describe.each([
     "-  throw new Error",
     "+test/dispatch.test.ts",
   ].join("\n");
-  const withMap = async () => {
+  const withMap = async (unverified = false) => {
     const review = await loadReview("review-a");
-    review.map = { text, check: 0.9, nodes: { "27358701b7b5": 1, cf4e691ac315: 11, "4c078e0cac32": 10 } };
+    review.map = {
+      text,
+      check: 0.9,
+      nodes: { "27358701b7b5": 1, cf4e691ac315: 11, "4c078e0cac32": 10 },
+      ...(unverified ? { unverified } : {}),
+    };
     const session = new FixtureSession(review);
     sessions.push(session);
     const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    // The map is in the first snapshot, so the first frame is the one to read.
     await painted(app);
-    await tick();
     return { app, screen: () => lines(app.lastFrame()) };
   };
   const firstCard = (s: string[]) => s.findIndex((l) => /^[┃█] (RED|AMBER|GREEN|GREY)/.test(l));
@@ -592,6 +597,14 @@ describe.each([
     // The grey card has no node: no line is marked.
     await press(app, "j");
     expect(marked(screen())).toEqual([]);
+    app.unmount();
+  });
+
+  test("an unverified map says so in words, inside the same row budget", async () => {
+    const { app, screen } = await withMap(true);
+    expect(screen()[1]).toContain("map unverified · read the cards");
+    expect(firstCard(screen()) - 1).toBeLessThanOrEqual(cap);
+    expect(marked(screen())).toEqual(["+  runDispatch → Result<Dispatch>"]);
     app.unmount();
   });
 
