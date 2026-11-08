@@ -174,7 +174,7 @@ test("past six cards, a first call groups them into concerns and the map draws o
   const language = writer([grouping, concernMap]);
   const { maps } = await run(language, model([0.9]), shared, many);
   expect(language.doGenerateCalls).toHaveLength(2);
-  expect(JSON.stringify(language.doGenerateCalls[1]!.prompt)).toContain("1. Load the user env file: cards 1, 2, 3, 7, 8, 9");
+  expect(JSON.stringify(language.doGenerateCalls[1]!.prompt)).toContain("1. Load the user env file\\n   holds cards 1, 2, 3, 7, 8, 9");
   expect(maps.map((m) => m.text)).toEqual([concernMap]);
   expect(maps[0]!.concerns).toEqual([
     { title: "Load the user env file", cardIds: [1, 2, 3, 7, 8, 9].map((n) => many[n - 1]!.id) },
@@ -227,5 +227,29 @@ test("a card named only above the first top-level line is not in the map", () =>
   const orphan = ["+  describe user env file", " main", "+  USER_ENV_PATH"].join("\n");
   expect(mapProblems(orphan, source)).toEqual([
     'the card "Test the loader against a temp directory" is not in the map; name it by its title words, a file or a name from its edits',
+  ]);
+});
+
+test("a line naming a hyphenated file represents the card of that file", () => {
+  const source = mapSource(changeSet, cards);
+  const card = { id: "x", title: "Typing refactor across 2 files", tokens: new Set(["widget-edit-resume"]) };
+  const map = [
+    " main",
+    "+  loadUserEnv(path = USER_ENV_PATH, env = process.env)",
+    "+  describe user env file",
+    "   widget-edit-resume.ts",
+  ].join("\n");
+  expect(mapProblems(map, { ...source, cards: [...source.cards, card] }).filter((p) => p.includes("Typing"))).toEqual([]);
+});
+
+test("with concerns, a top-level line that is not a concern's title is a problem", () => {
+  const concerns = [
+    { title: "Load the user env file", cardIds: [cards[0]!.id, cards[1]!.id] },
+    { title: "Test the loader", cardIds: [cards[2]!.id] },
+  ];
+  const source = mapSource(changeSet, cards, concerns);
+  expect(mapProblems(concernMap, source)).toEqual([]);
+  expect(mapProblems(concernMap.replace(" Test the loader", " Test the loader env"), source)).toEqual([
+    "`Test the loader env` is at the top level but is not a concern title; the top level is the concern titles exactly as given",
   ]);
 });

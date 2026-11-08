@@ -22,7 +22,7 @@ const MAP_MAX_WIDTH = 120;
 /** Top-level lines a map may have; past this many cards, the cards are first grouped into as many concerns. */
 const MAP_MAX_TOP = 6;
 // Cache key versions: bumped with the prompts so a sharper prompt is never answered from an old cache.
-const MAP_VERSION = "map-v8";
+const MAP_VERSION = "map-v12";
 const CONCERNS_VERSION = "map-concerns-v1";
 const QUESTION =
   "Does every line of this change map follow from the cards? Lines starting with + name what the change adds, lines starting with - what it removes, other lines are unchanged context the cards show or the titles of the concerns listed.";
@@ -49,6 +49,8 @@ export interface MapSource {
   /** What the map's names are checked against: the diff, the drawn cards' sketches and titles. */
   known: SketchSource;
   cards: { id: string; title: string; tokens: Set<string> }[];
+  /** With concerns, the titles that are the map's only top-level lines. */
+  concerns?: string[];
 }
 
 /** Grey cards (the clean card) are not drawn: they hold nothing to review. */
@@ -82,6 +84,7 @@ export function mapSource(changeSet: ChangeSet, cards: Card[], concerns: MapConc
   };
   return {
     known,
+    ...(concerns.length ? { concerns: concerns.map((c) => c.title) } : {}),
     cards: drawn(cards).map((c) => {
       const source = sketchSource(changeSet, c);
       return {
@@ -97,7 +100,9 @@ export function mapSource(changeSet: ChangeSet, cards: Card[], concerns: MapConc
   };
 }
 
-const lineTokens = (line: string): Set<string> => new Set(identifiers(line).map((w) => w.toLowerCase()));
+// A file's base name counts whole, as `stem` makes it: `widget-copy.ts` names the card of `widget-copy`.
+const lineTokens = (line: string): Set<string> =>
+  new Set([...identifiers(line), ...(line.match(/[\w$-]+(?=\.\w)/g) ?? [])].map((w) => w.toLowerCase()));
 // Spaces after the mark column.
 const indentOf = (line: string): number => /^. */.exec(line)![0].length - 1;
 /**
@@ -124,7 +129,14 @@ export function mapProblems(map: string, source: MapSource): string[] {
     .filter((c) => !named.some((line) => [...c.tokens].some((t) => line.has(t))))
     .map((c) => `the card "${c.title}" is not in the map; name it by its title words, a file or a name from its edits`);
   const wide = top.length > MAP_MAX_TOP ? [`the map has ${top.length} top-level lines; at most ${MAP_MAX_TOP}`] : [];
-  return [...sketchProblems(map, source.known, MAP_MAX_LINES, MAP_MAX_WIDTH), ...wide, ...missing];
+  const titles = new Set(source.concerns?.map((t) => t.toLowerCase()));
+  const strays = source.concerns
+    ? top
+        .map((k) => lines[k]!.trim())
+        .filter((l) => !titles.has(l.toLowerCase()))
+        .map((l) => `\`${l}\` is at the top level but is not a concern title; the top level is the concern titles exactly as given`)
+    : [];
+  return [...sketchProblems(map, source.known, MAP_MAX_LINES, MAP_MAX_WIDTH), ...wide, ...strays, ...missing];
 }
 
 /**
@@ -219,7 +231,7 @@ function cardsText(changeSet: ChangeSet, cards: Card[]): string {
 /** The concerns as the writer and the checker see them: title and stack numbers, in order. */
 function concernsText(cards: Card[], concerns: MapConcern[]): string {
   const numberOf = new Map(drawn(cards).map((c, k) => [c.id, k + 1]));
-  return concerns.map((g, k) => `${k + 1}. ${g.title}: cards ${g.cardIds.map((id) => numberOf.get(id)).join(", ")}`).join("\n");
+  return concerns.map((g, k) => `${k + 1}. ${g.title}\n   holds cards ${g.cardIds.map((id) => numberOf.get(id)).join(", ")}`).join("\n");
 }
 
 function concernsPrompt(changeSet: ChangeSet, context: string): string {
@@ -256,7 +268,7 @@ function mapPrompt(changeSet: ChangeSet, cards: Card[], context: string, concern
   const files = [...new Set(drawn(cards).flatMap((c) => c.files))];
   const levels = concerns
     ? `- The top level is the concerns listed after the cards: each concern is ONE unmarked line with no indentation, its title exactly as given, in the order given. Nothing else goes at the top level.
-- Under each concern, indented two spaces, its cards in stack order: each card ONE line (the top node of its sketch, or the one thing it adds or removes), with a deeper line only where a call or a file needs showing. A concern's test cards share one line naming their test files, its docs cards another. Never copy a card's sketch.
+- Under each concern, indented two spaces, its cards in stack order: each card ONE line (the top node of its sketch, or the one thing it adds or removes), with a deeper line only where a call or a file needs showing. A concern's mechanical cards share one line naming their files, its test cards another, its docs cards another. Never copy a card's sketch.
 - Every card appears under its concern, named by one of its files or one or two names from its sketch, names or title. A line is a node, not a list of words.`
     : `- One level above the cards: each card is ONE line (the top node of its sketch, or the one thing it adds or removes), and the few unmarked context lines show how the cards fit together (which function calls which, which file holds what). Never copy a card's sketch.
 - At most ${MAP_MAX_TOP} lines at the top level (no indentation); every other line nests under one of them.
@@ -390,13 +402,15 @@ async function drawMap(
       const why = problems.length
         ? `A checker rejected the map:\n${problems.map((p) => `- ${p}`).join("\n")}`
         : "A checker could not verify that every line follows from the cards.";
-      // Told only "at most 20", writers return the same 29 lines; a count per card is a target they meet.
+      // Told only "at most 20", writers return the same 29 lines; a count per concern and card is a target they meet.
       const lines = previous.split("\n");
-      const perCard = `one line per card (${source.cards.length} cards, fewer if you fold mechanical, test or docs cards into one line each)`;
+      // A small map that runs long is a good tree with too much context; "one line per card" flattened it to 3 lines.
       const tooLong =
-        lines.length > MAP_MAX_LINES
-          ? `\nIt is too long: write exactly ${concerns ? `one line per concern (${concerns.length}) and ` : ""}${perCard} and no other lines.`
-          : "";
+        lines.length <= MAP_MAX_LINES
+          ? ""
+          : concerns
+            ? `\nIt is too long: write exactly one line per concern (${concerns.length}) and one line per card (${source.cards.length} cards, fewer if you fold a concern's test or docs cards into one line each) and no other lines.`
+            : `\nIt is ${lines.length} lines: cut it to at most 16. Keep its top-level lines and one line per card; drop the other lines a reviewer needs least, and put all test files on one line and all docs files on another.`;
       const tooFlat =
         topLevel(lines).length > MAP_MAX_TOP
           ? `\nIt has ${topLevel(lines).length} top-level lines: ${concerns ? "only the concern titles go at the top level, every card indented under its concern" : `keep at most ${MAP_MAX_TOP} at the top level and indent the rest under them`}.`
