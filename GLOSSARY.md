@@ -8,7 +8,9 @@
 
 **Card** — one logical change, described in a paragraph, made of edit blocks from any files. The unit a human reviews. Two fixed cards exist: *verified clean* and *untouched*.
 
-**Change map** — one diff-shaped sketch of the whole change (at most 20 lines) above the stack, whose *nodes* are the cards: each non-grey card is one line, the line naming most of what only that card changes. Every name in it is in the diff, a card's sketch or a card's title; a map that fails that gate twice is not shown. Decisions scores whether it follows from the cards; below 0.7 it is shown *unverified*.
+**Change map** — one diff-shaped sketch of the whole change (at most 20 lines, at most six top-level lines) above the stack, whose *nodes* are the cards: each non-grey card is one line, the line naming most of what only that card changes. Past six cards the top level is the *map concerns*, each card under its own. Every name in it is in the diff, a card's sketch, a card's title or a map concern's title; a map that fails that gate twice is not shown. Decisions scores whether it follows from the cards; below 0.7 it is shown *unverified*.
+
+**Map concern** — a named group of cards a reviewer reads together, one of the three to six the change map's top level draws on a review of more than six cards. Every non-grey card is in exactly one. Not the *concerns* a blob card is split into (those group blocks, not cards).
 
 **Attention** — how much a single edit block deserves a look: `inert`, `routine`, `needs-eyes`, `suspicious`. Only rules may call something inert.
 

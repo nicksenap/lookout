@@ -308,6 +308,14 @@ export interface ChangeMap {
   unverified?: boolean;
   /** Card id → index of the map line that is its node; the TUI marks the selected card's. */
   nodes: Record<string, number>;
+  /** Past six cards, the named groups of cards the map's top-level lines draw, in stack order. */
+  concerns?: MapConcern[];
+}
+
+/** A few cards a reviewer reads together; every drawn card is in exactly one. */
+export interface MapConcern {
+  title: string;
+  cardIds: string[];
 }
 
 export interface Review {
