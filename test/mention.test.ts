@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { buildCards } from "../src/cards/build.ts";
-import { markMentions } from "../src/cards/mention.ts";
+import { bodyHasNames, markMentions } from "../src/cards/mention.ts";
 import { parseDiff } from "../src/core/diff.ts";
 import type { ChangeSet } from "../src/core/types.ts";
 import { DEFAULT_POLICY } from "../src/policy/schema.ts";
@@ -29,6 +29,20 @@ const changeSet = (body?: string): ChangeSet =>
       ].join("\n")}\n`,
     ),
   });
+
+test.each([
+  [undefined, false],
+  ["", false],
+  ["Update card building and runner behavior.", false],
+  ["See https://example.com/docs and other/build.ts.", false],
+  ["Changed (`cards/build.ts`),", true],
+  ["Uses `newCards`.", true],
+  ["Uses `unrelatedName`.", true],
+  ["```diff\n+ newCards\n```", true],
+  ["`123 + !!!`", false],
+] as const)("body %j exposes usable names: %j", (body, expected) => {
+  expect(bodyHasNames(changeSet(body))).toBe(expected);
+});
 
 test("paths match whole suffixes after stripping backticks, parentheses and trailing punctuation", () => {
   const cs = changeSet("Changed (`cards/build.ts`), but not other/build.ts or ispatch/build.ts.");

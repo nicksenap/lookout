@@ -469,6 +469,7 @@ describe("door", () => {
       files: parseDiff(
         diff("src/tui/card.tsx", "@@ -0,0 +1,1 @@", ['+const title = <span className="truncate" title="Review">Review</span>;']) +
           diff("docs/sql.md", "@@ -0,0 +1,1 @@", ["+TRUNCATE TABLE reviews removes all rows."]) +
+          diff("src/ui/Toolbar.tsx", "@@ -0,0 +1,1 @@", ['+<p className="ml-lg hidden max-w-[14rem] truncate text-fun-m">{name}</p>']) +
           diff("src/prose.ts", "@@ -0,0 +1,1 @@", ['+// "Review" describes TRUNCATE TABLE reviews.']) +
           diff("db/reset.sql", "@@ -0,0 +1,1 @@", ["+TRUNCATE TABLE reviews;"]) +
           diff("src/reset.ts", "@@ -0,0 +1,1 @@", ['+await db.execute("TRUNCATE TABLE reviews");']) +

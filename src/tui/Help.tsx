@@ -17,6 +17,10 @@ export const GLOSSARY: readonly { term: string; text: string }[] = [
     text: "One logical change, built from edit blocks across any files. The unit you review. Two fixed cards: verified clean (every inert edit) and untouched (sensitive areas the change does not reach).",
   },
   {
+    term: "Change map",
+    text: "One diff-shaped sketch of the whole change above the stack, each card one line of it; ▸ marks the selected card's line. Every name in it is in the diff, a card's sketch or a title; a map that fails that twice is not shown. m hides it.",
+  },
+  {
     term: "Edit block",
     text: "One contiguous run of added or removed lines. The smallest unit lookout reasons about; a git hunk may hold several.",
   },
@@ -42,7 +46,7 @@ export const GLOSSARY: readonly { term: string; text: string }[] = [
   },
   {
     term: "Verdict",
-    text: "In the header: the risk tier (low, medium, high) and how many humans must review, with the reasons. Kind defaults, area rules and floors; a rule can stand down for an additive two-way change.",
+    text: "In help: the risk tier (low, medium, high) and how many humans must review, with the reasons. Kind defaults, area rules and floors; a rule can stand down for an additive two-way change.",
   },
   {
     term: "One-way",
@@ -75,7 +79,7 @@ const MAX_W = 96;
 
 interface HelpRow {
   text: string;
-  style?: "heading" | "term";
+  style?: "heading" | "term" | "diagnostics";
 }
 
 function helpRows(page: HelpState["page"], inner: number): HelpRow[] {
@@ -133,11 +137,11 @@ export function scrollHelp(help: HelpState, delta: number, w: number): HelpState
 }
 
 /** The popup's rows at their final width, and where it sits: centred, with one body row of margin. */
-export function helpBox(help: HelpState, w: number, h: number): { lines: Line[]; left: number; top: number } {
+export function helpBox(help: HelpState, w: number, h: number, diagnostics: string): { lines: Line[]; left: number; top: number } {
   const boxW = Math.max(20, Math.min(w - 4, MAX_W));
   const inner = boxW - 4;
   const rows = helpRows(help.page, inner);
-  const bodyH = Math.max(1, Math.min(rows.length, h - 4));
+  const bodyH = Math.max(1, Math.min(rows.length, h - 5));
   const top = Math.max(0, Math.min(help.scroll, rows.length - bodyH));
   const accent = theme.accent;
   const tab = (page: HelpState["page"]): Segment => ({
@@ -161,11 +165,16 @@ export function helpBox(help: HelpState, w: number, h: number): { lines: Line[];
     { text: footText, color: accent, dim: true },
     { text: `${"─".repeat(Math.max(0, boxW - width(footText) - 2))}┘`, color: accent },
   ];
-  const body = rows.slice(top, top + bodyH).map(
+  const body = [...rows.slice(top, top + bodyH), { text: diagnostics, style: "diagnostics" as const }].map(
     (r): Line => ({
       segments: [
         { text: "│ ", color: accent },
-        { text: fit(r.text, inner), bold: r.style !== undefined, color: r.style === "heading" ? accent : undefined },
+        {
+          text: fit(r.text, inner),
+          bold: r.style === "heading" || r.style === "term",
+          color: r.style === "heading" ? accent : undefined,
+          dim: r.style === "diagnostics",
+        },
         { text: " ".repeat(Math.max(0, inner - width(fit(r.text, inner)))) },
         { text: " │", color: accent },
       ],

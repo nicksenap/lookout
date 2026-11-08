@@ -110,7 +110,7 @@ describe.each(names)("fixture %s", (name) => {
       expect(Math.max(...lines.map((l) => Bun.stringWidth(l)))).toBeLessThanOrEqual(columns);
       return lines;
     };
-    expect(check()[0]).toMatch(/LOW|MEDIUM|HIGH/);
+    expect(check()[0]).not.toMatch(/LOW|MEDIUM|HIGH|human|rules|gpt-/);
     app.stdin.write("\r");
     await new Promise((r) => setTimeout(r, 30));
     check();

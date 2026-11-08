@@ -101,18 +101,13 @@ export function filesOf(review: Review, card: Card): string[] {
   return review.changeSet.files.filter((f) => f.hunks.some((h) => h.blocks.some((b) => ids.has(b.id)))).map((f) => f.path);
 }
 
-/** Words on the badge line a stripped frame still reads: a one-way signal, test coverage. */
-export function evidenceBadges(review: Review, card: Card): string[] {
-  const out: string[] = [];
-  if (card.doorSignals?.length) out.push(`one-way · ${card.doorSignals[0]!.kind}`);
-  if (card.covers?.length)
-    out.push(`covers ${card.covers.map((id) => `card ${review.cards.findIndex((c) => c.id === id) + 1}`).join(", ")}`);
-  else if (card.testsTouched) out.push("tests touched");
-  return out;
+/** The first door signal explains the badge without policy jargon. */
+export function evidenceBadges(card: Card): string[] {
+  return card.doorSignals?.length ? [card.doorSignals[0]!.text] : [];
 }
 
-/** A card as it appears in the stack: badge line, title, paragraph or summary. */
-export function cardLines(card: Card, index: number, selected: boolean, w: number, ctx: CardContext): Line[] {
+/** Stack cards show badges, title and one risk row; only the selection shows its body. Expanded risk wraps. */
+export function cardLines(card: Card, index: number, selected: boolean, w: number, ctx: CardContext, expanded = false): Line[] {
   const color = theme.card[card.color];
   // The selected card gets a solid bar; others a thin one. Visible without color.
   const bar: Segment = { text: `${selected ? "█" : BAR} `, color, bold: selected };
@@ -120,14 +115,10 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   const row = (segs: Segment[]): Line => ({ segments: [bar, ...segs], card: index });
 
   const files = filesOf(ctx.review, card);
-  const badges = [
-    COLOR_LABEL[card.color],
-    card.mentioned ? undefined : "body: no",
-    card.kind,
-    ...card.labels.filter((l) => l !== "test" || card.kind !== "test"),
-    ...card.areas.map((a) => `${a}/*`),
-  ].filter(Boolean);
-  const evidence = card.fixed ? [] : evidenceBadges(ctx.review, card);
+  const badges = [COLOR_LABEL[card.color], card.kind, ...card.areas.map((a) => `${a}/*`), card.mentioned ? undefined : "body: no"].filter(
+    Boolean,
+  );
+  const evidence = card.fixed ? [] : evidenceBadges(card);
   const right = [plural(card.blockIds.length, "edit"), plural(files.length, "file")].join(" · ");
   const badgeSegs: Segment[] = [
     { text: badges[0]!, color, bold: true },
@@ -144,9 +135,12 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   lines.push(row([{ text: fit(card.title, inner), bold: true }]));
   if (card.risk) {
     const label = card.riskUnverified ? "risk unverified" : "risk";
-    for (const l of wrap(`${label}: ${card.risk}`, inner)) lines.push(row([{ text: l, dim: card.riskUnverified }]));
+    const risk = `${label}: ${card.risk}`;
+    for (const l of expanded ? wrap(risk, inner) : [fit(risk, inner)]) lines.push(row([{ text: l, dim: card.riskUnverified }]));
   }
-  if (card.paragraph && card.unverified) {
+  if (!selected && !expanded) return lines;
+  if (card.sketch) for (const segs of sketchLines(card, inner)) lines.push(row(segs));
+  else if (card.paragraph && card.unverified) {
     // The gate failed twice: the text is shown, but dimmed and labelled so nobody reads it as checked.
     lines.push(row([{ text: fit("paragraph unverified · read the diff", inner), color: theme.card.amber }]));
     for (const l of wrap(card.paragraph, inner)) lines.push(row([{ text: l, dim: true }]));
@@ -160,6 +154,22 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   const last = cardExchanges(ctx.review, card).at(-1);
   if (last) for (const segs of exchangeLines(last, inner, ctx.frame)) lines.push(row(segs));
   return lines;
+}
+
+/**
+ * The card's sketch, one row per line, never wrapped: a wrapped tree reads as two nodes. `+`/`-` keep
+ * their glyphs so a stripped frame reads the same; an unverified sketch is dimmed under a word label.
+ */
+export function sketchLines(card: Card, w: number): Segment[][] {
+  const head: Segment[][] = card.sketchUnverified ? [[{ text: fit("sketch unverified · read the diff", w), color: theme.card.amber }]] : [];
+  return [
+    ...head,
+    ...card
+      .sketch!.split("\n")
+      .map((l): Segment[] => [
+        { text: fit(l, w), color: l[0] === "+" ? theme.add : l[0] === "-" ? theme.del : undefined, dim: card.sketchUnverified },
+      ]),
+  ];
 }
 
 /** Expanded card: its door signals and test coverage, then the diff of its hunks with other cards' edits faded. */
@@ -193,6 +203,11 @@ export function expandedLines(card: Card, w: number, ctx: CardContext): Line[] {
       for (const l of hunkRows(h, ids, w)) push(l);
     }
     push([{ text: "" }]);
+  }
+  // With a sketch above, the paragraph comes last: the shape first, the code, then the words.
+  if (card.sketch && card.paragraph) {
+    push([{ text: card.unverified ? "paragraph unverified · read the diff" : "paragraph", color, bold: true }]);
+    for (const l of wrap(card.paragraph, w)) push([{ text: l, dim: card.unverified }]);
   }
   return lines;
 }

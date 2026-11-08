@@ -18,6 +18,7 @@ import {
 import { type Composer, composerKey, composerLines, openComposer } from "./Composer.tsx";
 import { type HelpState, helpBox, helpKey, overlay } from "./Help.tsx";
 import { type Action, jumpTarget, keyAction, keyHelp, type Mode } from "./keys.ts";
+import { mapPanel } from "./map.ts";
 import { highlight, nextHit, openSearch, type Search, searchFooter, searchHits, searchKey } from "./Search.tsx";
 import { runFullscreen } from "./screen.ts";
 import { theme } from "./theme.ts";
@@ -105,6 +106,8 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const frame = useFrame(pending, frameOverride);
   const [selected, setSelected] = useState(0);
   const [mode, setMode] = useState<Mode>("stack");
+  /** `m` hides the change map; shown by default when the review has one. */
+  const [showMap, setShowMap] = useState(true);
   /** The help popup: which page and how far it is scrolled. */
   const [help, setHelpState] = useState<HelpState>();
   const helpRef = useRef(help);
@@ -138,8 +141,10 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const w = size.columns;
   const about = card ? `card ${sel + 1}` : "the change";
   const composer = asking ? composerLines(asking, about, w) : [];
-  // Header, footer, one row spare for Ink, the progress row while the pipeline runs, and the composer while asking.
-  const bodyH = Math.max(3, size.rows - 1 - 2 - (review.progress ? 1 : 0) - composer.length);
+  // The map takes at most a third of the screen (8 rows at 80x24), above the stack only.
+  const map = mode === "stack" && showMap && review.map ? mapPanel(review.map, card?.id, w, Math.floor(size.rows / 3)) : [];
+  // Header, footer, one row spare for Ink, the progress row while the pipeline runs, the map, and the composer while asking.
+  const bodyH = Math.max(3, size.rows - 1 - 2 - (review.progress ? 1 : 0) - map.length - composer.length);
 
   const ctx: CardContext = { review, pending, frame };
 
@@ -172,7 +177,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const bodyLines = useMemo(
     () =>
       mode === "expanded" && card
-        ? [...cardLines(card, sel, true, w, ctx), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctx)]
+        ? [...cardLines(card, sel, true, w, ctx, true), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctx)]
         : stackLines,
     [mode, card, stackLines, w, sel, ctx],
   );
@@ -219,6 +224,8 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
         return exit();
       case "help":
         return setHelp({ page: "keys", scroll: 0 });
+      case "map":
+        return setShowMap((shown) => !shown);
       case "toggle":
         if (mode === "expanded") return setMode("stack");
         if (card && card.fixed !== "clean") {
@@ -303,22 +310,19 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     ...visible,
     ...Array.from({ length: Math.max(0, bodyH - visible.length) }, (): Line => ({ segments: [{ text: "" }] })),
   ];
-  const body = help ? (({ lines, left, top }) => overlay(padded, lines, left, top, w))(helpBox(help, w, bodyH)) : padded;
+  const diagnostics = [
+    review.verdict.tier.toUpperCase(),
+    plural(review.verdict.requiredHumans, "human"),
+    plural(cards.length, "card"),
+    review.rankedBy,
+  ].join(" · ");
+  const body = help ? (({ lines, left, top }) => overlay(padded, lines, left, top, w))(helpBox(help, w, bodyH, diagnostics)) : padded;
 
   const v = review.verdict;
   const title = review.changeSet.intent?.title ? `${review.changeSet.target} · ${review.changeSet.intent.title}` : review.changeSet.target;
-  // Model name without its provider, and how long the pipeline has run; the stack is readable while that counter still moves.
-  const model = review.rankedBy
-    .replace(/^rules\+?/, "")
-    .split(":")
-    .pop();
+  // The stack is readable while the elapsed counter still moves.
   const headerRight = [
-    v.tier.toUpperCase(),
-    plural(v.requiredHumans, "human"),
-    plural(cards.length, "card"),
-    review.unmentionedCount > 0 ? `${review.unmentionedCount} not in body` : "",
-    review.door.computed === "one-way" ? "one-way" : "",
-    model ? model : "rules only",
+    review.bodyHasNames && review.unmentionedCount > 0 ? `${review.unmentionedCount} not in body` : "",
     pending ? `${theme.spinner[frame % theme.spinner.length]} ${Math.round((Date.now() - openedAt.current) / 1000)}s` : "",
   ]
     .filter(Boolean)
@@ -350,6 +354,9 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
     <Box flexDirection="column" width={w} height={size.rows - 1}>
       <Row line={header} w={w} />
       {review.progress ? <Row line={{ segments: progressLine(review.progress, Date.now() - openedAt.current, w) }} w={w} /> : null}
+      {map.map((l, k) => (
+        <Row key={`map${k}`} line={l} w={w} />
+      ))}
       <Box flexDirection="column" height={bodyH}>
         {body.map((l, k) => (
           <Row key={k} line={l} w={w} selected={!help && mode === "stack" && l.card === sel && l.segments.length > 1} />

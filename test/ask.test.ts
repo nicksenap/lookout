@@ -37,6 +37,7 @@ const review = (): Review => {
     verdict: evaluate(classification, DEFAULT_POLICY),
     cards,
     unmentionedCount: 0,
+    bodyHasNames: false,
     untouched: [],
     claims: [],
     door: { computed: "two-way", signals: [] },

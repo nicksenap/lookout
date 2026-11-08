@@ -17,6 +17,8 @@ export type Action =
   /** `n` / `N`: next or previous search hit. */
   | { type: "hit"; delta: 1 | -1 }
   | { type: "help" }
+  /** `m`: hide or show the change map. */
+  | { type: "map" }
   | { type: "quit" };
 
 /**
@@ -51,6 +53,7 @@ export function keyAction(input: string, key: Key, pending?: string): { action?:
   if (input === "/") return a({ type: "search" });
   if (input === "n") return a({ type: "hit", delta: 1 });
   if (input === "N") return a({ type: "hit", delta: -1 });
+  if (input === "m") return a({ type: "map" });
   if (input === "?") return a({ type: "help" });
   if (input === "q") return a({ type: "quit" });
   return {};
@@ -105,6 +108,7 @@ export const HELP_KEYS: readonly string[] = [
   "  enter  l  →          expand the card: scope, tests, door signals, then its diff",
   "  o  space             toggle expanded / stack",
   "  esc  h  ←            back to the stack",
+  "  m                    hide / show the change map above the stack; ▸ marks the selected card",
   "",
   "Search",
   "  /                    search the stack (titles, paragraphs, files) or the expanded card's diff",

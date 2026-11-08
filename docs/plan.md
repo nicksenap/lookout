@@ -1,4 +1,4 @@
-# lookout — plan (v2: cards first; v3: point at the risk)
+# lookout — plan (v2: cards first; v3: point at the risk; v4: one level up)
 
 v1 built the whole north light (cards, claims, door, radius, find+verify, questions). Three production PRs (PR A, PR B, PR C; reports in `/tmp/lookout-eval/`) scored it 3/3/2 out of 5, and every evaluator named the same cause: the cards are wrong before anything downstream runs. v2 narrows to one question — **can a reviewer understand a PR from the card titles and paragraphs alone?** — and measures it before anything else gets attention back.
 
@@ -96,6 +96,32 @@ Steps 23–26 are independent slices (one issue each); they touch `cards/build.t
 **26. Body versus diff, deterministic.** `src/cards/mention.ts`: from `changeSet.intent.body`, collect file paths (any token containing `/` that matches a changed file's suffix) and backticked identifiers; a card is *mentioned* when any of its files or changed identifiers appears. No model, no claim statuses. `Review.unmentionedCount` and `Card.mentioned` land in the JSON; the header shows `N not in body` when N > 0; the TUI marks unmentioned cards with a word (`body: no`), not only a colour. Mechanical, docs and test cards are never counted. Replaces the model-driven `unmentioned` under `--evidence` for the default path; the `--evidence` flag is untouched. Check: unit tests over a fixture body; on probe PR #3703 the count is 1 (the Intercom formatting stowaway); on #3697, #3699, #3701, #3705 it is 0.
 
 **27. Re-probe.** Run the five probe PRs and the next five merged PRs; record first-card correctness, card counts, risk-line hits and misses, and the not-in-body count in `docs/handoff.md`. Then write `scripts/review-recall.ts`: for merged PRs with human review comments, map each comment's file:line to a card and count whether the card was non-green or its risk line named the thing. That number replaces the persona gate.
+
+# v4: one level up
+
+v3 is tagged `v3-checkpoint`. Steps 23–27 fixed what the evaluators named: the first card is the one to read first on 10/13 out-of-sample PRs, risk lines fire on 43 % of behaviour cards and were right every time read, and review recall is 0.75 on 15 PRs. Two things stayed wrong after dogfooding, and neither is a grouping or ordering problem:
+
+1. **The card is too low level.** Its paragraph is the diff translated to English ("`DataContextServiceImpl` now fetches only workspace metadata and `explorer.listExplorerViews(workspaceId)` with `Promise.allSettled`"). Every probe where the author had written a /pr-style diff sketch, the sketch beat the stack. The level a reviewer wants sits between the sketch and the hunk: the program's shape with `+`/`-` on it.
+2. **The screen shows the machinery.** `HIGH · 2 humans · 4 cards · rules+openai:gpt-6-luna`, badges `sensitive`, `added`, `test`, `lockfile`. These are v1 policy-gate ideas and internal labels. A reader needs colour, kind, area, risk and shape.
+
+## Done when
+
+On the five probe PRs and the 13 out-of-sample PRs (`~/.cache/lookout/bench/probe.txt`, `probe2.txt`):
+- the stack opens on a change map (one diff-shaped sketch of the whole PR, ≤ 20 lines) whose nodes are the cards; every identifier in it is in the diff;
+- each card above two blocks shows a sketch instead of a paragraph; every identifier in a sketch is in the card's edits or their context lines, every `+`/`-` line maps to an added/removed symbol, else the sketch is marked unverified;
+- the header shows the target, the elapsed time while running and `N not in body` only when the body names a path or identifier; no tier, humans, card count or model name on the default screen;
+- card badges are colour word, kind, area (`auth/*`), `body: no`, nothing else;
+- `bun run recall` on the 15 baseline PRs does not drop below 0.75; the TUI tests pass at 80×24 and 140×45.
+
+## Steps
+
+**28. Fewer elements.** Header: title · progress/elapsed · `N not in body` (only when `mention.ts` found at least one path or backticked name in the body). Tier, humans, card count and model move to `--json` and to the `?` help screen's last line. Card badges: colour word, kind, area, `body: no`; drop `sensitive`, `added`, `test`, `lockfile` and every other label from the default render (labels stay in JSON). Check: TUI tests updated at both sizes; `bun run story review-a` shows nothing from the removed list; JSON unchanged.
+
+**29. Card sketch.** `src/cards/sketch.ts`: for a non-mechanical card above two blocks, one writer call asks for a diff-shaped sketch (≤ 12 lines) in the shape the card's kind suggests: call tree or control flow for behaviour, key tree for config, component tree for `.tsx`, file tree for a refactor; `+`/`-` prefixes mark what the change adds or removes, unprefixed lines are kept context. Rules gate it: every identifier appears in the card's edits or their context lines (`unsupportedNames` extended with context); every `+` line names something in an added line and every `-` line something in a removed line; otherwise one rewrite quoting the offending lines, then `sketchUnverified`. Decisions consistency check as for paragraphs. Cached by card id with a prompt version. The paragraph is still written and kept in JSON; the TUI shows the sketch in the stack and the paragraph only in the expanded card under the hunks. Check: mock tests for the two gates and the rewrite; hand-written target sketches for six probe cards in `fixtures/sketches/` (this repo's own commits only) with a test that the gate accepts them; live on the five probe PRs, paste every sketch in the PR.
+
+**30. Change map.** `src/cards/map.ts`: one writer call over every card's title, risk line and sketch (not the diff) asks for the PR's shape as one sketch ≤ 20 lines, each card appearing as one node or `+`/`-` line, in the order of the stack. Gate: every identifier is in some card's sketch or the diff; every card title or one of its identifiers appears; otherwise one rewrite, then no map (the stack opens as today). `Review.map`, event `map.updated`. TUI: the map renders above the stack, selected card's node highlighted with a glyph, `m` toggles it. Check: mock tests; TUI tests at both sizes with and without a map; live on the five probe PRs and three of the out-of-sample ones.
+
+**31. Re-probe and recall.** The five probe PRs and the 13 out-of-sample ones through the new stack, read by hand; `bun run recall --prs 15`; record both in `docs/handoff.md`. Decide whether the paragraph writer still earns its call.
 
 ## What stays true from v1
 

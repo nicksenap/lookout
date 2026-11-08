@@ -176,6 +176,12 @@ export interface Card {
   riskCheck?: number;
   /** Risk failed its gate: visible but cannot raise colour. */
   riskUnverified?: boolean;
+  /** The program's shape with +/- on it, at most 12 diff-shaped lines; cards of more than two blocks only. */
+  sketch?: string;
+  /** Decisions' probability that every line of the sketch follows from the card's edits. */
+  sketchCheck?: number;
+  /** The sketch failed its gate twice: shown dimmed and labelled, not trusted. */
+  sketchUnverified?: boolean;
   /** The fixed card that collects every inert block. */
   fixed?: "clean";
   // ---- evidence (plan step 12)
@@ -292,6 +298,26 @@ export interface PrSummary {
   target: string;
 }
 
+/** One diff-shaped sketch of the whole change whose nodes are the cards; absent when no map passed the rules gate. */
+export interface ChangeMap {
+  /** At most 20 lines; `+`/`-` in the first column as in a card sketch. */
+  text: string;
+  /** Decisions' probability that every line follows from the cards. */
+  check?: number;
+  /** The consistency check failed twice: shown dimmed and labelled. */
+  unverified?: boolean;
+  /** Card id → index of the map line that is its node; the TUI marks the selected card's. */
+  nodes: Record<string, number>;
+  /** Past six cards, the named groups of cards the map's top-level lines draw, in stack order. */
+  concerns?: MapConcern[];
+}
+
+/** A few cards a reviewer reads together; every drawn card is in exactly one. */
+export interface MapConcern {
+  title: string;
+  cardIds: string[];
+}
+
 export interface Review {
   changeSet: ChangeSet;
   classification: Classification;
@@ -300,6 +326,8 @@ export interface Review {
   cards: Card[];
   /** Deterministic body coverage; separate from the evidence layer's claim-based unmentioned. */
   unmentionedCount: number;
+  /** The body contains a changed-file path or a backticked/fenced identifier the matcher can use. */
+  bodyHasNames: boolean;
   /** Policy areas no file of the change touches. */
   untouched: string[];
   claims: Claim[];
@@ -311,6 +339,8 @@ export interface Review {
   evidence: boolean;
   /** Reviewer questions answered from the diff, newest last. */
   exchanges: Exchange[];
+  /** The change map, once the cards' titles, risk lines and sketches have landed. */
+  map?: ChangeMap;
   /** Present while the pipeline runs; removed on done. */
   progress?: Progress;
   warning?: string;

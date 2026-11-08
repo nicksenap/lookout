@@ -70,6 +70,64 @@ describe.each([
   [80, 24],
   [140, 45],
 ])("body coverage at %dx%d", (columns, rows) => {
+  test("stack and expanded badges show only colour, kind, areas and body coverage", async () => {
+    const review = await loadReview("review-a");
+    review.cards = [
+      {
+        ...review.cards[0]!,
+        color: "red",
+        kind: "logic",
+        areas: ["auth"],
+        mentioned: false,
+        labels: ["sensitive", "added", "test", "lockfile", "generated"],
+        testsTouched: true,
+        covers: [review.cards[1]!.id],
+        doorSignals: [{ kind: "migration", path: "db/migrations/001.sql", text: "migration file changed" }],
+      },
+    ];
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    const check = () => {
+      const badge = lines(app.lastFrame()).find((line) => line.startsWith("█ RED"))!;
+      expect(badge).toContain("RED  logic · auth/* · body: no");
+      expect(badge).toContain("migration file changed");
+      expect(badge).not.toMatch(/sensitive|added|test|lockfile|generated|covers|one-way/);
+    };
+    check();
+    await press(app, "\r");
+    check();
+    app.unmount();
+  });
+
+  test("help keeps tier, humans, card count and model on its last content line", async () => {
+    const { app, session, screen } = await mount("review-a", columns, rows);
+    const review = session.snapshot();
+    await press(app, "?");
+    const bottom = screen().findIndex((line) => line.includes("└"));
+    expect(screen()[bottom - 1]).toContain("MEDIUM · 1 human · 4 cards · rules+openai:gpt-6-luna");
+    await press(app, "\t", "j");
+    const glossaryBottom = screen().findIndex((line) => line.includes("└"));
+    expect(screen()[glossaryBottom - 1]).toContain(review.rankedBy);
+    app.unmount();
+  });
+
+  test("a prose-only body hides the count even with an unmentioned card", async () => {
+    const review = await loadReview("review-body");
+    const session = new FixtureSession({
+      ...review,
+      changeSet: { ...review.changeSet, intent: { title: "Return recoverable errors", body: "Return recoverable errors as results." } },
+      bodyHasNames: false,
+    });
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    expect(lines(app.lastFrame())[0]).not.toContain("not in body");
+    expect(lines(app.lastFrame()).some((line) => line.includes("body: no"))).toBe(true);
+    app.unmount();
+  });
+
   test.each([
     ["review-body", 1],
     ["review-c", 0],
@@ -96,15 +154,16 @@ describe.each([
 
 describe.each([
   [80, 24],
-  [120, 40],
+  [140, 45],
   [200, 60],
 ])("stack at %dx%d", (columns, rows) => {
-  test("fixed height, no line wider than the terminal, header has the verdict, cards have bars", async () => {
+  test("fixed height, no line wider than the terminal, header has only the title, cards have bars", async () => {
     const { screen } = await mount("review-a", columns, rows);
     const s = screen();
     expect(s.length).toBe(rows - 1);
     expect(widest(s)).toBeLessThanOrEqual(columns);
-    expect(s[0]).toMatch(/MEDIUM · 1 human · \d+ cards/);
+    expect(s[0]).toContain("b015e48^..b015e48");
+    expect(s[0]).not.toMatch(/LOW|MEDIUM|HIGH|human|card|rules|gpt-|one-way/);
     expect(s.filter((l) => l.startsWith("┃")).length).toBeGreaterThan(3);
     expect(s.at(-1)).toContain("j/k card");
   });
@@ -190,6 +249,145 @@ describe.each([
   });
 });
 
+describe.each([
+  [80, 24],
+  [140, 45],
+])("sketches at %dx%d", (columns, rows) => {
+  test("only the selected sketch is shown; j and k move it between cards", async () => {
+    const { app, session, screen } = await mount("review-map", columns, rows);
+    await press(app, "m");
+    const cards = session.snapshot().cards;
+    const check = (selected: number) => {
+      const stack = screen();
+      cards.forEach((card, index) => {
+        const sketch = card.sketch!.split("\n");
+        sketch.forEach((row) => {
+          const rendered = stack.filter((line) => line.slice(2).trimEnd() === row);
+          expect(rendered).toHaveLength(index === selected ? 1 : 0);
+          if (index === selected) expect(rendered[0]).toStartWith("█ ");
+        });
+        expect(stack.join("\n")).not.toContain(card.paragraph!);
+      });
+      expect(stack.filter((line) => /^█ (RED|AMBER|GREEN|GREY)/.test(line))).toHaveLength(1);
+      expect(widest(stack)).toBeLessThanOrEqual(columns);
+    };
+    check(0);
+    await press(app, "j");
+    check(1);
+    await press(app, "k");
+    check(0);
+    app.unmount();
+  });
+
+  test.each([false, true])("only the selected paragraph is shown when there is no sketch (unverified=%s)", async (unverified) => {
+    const review = await loadReview("review-map");
+    review.cards = review.cards.slice(0, 2).map((card, index) => ({
+      ...card,
+      sketch: undefined,
+      paragraph: index === 0 ? "The recall score follows the card's risk." : "The local script runs review recall.",
+      unverified,
+    }));
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    await press(app, "m");
+    const check = (selected: number) => {
+      const stack = lines(app.lastFrame());
+      review.cards.forEach((card, index) => {
+        expect(stack.some((line) => line.includes(card.paragraph!))).toBe(index === selected);
+      });
+      expect(stack.filter((line) => line.includes("paragraph unverified"))).toHaveLength(unverified ? 1 : 0);
+    };
+    check(0);
+    await press(app, "j");
+    check(1);
+    await press(app, "k");
+    check(0);
+    app.unmount();
+  });
+
+  test("the stack shows the sketch instead of the paragraph; expanded shows sketch, diff, then paragraph; unverified has a word label", async () => {
+    const review = await loadReview("review-a");
+    const small = review.cards.find((c) => c.id === "4c078e0cac32")!;
+    const long = `   ${"wideCall".repeat(30)}`;
+    review.cards = [
+      {
+        ...small,
+        id: "sketched",
+        title: "Sketched change",
+        sketch: " runDispatch\n+  spawnAgent\n-  oldSpawn",
+        paragraph: "The paragraph words.",
+      },
+      {
+        ...small,
+        id: "unchecked",
+        title: "Unchecked sketch",
+        sketch: `+  inventedCall\n${long}`,
+        sketchUnverified: true,
+        paragraph: "Second words.",
+      },
+    ];
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    const stack = lines(app.lastFrame());
+    const title = stack.findIndex((l) => l.includes("Sketched change"));
+    expect(stack.slice(title + 1, title + 4).map((l) => l.slice(2).trimEnd())).toEqual([" runDispatch", "+  spawnAgent", "-  oldSpawn"]);
+    expect(stack.join("\n")).not.toContain("The paragraph words.");
+    expect(stack.join("\n")).not.toContain("inventedCall");
+    await press(app, "j");
+    const selected = lines(app.lastFrame());
+    const unchecked = selected.findIndex((l) => l.includes("Unchecked sketch"));
+    expect(selected[unchecked + 1]).toContain("sketch unverified · read the diff");
+    // A long line is cut with an ellipsis on one row, never wrapped onto the next.
+    expect(selected[unchecked + 3]).toMatch(/wideCall.*…$/);
+    expect(selected[unchecked + 4] ?? "").not.toContain("wideCall");
+    expect(widest(selected)).toBeLessThanOrEqual(columns);
+    await press(app, "k", "\r");
+    const expanded = lines(app.lastFrame());
+    const at = (frame: string[], text: string) => frame.findIndex((l) => l.includes(text));
+    expect(at(expanded, "+  spawnAgent")).toBeGreaterThan(0);
+    expect(at(expanded, "diff ·")).toBeGreaterThan(at(expanded, "+  spawnAgent"));
+    expect(widest(expanded)).toBeLessThanOrEqual(columns);
+    // The paragraph closes the expanded card, below the hunks; at 80x24 it is below the fold.
+    await press(app, "G");
+    const bottom = lines(app.lastFrame());
+    expect(at(bottom, "The paragraph words.")).toBeGreaterThan(Math.max(at(bottom, "@@"), at(bottom, "dispatch/runner.ts")));
+    app.unmount();
+  });
+});
+
+describe.each([
+  [80, 24],
+  [140, 45],
+])("stack risk density at %dx%d", (columns, rows) => {
+  test.each([false, true])("risk fits one row; expanded keeps the full sentence (unverified=%s)", async (unverified) => {
+    const review = await loadReview("review-map");
+    const card = review.cards[0]!;
+    card.riskUnverified = unverified;
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    await press(app, "m");
+    const stack = lines(app.lastFrame());
+    const title = stack.findIndex((line) => line.includes(card.title));
+    expect(stack[title + 1]).toMatch(new RegExp(`^█ risk${unverified ? " unverified" : ""}: .*…$`));
+    expect(stack[title + 2]?.slice(2).trimEnd()).toBe("+ scorePr");
+    expect(stack.join("\n")).not.toContain("verified risk line.");
+    expect(widest(stack)).toBeLessThanOrEqual(columns);
+    await press(app, "\r");
+    const expanded = lines(app.lastFrame());
+    const start = expanded.findIndex((line) => line.includes(card.title)) + 1;
+    const riskRows = expanded.slice(start, start + (columns === 80 ? (unverified ? 4 : 3) : 2));
+    expect(riskRows.map((line) => line.slice(2).trim()).join(" ")).toBe(`risk${unverified ? " unverified" : ""}: ${card.risk}`);
+    expect(widest(expanded)).toBeLessThanOrEqual(columns);
+    app.unmount();
+  });
+});
+
 describe("stack contents", () => {
   test("cards are riskiest first and the untouched line closes the stack", async () => {
     const { screen } = await mount("review-a", 120, 50);
@@ -216,7 +414,7 @@ describe("stack contents", () => {
     void app;
   });
 
-  test("the header shows the model; claim glyphs, questions and findings never render; one-way shows on its card", async () => {
+  test("claim glyphs, questions and findings never render", async () => {
     const review = await loadReview("review-c");
     const session = new FixtureSession({ ...review, rankedBy: "rules+openai:gpt-6-luna" }, { dispatchMs: 0 });
     sessions.push(session);
@@ -224,7 +422,7 @@ describe("stack contents", () => {
     await painted(app);
     await tick();
     const s = lines(app.lastFrame());
-    expect(s[0]).toContain("gpt-6-luna");
+    expect(s[0]).not.toContain("gpt-6-luna");
     expect(s[0]).not.toContain("claim");
     expect(s.some((l) => l.includes("✗ contradicted") || l.includes("☐ ") || l.includes("P1 "))).toBe(false);
     expect(s.at(-1)).not.toContain("c claims");
@@ -435,5 +633,80 @@ describe("text helpers", () => {
     expect(windowLines(ls, 3, 10, 6)).toBe(6); // no movement when already visible
     expect(windowLines(ls, 9, 10, 6)).toBe(30);
     expect(windowLines(ls, 0, 10, 30)).toBe(0);
+  });
+});
+
+describe.each([
+  [80, 24, 8],
+  [140, 45, 15],
+])("change map at %dx%d", (columns, rows, cap) => {
+  // Twelve lines: more than fit at 80x24, so the third card's node (line 11) is below the map's first window.
+  const text = [
+    " main",
+    "+  runDispatch → Result<Dispatch>",
+    ...Array.from({ length: 8 }, (_, k) => `   context${k}`),
+    "-  throw new Error",
+    "+test/dispatch.test.ts",
+  ].join("\n");
+  const withMap = async (unverified = false) => {
+    const review = await loadReview("review-a");
+    review.map = {
+      text,
+      check: 0.9,
+      nodes: { "27358701b7b5": 1, cf4e691ac315: 11, "4c078e0cac32": 10 },
+      ...(unverified ? { unverified } : {}),
+    };
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    // The map is in the first snapshot, so the first frame is the one to read.
+    await painted(app);
+    return { app, screen: () => lines(app.lastFrame()) };
+  };
+  const firstCard = (s: string[]) => s.findIndex((l) => /^[┃█] (RED|AMBER|GREEN|GREY)/.test(l));
+  const marked = (s: string[]) => s.filter((l) => l.startsWith("▸")).map((l) => l.slice(2).trimEnd());
+
+  test("the map sits above the stack within its row budget; the selected card's node carries ▸ and follows j/k", async () => {
+    const { app, screen } = await withMap();
+    const s = screen();
+    expect(s[1]!.slice(2).trimEnd()).toBe(" main");
+    expect(firstCard(s) - 1).toBeLessThanOrEqual(cap);
+    expect(s.length).toBe(rows - 1);
+    expect(widest(s)).toBeLessThanOrEqual(columns);
+    expect(marked(s)).toEqual(["+  runDispatch → Result<Dispatch>"]);
+    // The stack is green-sorted: card 2 is dispatch.test.ts (node 11), card 3 the Result wrapper (node 10).
+    await press(app, "j");
+    expect(marked(screen())).toEqual(["+test/dispatch.test.ts"]);
+    expect(firstCard(screen()) - 1).toBeLessThanOrEqual(cap);
+    await press(app, "j");
+    expect(marked(screen())).toEqual(["-  throw new Error"]);
+    // The grey card has no node: no line is marked.
+    await press(app, "j");
+    expect(marked(screen())).toEqual([]);
+    app.unmount();
+  });
+
+  test("an unverified map says so in words, inside the same row budget", async () => {
+    const { app, screen } = await withMap(true);
+    expect(screen()[1]).toContain("map unverified · read the cards");
+    expect(firstCard(screen()) - 1).toBeLessThanOrEqual(cap);
+    expect(marked(screen())).toEqual(["+  runDispatch → Result<Dispatch>"]);
+    app.unmount();
+  });
+
+  test("m hides the map and shows it again", async () => {
+    const { app, screen } = await withMap();
+    await press(app, "m");
+    expect(firstCard(screen())).toBe(1);
+    expect(screen().join("\n")).not.toContain("runDispatch");
+    await press(app, "m");
+    expect(screen()[1]!.slice(2).trimEnd()).toBe(" main");
+    app.unmount();
+  });
+
+  test("without a map the stack opens as before: the first card right under the header", async () => {
+    const { screen } = await mount("review-a", columns, rows);
+    expect(firstCard(screen())).toBe(1);
+    expect(marked(screen())).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 # Handoff
 
-State of lookout for the next session. `docs/plan.md` is the current plan (v2 steps 15–22, v3 steps 23–27), `docs/plan-v1.md` the v1 spec it narrows, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those first; this file is what they don't say.
+State of lookout for the next session. `docs/plan.md` is the current plan (v2 steps 15–22, v3 steps 23–27, v4 steps 28–31), `docs/plan-v1.md` the v1 spec it narrows, `GLOSSARY.md` the vocabulary, `AGENTS.md` the working rules. Read those first; this file is what they don't say.
 
 ## v2: cards first (steps 15–22, this session)
 
@@ -75,6 +75,20 @@ Baseline, the probe repo, 15 most recent merged PRs with human inline comments (
 | 33 | 32 (31 on an edited line, 1 on context) | 24 (18 amber, 6 red) | 8 | 1 | **0.75** | 0.75 |
 
 All eight misses are green cards: seven are docs cards (design and workflow documents), one a test card. No miss is a green behaviour card. Open: whether a document that defines behaviour (a plan, a workflow an agent follows) should be amber; a blanket docs rule would buy recall and cost the colour its meaning.
+
+## v4 re-probe (step 31, v4/higher c844ee4)
+
+The 5 probe PRs and the 13 out-of-sample PRs through the v4 stack (header trimmed, card = title · one risk row · sketch on the selected card, change map above the stack with 3–6 concerns):
+
+- **Sketches**: 66/66 eligible cards (> 2 blocks, not mechanical) got one; 7 unverified (11 %), every one a rules-gate rejection (over 12 lines, a quoted test name over 100 chars), none a model-check failure. Read on the 9- and 29-file PRs they are the author's /pr diagram: `getContextsList` with `- explorer.listDashboards`, `preflightUpdates → problems → convention_owned_field → result.failed`.
+- **Maps**: 15/15 on PRs with more than one card, none unverified, none dropped. Small PRs get a tree of the behaviour; the 29- and 56-file ones get 5 concern nodes ("Refuse Convention-owned field mutations", "Carry and pin draft context") whose children are still file-name chains rather than the shape of the behaviour. Follow-up: children should be identifiers and `+`/`-` lines, like the card sketches; the writer sees card titles, risks and sketches, so the material is there.
+- **First card**: same as the v3 probe on 16/18. One regression was mine: the #25 `TRUNCATE` fix accepted the keyword inside any quoted string, and a Tailwind `className="… truncate text-…"` is a quoted string; fixed in c844ee4 (outside `.sql` the keyword must be uppercase or name a TABLE). The deleted race test is still red and first on its PR; left as is.
+- **Cold**: 6–33 s on 2–56 files (map and sketches add 4–8 s; the 56-file PR was warm).
+- **Recall**: `bun run recall --prs 15` = 24/32 = 0.75, unchanged from the baseline; the 8 misses are the same green docs and test cards. v4 changed what a card shows, not which card is coloured, so this was expected. Lifting docs that define behaviour (skills, prompts in markdown, decision records) is the open product question from step 27.
+
+Paragraph writer: still called for every card and kept in JSON; in the TUI it shows only in the expanded card under the hunks. On the 18 PRs I did not read one paragraph to understand a card once the sketch was there. Decision deferred to after a week of dogfooding v4; cost is one writer call per card, run in parallel with the sketch.
+
+Open after v4: map children as behaviour (#38 follow-up, not yet filed), #36 (test-name length, docs sketches, latency), `UNTOUCHED areas` row in the stack footer is machinery too, `not in body` only proves itself on repos with sloppy bodies.
 
 ## Re-probe after steps 23–26 (2026-11-07, main e66bd23)
 

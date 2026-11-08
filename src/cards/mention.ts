@@ -6,17 +6,7 @@ import { changedIdentifiers, identifiers } from "./group.ts";
 export function markMentions(changeSet: ChangeSet, cards: Card[]): Card[] {
   const body = changeSet.intent?.body ?? "";
   if (!body.trim()) return cards.map((card) => ({ ...card, mentioned: true }));
-  const tokens = body.split(/\s+/).map((token) => token.replace(/^[`(]+|[`).,;:!?]+$/g, ""));
-  const paths = new Set(
-    changeSet.files
-      .filter((file) => tokens.some((token) => token.includes("/") && (file.path === token || file.path.endsWith(`/${token}`))))
-      .map((file) => file.path),
-  );
-  const names = new Set(
-    [...body.matchAll(/```[^\n]*\n([\s\S]*?)```|`([^`\n]+)`/g)].flatMap((match) =>
-      [...identifiers(match[1] ?? match[2]!)].map(normalizeIdentifier),
-    ),
-  );
+  const { paths, names } = bodyNames(changeSet);
   const byBlock = new Map(
     allBlocks(changeSet).map((ref) => {
       const changed = changedIdentifiers(ref);
@@ -50,6 +40,28 @@ export function markMentions(changeSet: ChangeSet, cards: Card[]): Card[] {
         ),
       ),
   }));
+}
+
+/** A count is meaningful only when the matcher has paths or code names to work with. */
+export function bodyHasNames(changeSet: ChangeSet): boolean {
+  const { paths, names } = bodyNames(changeSet);
+  return paths.size > 0 || names.size > 0;
+}
+
+function bodyNames(changeSet: ChangeSet): { paths: Set<string>; names: Set<string> } {
+  const body = changeSet.intent?.body ?? "";
+  const tokens = body.split(/\s+/).map((token) => token.replace(/^[`(]+|[`).,;:!?]+$/g, ""));
+  const paths = new Set(
+    changeSet.files
+      .filter((file) => tokens.some((token) => token.includes("/") && (file.path === token || file.path.endsWith(`/${token}`))))
+      .map((file) => file.path),
+  );
+  const names = new Set(
+    [...body.matchAll(/```[^\n]*\n([\s\S]*?)```|`([^`\n]+)`/g)].flatMap((match) =>
+      [...identifiers(match[1] ?? match[2]!)].map(normalizeIdentifier),
+    ),
+  );
+  return { paths, names };
 }
 
 const normalizeIdentifier = (name: string): string => name.replace(/_/g, "").toLowerCase();

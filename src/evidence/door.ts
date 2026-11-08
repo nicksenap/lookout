@@ -12,6 +12,8 @@ const CONTRACT_PATH = /openapi|swagger|\.proto$|\.graphqls?$|\.avsc$|(^|\/)schem
 const DESTRUCTIVE_SQL =
   /\b(DROP\s+(TABLE|COLUMN|INDEX|SCHEMA|DATABASE|TYPE)|ALTER\s+TABLE\b.*\bDROP\b|DELETE\s+FROM)\b|\.(dropTable|dropColumn|dropIndex|removeColumn|renameColumn|renameTable)\s*\(/i;
 const TRUNCATE_SQL = /\bTRUNCATE\s+(TABLE\s+)?\w/i;
+/** Outside `.sql`, a quoted `truncate text-…` is a Tailwind class list; only an uppercase keyword or an explicit TABLE counts. */
+const TRUNCATE_IN_STRING = /\bTRUNCATE\s+(TABLE\s+\w|[\w"'`]+\s*[;`'"]?\s*$)/;
 /** Same-line literals only: a bare keyword also appears in JSX classes and documentation. */
 const QUOTED_TEXT = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g;
 const SQL_WRITE = /\b(INSERT\s+INTO|UPDATE\s+[\w."]+\s+SET|MERGE\s+INTO)\b/i;
@@ -153,7 +155,7 @@ export function attachDoorSignals(changeSet: ChangeSet, cards: Card[], signals: 
 function isDestructiveSql(path: string, text: string): boolean {
   if (DESTRUCTIVE_SQL.test(text)) return true;
   if (/\.sql$/i.test(path)) return TRUNCATE_SQL.test(text);
-  return text.match(QUOTED_TEXT)?.some((s) => TRUNCATE_SQL.test(s)) ?? false;
+  return text.match(QUOTED_TEXT)?.some((s) => TRUNCATE_IN_STRING.test(s)) ?? false;
 }
 
 const inRange = (range: { start: number; end: number } | undefined, line: number) =>
