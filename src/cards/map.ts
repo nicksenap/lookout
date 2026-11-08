@@ -21,9 +21,10 @@ export const MAP_MAX_LINES = 20;
 const MAP_MAX_WIDTH = 120;
 /** Top-level lines a map may have; past this many cards, the cards are first grouped into as many concerns. */
 const MAP_MAX_TOP = 6;
+const MIN_CONCERNS = 3;
 // Cache key versions: bumped with the prompts so a sharper prompt is never answered from an old cache.
-const MAP_VERSION = "map-v12";
-const CONCERNS_VERSION = "map-concerns-v1";
+const MAP_VERSION = "map-v13";
+const CONCERNS_VERSION = "map-concerns-v2";
 const QUESTION =
   "Does every line of this change map follow from the cards? Lines starting with + name what the change adds, lines starting with - what it removes, other lines are unchanged context the cards show or the titles of the concerns listed.";
 
@@ -124,7 +125,8 @@ const topLevel = (lines: string[]): number[] => {
 export function mapProblems(map: string, source: MapSource): string[] {
   const lines = map.split("\n");
   const top = topLevel(lines);
-  const named = lines.slice(top[0]).map(lineTokens);
+  // A concern's title line is written from its cards' titles, so it would stand in for all of them.
+  const named = lines.flatMap((l, k) => (k < top[0]! || (source.concerns && top.includes(k)) ? [] : [lineTokens(l)]));
   const missing = source.cards
     .filter((c) => !named.some((line) => [...c.tokens].some((t) => line.has(t))))
     .map((c) => `the card "${c.title}" is not in the map; name it by its title words, a file or a name from its edits`);
@@ -144,7 +146,8 @@ export function mapProblems(map: string, source: MapSource): string[] {
  * it is unusable. The model names cards by stack number. As in `parseSplit`, rules repair what they can:
  * foreign numbers are dropped, a card named twice keeps its first concern, an unplaced card and a
  * one-card concern join the concern sharing most of their files (else the largest), and past six the
- * smallest concern merges the same way. Fewer than two concerns left means none. Concerns and their
+ * smallest concern merges the same way. An entry with no title is dropped (no map line could draw it).
+ * Fewer than three concerns left means none: two halves are not the change's shape. Concerns and their
  * cards come out in stack order.
  */
 export function parseConcerns(text: string, cards: Pick<Card, "id" | "files">[]): MapConcern[] | undefined {
@@ -155,14 +158,15 @@ export function parseConcerns(text: string, cards: Pick<Card, "id" | "files">[])
   const byNumber = new Map(cards.map((c, k) => [String(k + 1), c.id]));
   const seen = new Set<string>();
   const groups = answer
-    .map((c: { title?: unknown; cards?: unknown }) => ({
-      title: typeof c.title === "string" ? c.title.trim().slice(0, 60) : "",
+    .filter((c): c is { title: string; cards?: unknown } => typeof c?.title === "string" && c.title.trim() !== "")
+    .map((c) => ({
+      title: c.title.trim().slice(0, 60),
       cardIds: (Array.isArray(c.cards) ? c.cards : [])
         .map((n) => byNumber.get(String(n)))
         .filter((id): id is string => id !== undefined && !seen.has(id) && !!seen.add(id)),
     }))
     .filter((g) => g.cardIds.length > 0);
-  if (groups.length < 2) return undefined;
+  if (groups.length < MIN_CONCERNS) return undefined;
 
   const filesOf = new Map(cards.map((c) => [c.id, c.files]));
   const shared = (g: MapConcern, ids: string[]) => {
@@ -180,7 +184,7 @@ export function parseConcerns(text: string, cards: Pick<Card, "id" | "files">[])
     groups.splice(groups.indexOf(lone), 1);
     join(lone.cardIds, groups);
   }
-  if (groups.length < 2) return undefined;
+  if (groups.length < MIN_CONCERNS) return undefined;
   const order = new Map(cards.map((c, k) => [c.id, k]));
   return groups
     .map((g) => ({ title: g.title, cardIds: g.cardIds.sort((a, b) => order.get(a)! - order.get(b)!) }))
@@ -342,14 +346,7 @@ export async function mapCards(
             : undefined;
         const source = mapSource(changeSet, cards, concerns);
         const context = concerns ? `${listed}\n\nConcerns, in order:\n${concernsText(cards, concerns)}` : listed;
-        const drawnMap = await drawMap(
-          models.writer,
-          models.check,
-          mapPrompt(changeSet, cards, context, concerns),
-          source,
-          context,
-          concerns,
-        );
+        const drawnMap = await drawMap(models.writer, models.check, mapPrompt(changeSet, cards, context, concerns), source, context);
         return drawnMap ? { ...drawnMap, nodes: mapNodes(drawnMap.text, source), ...(concerns ? { concerns } : {}) } : undefined;
       });
   if (!result.ok) return { warning: `No change map: ${result.error}` };
@@ -392,7 +389,6 @@ async function drawMap(
   prompt: string,
   source: MapSource,
   context: string,
-  concerns: MapConcern[] | undefined,
 ): Promise<Omit<ChangeMap, "nodes" | "concerns"> | undefined> {
   const gated = await gateDraft(
     parseSketch(await writeText(writer, prompt)),
@@ -404,6 +400,8 @@ async function drawMap(
         : "A checker could not verify that every line follows from the cards.";
       // Told only "at most 20", writers return the same 29 lines; a count per concern and card is a target they meet.
       const lines = previous.split("\n");
+      const concerns = source.concerns;
+      const top = topLevel(lines).length;
       // A small map that runs long is a good tree with too much context; "one line per card" flattened it to 3 lines.
       const tooLong =
         lines.length <= MAP_MAX_LINES
@@ -412,10 +410,10 @@ async function drawMap(
             ? `\nIt is too long: write exactly one line per concern (${concerns.length}) and one line per card (${source.cards.length} cards, fewer if you fold a concern's test or docs cards into one line each) and no other lines.`
             : `\nIt is ${lines.length} lines: cut it to at most 16. Keep its top-level lines and one line per card; drop the other lines a reviewer needs least, and put all test files on one line and all docs files on another.`;
       const tooFlat =
-        topLevel(lines).length > MAP_MAX_TOP
-          ? `\nIt has ${topLevel(lines).length} top-level lines: ${concerns ? "only the concern titles go at the top level, every card indented under its concern" : `keep at most ${MAP_MAX_TOP} at the top level and indent the rest under them`}.`
+        top > MAP_MAX_TOP
+          ? `\nIt has ${top} top-level lines: ${concerns ? "only the concern titles go at the top level, every card indented under its concern" : `keep at most ${MAP_MAX_TOP} at the top level and indent the rest under them`}.`
           : "";
-      const tooWide = previous.split("\n").some((l) => l.length > MAP_MAX_WIDTH)
+      const tooWide = lines.some((l) => l.length > MAP_MAX_WIDTH)
         ? `\nA line over ${SKETCH_MAX_WIDTH} characters keeps only its first two or three names.`
         : "";
       return parseSketch(

@@ -156,17 +156,19 @@ const many: Card[] = cards.flatMap((c) =>
 );
 const grouping = JSON.stringify({
   concerns: [
-    { title: "Load the user env file", cards: [1, 2, 3, 7, 8, 9] },
+    { title: "Load the user env file", cards: [1, 2, 3] },
     { title: "Test the loader", cards: [4, 5, 6] },
+    { title: "Call the loader at startup", cards: [7, 8, 9] },
   ],
 });
 const concernMap = [
   " Load the user env file",
   "+  loadUserEnv(path = USER_ENV_PATH, env = process.env)",
-  "   main",
-  "+    loadUserEnv()",
   " Test the loader",
   "+  describe user env file",
+  " Call the loader at startup",
+  "   main",
+  "+    loadUserEnv()",
 ].join("\n");
 
 test("past six cards, a first call groups them into concerns and the map draws one top-level node per concern", async () => {
@@ -174,11 +176,12 @@ test("past six cards, a first call groups them into concerns and the map draws o
   const language = writer([grouping, concernMap]);
   const { maps } = await run(language, model([0.9]), shared, many);
   expect(language.doGenerateCalls).toHaveLength(2);
-  expect(JSON.stringify(language.doGenerateCalls[1]!.prompt)).toContain("1. Load the user env file\\n   holds cards 1, 2, 3, 7, 8, 9");
+  expect(JSON.stringify(language.doGenerateCalls[1]!.prompt)).toContain("1. Load the user env file\\n   holds cards 1, 2, 3");
   expect(maps.map((m) => m.text)).toEqual([concernMap]);
   expect(maps[0]!.concerns).toEqual([
-    { title: "Load the user env file", cardIds: [1, 2, 3, 7, 8, 9].map((n) => many[n - 1]!.id) },
+    { title: "Load the user env file", cardIds: [1, 2, 3].map((n) => many[n - 1]!.id) },
     { title: "Test the loader", cardIds: [4, 5, 6].map((n) => many[n - 1]!.id) },
+    { title: "Call the loader at startup", cardIds: [7, 8, 9].map((n) => many[n - 1]!.id) },
   ]);
   // Both steps are cached by the card-id set.
   const again = writer([]);
@@ -189,6 +192,8 @@ test("past six cards, a first call groups them into concerns and the map draws o
 test("concern grouping keeps every card once: foreign ids dropped, a repeat keeps its first concern, the unplaced and singletons join the concern sharing their files", () => {
   const answer = JSON.stringify({
     concerns: [
+      null,
+      { cards: [1] },
       { title: "loader", cards: [1, 2, 99, "x"] },
       { title: "tests", cards: [4, 5, 2] },
       { title: "lonely test", cards: [6] },
@@ -202,7 +207,14 @@ test("concern grouping keeps every card once: foreign ids dropped, a repeat keep
     { title: "startup", cardIds: [7, 8, 9].map((n) => many[n - 1]!.id) },
   ]);
   expect(parseConcerns("no json", many)).toBeUndefined();
-  expect(parseConcerns(JSON.stringify({ concerns: [{ title: "all", cards: [1, 2, 3, 4, 5, 6, 7, 8, 9] }] }), many)).toBeUndefined();
+  // Fewer than three concerns is not the change's shape: the map is drawn without them.
+  const two = {
+    concerns: [
+      { title: "first", cards: [1, 2, 3, 4] },
+      { title: "rest", cards: [5, 6, 7, 8, 9] },
+    ],
+  };
+  expect(parseConcerns(JSON.stringify(two), many)).toBeUndefined();
 });
 
 test("more than six concerns merge, smallest first, into the concern sharing their files", () => {
@@ -243,13 +255,16 @@ test("a line naming a hyphenated file represents the card of that file", () => {
 });
 
 test("with concerns, a top-level line that is not a concern's title is a problem", () => {
-  const concerns = [
-    { title: "Load the user env file", cardIds: [cards[0]!.id, cards[1]!.id] },
-    { title: "Test the loader", cardIds: [cards[2]!.id] },
-  ];
-  const source = mapSource(changeSet, cards, concerns);
+  const source = mapSource(changeSet, many, parseConcerns(grouping, many));
   expect(mapProblems(concernMap, source)).toEqual([]);
   expect(mapProblems(concernMap.replace(" Test the loader", " Test the loader env"), source)).toEqual([
     "`Test the loader env` is at the top level but is not a concern title; the top level is the concern titles exactly as given",
   ]);
+});
+
+test("with concerns, a concern's title line does not stand in for its cards", () => {
+  const source = mapSource(changeSet, many, parseConcerns(grouping, many));
+  // The loader card's only mention is the title line "Load the user env file", whose words are its title's.
+  const bare = [" Load the user env file", " Test the loader", "   sources.test.ts", " Call the loader at startup", "   main"].join("\n");
+  expect(mapProblems(bare, source).filter((p) => p.includes("Load the user env file"))).toHaveLength(3);
 });
