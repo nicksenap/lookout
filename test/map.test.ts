@@ -123,3 +123,10 @@ test("an identifier neither in the diff, a sketch nor a title is a problem; so i
   const long = [...good.split("\n"), ...Array.from({ length: 17 }, () => "   loadUserEnv")].join("\n");
   expect(mapProblems(long, source)).toEqual(["the sketch has 21 lines; at most 20"]);
 });
+
+test("a map line may run to 120 columns, past the 100 a card sketch gets; a longer one is a problem", () => {
+  const source = mapSource(changeSet, cards);
+  const at = (n: number) => `${good}\n   loadUserEnv${" ".repeat(n - 18)}→ env`;
+  expect(mapProblems(at(110), source)).toEqual([]);
+  expect(mapProblems(at(130), source)).toHaveLength(1);
+});

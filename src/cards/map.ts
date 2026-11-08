@@ -17,9 +17,10 @@ import {
 import { shapeOf } from "./write.ts";
 
 export const MAP_MAX_LINES = 20;
+const MAP_MAX_WIDTH = 120;
 const MAP_GATE = 0.7;
 // Cache key version: bumped with the prompt so a sharper prompt is never answered from an old cache.
-const MAP_VERSION = "map-v2";
+const MAP_VERSION = "map-v7";
 const QUESTION =
   "Does every line of this change map follow from the cards? Lines starting with + name what the change adds, lines starting with - what it removes, other lines are unchanged context the cards show.";
 
@@ -94,14 +95,16 @@ const lineTokens = (line: string): Set<string> => new Set(identifiers(line).map(
 
 /**
  * The rules half of the map gate, pure: the card-sketch rules (names in the diff, a sketch or a title;
- * `+`/`-` direction; width) at 20 lines, and every drawn card represented by one of its words.
+ * `+`/`-` direction) at 20 lines and 120 columns, and every drawn card represented by one of its words.
+ * The prompt asks for 100 columns; gating at 100 dropped half the live maps over a few characters,
+ * and a line is cut on screen anyway. 120 still rejects a line that is a list of words.
  */
 export function mapProblems(map: string, source: MapSource): string[] {
   const named = map.split("\n").map(lineTokens);
   const missing = source.cards
     .filter((c) => !named.some((line) => [...c.tokens].some((t) => line.has(t))))
     .map((c) => `the card "${c.title}" is not in the map; name it by its title words, a file or a name from its edits`);
-  return [...sketchProblems(map, source.names, MAP_MAX_LINES), ...missing];
+  return [...sketchProblems(map, source.names, MAP_MAX_LINES, MAP_MAX_WIDTH), ...missing];
 }
 
 /**
@@ -132,7 +135,7 @@ function cardsText(changeSet: ChangeSet, cards: Card[]): string {
       const source = sketchSource(changeSet, c);
       const names = [
         ...new Set(identifiers(`${source.added}\n${source.removed}`).filter((w) => w.length >= 4 && !COMMON.has(w.toLowerCase()))),
-      ].slice(0, 10);
+      ].slice(0, 6);
       return [
         `${k + 1}. [${c.color} ${c.mechanical ? `mechanical ${c.blockKind ?? c.kind}` : shapeOf(c)}] ${c.title}`,
         `   files: ${c.files.join(", ")}`,
@@ -150,10 +153,12 @@ export function mapPrompt(changeSet: ChangeSet, cards: Card[]): string {
   return `You are drawing the change map of a code review for a senior engineer: ONE diff-shaped sketch of the whole change, the way a PR author sketches it in a PR summary, whose nodes are the review's cards listed below.
 Draw ${sketchShape({ kind: "logic", files })}.
 Rules:
-- At most ${MAP_MAX_LINES} lines, each at most ${SKETCH_MAX_WIDTH} characters. Indent with spaces to show nesting.
+- Aim for 10-16 lines and never more than ${MAP_MAX_LINES}, each at most ${SKETCH_MAX_WIDTH} characters. Indent with spaces to show nesting.
 - One level above the cards: each card is ONE line (the top node of its sketch, or the one thing it adds or removes), and the few unmarked context lines show how the cards fit together (which function calls which, which file holds what). Never copy a card's sketch.
-- Every card appears, in the order given, named by one of its files or one or two names from its sketch, names or title. A line is a node, not a list of words. Mechanical cards may share one line, and docs cards another, as long as that line names each of them.
-- Start a line with "+" for what the change adds, "-" for what it removes, a space for kept context. The mark is the first character of the line, before the indentation: "+    call", not "    + call".
+- Every card appears, in the order given, named by one of its files or one or two names from its sketch, names or title. A line is a node, not a list of words. Mechanical cards may share one line, test cards another and docs cards another, as long as that line names each of them; with many cards, fold them.
+- Name a file by its base name (field-tools.ts), not its path.
+- No words of your own: a line holds names, "→" and <placeholders>, never a verb or a description.
+- Start a line with "+" for what the change adds, "-" for what it removes, a space for kept context. The mark is the first character of the line, before the indentation: "+    call", not "    + call". A file the change only edits is context: mark a file + only when the change creates it, - only when it deletes it, and put the names its edits add on "+" lines under it.
 - Use only names the cards show (files, sketches, names, title words). Use "→" for "returns" or "leads to", <name> for a placeholder.
 - No prose lines, no card numbers, no heading, no code fence.
 
@@ -245,10 +250,18 @@ async function drawMap(
     const why = problems.length
       ? `A checker rejected the map:\n${problems.map((p) => `- ${p}`).join("\n")}`
       : "A checker could not verify that every line follows from the cards.";
+    // Told only "at most 20", writers return the same 29 lines; a count per card is a target they meet.
+    const cut =
+      text.split("\n").length > MAP_MAX_LINES
+        ? `\nIt is too long: write exactly one line per card (${source.cards.length} cards, fewer if you fold mechanical, test or docs cards into one line each) and no other lines.`
+        : "";
+    const narrow = text.split("\n").some((l) => l.length > MAP_MAX_WIDTH)
+      ? `\nA line over ${SKETCH_MAX_WIDTH} characters keeps only its first two or three names.`
+      : "";
     const rewrite = await attemptAsync(() =>
       writeText(
         writer,
-        `${prompt}\n\n${why}\nRedraw it in at most ${MAP_MAX_LINES} lines: add the missing cards, drop or correct the rejected lines, and merge or drop context lines to fit. Previous map:\n${text}`,
+        `${prompt}\n\n${why}\nRedraw it in at most ${MAP_MAX_LINES} lines: add the missing cards, drop or correct the rejected lines, and merge or drop context lines to fit.${cut}${narrow} Previous map:\n${text}`,
       ),
     );
     const next = rewrite.ok ? parseSketch(rewrite.value) : "";

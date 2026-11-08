@@ -113,9 +113,9 @@ const placeholders = (line: string): string[] => [...line.matchAll(/<([a-z]+)>/g
  * The rules half of the sketch gate, pure: the offending lines, each with its reason; empty means the
  * sketch passes. (a) every name is in the edits or their context lines; (b) a `+` line names something
  * from an added line and a `-` line something from a removed line, so a removal cannot be drawn as an
- * addition; (c) at most `maxLines` lines (12 for a card) of at most 100 characters.
+ * addition; (c) at most `maxLines` lines (12 for a card) of at most `maxWidth` characters (100).
  */
-export function sketchProblems(sketch: string, source: SketchSource, maxLines = SKETCH_MAX_LINES): string[] {
+export function sketchProblems(sketch: string, source: SketchSource, maxLines = SKETCH_MAX_LINES, maxWidth = SKETCH_MAX_WIDTH): string[] {
   const known = new Set(identifiers(source.edits));
   const added = new Set(identifiers(source.added));
   const removed = new Set(identifiers(source.removed));
@@ -130,7 +130,7 @@ export function sketchProblems(sketch: string, source: SketchSource, maxLines = 
       out.push(`\`${line.trim()}\` is marked + but names nothing an added line names`);
     if (mark === "-" && !identifiers(line).some((w) => removed.has(w)))
       out.push(`\`${line.trim()}\` is marked - but names nothing a removed line names`);
-    if (line.length > SKETCH_MAX_WIDTH) out.push(`\`${line.trim().slice(0, 40)}…\` is longer than ${SKETCH_MAX_WIDTH} characters`);
+    if (line.length > maxWidth) out.push(`\`${line.trim().slice(0, 40)}…\` is longer than ${maxWidth} characters`);
     return out;
   });
   return lines.length > maxLines ? [`the sketch has ${lines.length} lines; at most ${maxLines}`, ...problems] : problems;
