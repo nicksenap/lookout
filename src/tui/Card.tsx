@@ -106,8 +106,8 @@ export function evidenceBadges(card: Card): string[] {
   return card.doorSignals?.length ? [card.doorSignals[0]!.text] : [];
 }
 
-/** A card as it appears in the stack: badge line, title, paragraph or summary. */
-export function cardLines(card: Card, index: number, selected: boolean, w: number, ctx: CardContext): Line[] {
+/** Stack cards show badges, title and one risk row; only the selection shows its body. Expanded risk wraps. */
+export function cardLines(card: Card, index: number, selected: boolean, w: number, ctx: CardContext, expanded = false): Line[] {
   const color = theme.card[card.color];
   // The selected card gets a solid bar; others a thin one. Visible without color.
   const bar: Segment = { text: `${selected ? "█" : BAR} `, color, bold: selected };
@@ -135,8 +135,10 @@ export function cardLines(card: Card, index: number, selected: boolean, w: numbe
   lines.push(row([{ text: fit(card.title, inner), bold: true }]));
   if (card.risk) {
     const label = card.riskUnverified ? "risk unverified" : "risk";
-    for (const l of wrap(`${label}: ${card.risk}`, inner)) lines.push(row([{ text: l, dim: card.riskUnverified }]));
+    const risk = `${label}: ${card.risk}`;
+    for (const l of expanded ? wrap(risk, inner) : [fit(risk, inner)]) lines.push(row([{ text: l, dim: card.riskUnverified }]));
   }
+  if (!selected && !expanded) return lines;
   if (card.sketch) for (const segs of sketchLines(card, inner)) lines.push(row(segs));
   else if (card.paragraph && card.unverified) {
     // The gate failed twice: the text is shown, but dimmed and labelled so nobody reads it as checked.

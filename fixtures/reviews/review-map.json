@@ -1945,7 +1945,9 @@
       "testsTouched": true,
       "questions": [],
       "blockKind": "behavior",
-      "paragraph": "Review cards now mark routine changes in sensitive areas amber rather than red, and reviewers can run `scripts/review-recall.ts` to see whether cards surfaced issues raised in human inline comments. `colorFloor` uses `card.attention === \"needs-eyes\"` to set red versus amber, `compareCards` ranks attention before skim, and `mapComment` maps comment lines to blocks while `scorePr` counts amber/red cards or verified risk lines as pointed."
+      "paragraph": "Review cards now mark routine changes in sensitive areas amber rather than red, and reviewers can run `scripts/review-recall.ts` to see whether cards surfaced issues raised in human inline comments. `colorFloor` uses `card.attention === \"needs-eyes\"` to set red versus amber, `compareCards` ranks attention before skim, and `mapComment` maps comment lines to blocks while `scorePr` counts amber/red cards or verified risk lines as pointed.",
+      "risk": "The recall score can hide comments that reviewers still need to examine when green documentation or test cards define behaviour, because the baseline counts only amber or red cards and cards with a verified risk line.",
+      "sketch": "+ scorePr\n+   mapComment\n+   card.color or verified risk"
     },
     {
       "id": "d695f9749fc5",
@@ -1968,7 +1970,8 @@
       "testsTouched": false,
       "questions": [],
       "blockKind": "config",
-      "paragraph": "The `package.json` `scripts.recall` key adds `bun scripts/review-recall.ts`, which `bun run recall` reads in the local development environment. Undoing this removes the `recall` line."
+      "paragraph": "The `package.json` `scripts.recall` key adds `bun scripts/review-recall.ts`, which `bun run recall` reads in the local development environment. Undoing this removes the `recall` line.",
+      "sketch": " package.json\n+  scripts.recall\n+    bun scripts/review-recall.ts"
     },
     {
       "id": "08fa02ed1706",
@@ -1993,7 +1996,8 @@
       "testsTouched": false,
       "questions": [],
       "blockKind": "docs",
-      "paragraph": "The `bun run recall <repo-dir> [--prs N | --pr A,B,C] [--json]` section describes how comments are counted and cached, and reports a baseline recall of **0.75** across 33 comments from 15 merged PRs. It says all eight misses were green cards—seven docs cards and one test card—and leaves open whether documents that define behaviour should be amber."
+      "paragraph": "The `bun run recall <repo-dir> [--prs N | --pr A,B,C] [--json]` section describes how comments are counted and cached, and reports a baseline recall of **0.75** across 33 comments from 15 merged PRs. It says all eight misses were green cards—seven docs cards and one test card—and leaves open whether documents that define behaviour should be amber.",
+      "sketch": " docs/handoff.md\n+  Review recall baseline"
     }
   ],
   "unmentionedCount": 0,

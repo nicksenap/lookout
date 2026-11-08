@@ -177,7 +177,7 @@ export function App({ session, size: sizeOverride, frame: frameOverride, throttl
   const bodyLines = useMemo(
     () =>
       mode === "expanded" && card
-        ? [...cardLines(card, sel, true, w, ctx), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctx)]
+        ? [...cardLines(card, sel, true, w, ctx, true), { segments: [{ text: "" }] }, ...expandedLines(card, w, ctx)]
         : stackLines,
     [mode, card, stackLines, w, sel, ctx],
   );
