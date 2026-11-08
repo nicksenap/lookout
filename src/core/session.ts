@@ -1,5 +1,6 @@
 import { ask } from "../ask/ask.ts";
 import { buildCards, compareCards, untouchedAreas } from "../cards/build.ts";
+import { mapCards } from "../cards/map.ts";
 import { bodyHasNames, markMentions } from "../cards/mention.ts";
 import { riskCards } from "../cards/risk.ts";
 import { sketchCards } from "../cards/sketch.ts";
@@ -417,6 +418,14 @@ export class LocalSession implements ReviewSession {
       const claims = [...this.snapshot().claims, ...extracted.claims];
       this.store.update((r) => ({ ...r, claims }), { type: "claims.replaced", claims });
     }
+    // The map reads every card's title, risk line and sketch, so it waits for all three.
+    const mapped = await mapCards(
+      this.snapshot().changeSet,
+      this.snapshot().cards,
+      { modelSpec: this.opts.config.model.write, checkSpec: this.opts.config.model.decide, env: this.opts.env, cache: modelOpts.cache },
+      (map) => this.store.update((r) => ({ ...r, map }), { type: "map.updated", map }),
+    );
+    if (mapped.warning) this.warn(mapped.warning);
     this.progress(undefined);
     if (!this.opts.evidence) return;
     await this.ground();

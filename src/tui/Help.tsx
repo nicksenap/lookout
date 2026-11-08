@@ -17,6 +17,10 @@ export const GLOSSARY: readonly { term: string; text: string }[] = [
     text: "One logical change, built from edit blocks across any files. The unit you review. Two fixed cards: verified clean (every inert edit) and untouched (sensitive areas the change does not reach).",
   },
   {
+    term: "Change map",
+    text: "One diff-shaped sketch of the whole change above the stack, each card one line of it; ▸ marks the selected card's line. Every name in it is in the diff, a card's sketch or a title; a map that fails that twice is not shown. m hides it.",
+  },
+  {
     term: "Edit block",
     text: "One contiguous run of added or removed lines. The smallest unit lookout reasons about; a git hunk may hold several.",
   },

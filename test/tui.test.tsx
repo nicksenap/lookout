@@ -549,3 +549,78 @@ describe("text helpers", () => {
     expect(windowLines(ls, 0, 10, 30)).toBe(0);
   });
 });
+
+describe.each([
+  [80, 24, 8],
+  [140, 45, 15],
+])("change map at %dx%d", (columns, rows, cap) => {
+  // Twelve lines: more than fit at 80x24, so the third card's node (line 11) is below the map's first window.
+  const text = [
+    " main",
+    "+  runDispatch → Result<Dispatch>",
+    ...Array.from({ length: 8 }, (_, k) => `   context${k}`),
+    "-  throw new Error",
+    "+test/dispatch.test.ts",
+  ].join("\n");
+  const withMap = async (unverified = false) => {
+    const review = await loadReview("review-a");
+    review.map = {
+      text,
+      check: 0.9,
+      nodes: { "27358701b7b5": 1, cf4e691ac315: 11, "4c078e0cac32": 10 },
+      ...(unverified ? { unverified } : {}),
+    };
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    // The map is in the first snapshot, so the first frame is the one to read.
+    await painted(app);
+    return { app, screen: () => lines(app.lastFrame()) };
+  };
+  const firstCard = (s: string[]) => s.findIndex((l) => /^[┃█] (RED|AMBER|GREEN|GREY)/.test(l));
+  const marked = (s: string[]) => s.filter((l) => l.startsWith("▸")).map((l) => l.slice(2).trimEnd());
+
+  test("the map sits above the stack within its row budget; the selected card's node carries ▸ and follows j/k", async () => {
+    const { app, screen } = await withMap();
+    const s = screen();
+    expect(s[1]!.slice(2).trimEnd()).toBe(" main");
+    expect(firstCard(s) - 1).toBeLessThanOrEqual(cap);
+    expect(s.length).toBe(rows - 1);
+    expect(widest(s)).toBeLessThanOrEqual(columns);
+    expect(marked(s)).toEqual(["+  runDispatch → Result<Dispatch>"]);
+    // The stack is green-sorted: card 2 is dispatch.test.ts (node 11), card 3 the Result wrapper (node 10).
+    await press(app, "j");
+    expect(marked(screen())).toEqual(["+test/dispatch.test.ts"]);
+    expect(firstCard(screen()) - 1).toBeLessThanOrEqual(cap);
+    await press(app, "j");
+    expect(marked(screen())).toEqual(["-  throw new Error"]);
+    // The grey card has no node: no line is marked.
+    await press(app, "j");
+    expect(marked(screen())).toEqual([]);
+    app.unmount();
+  });
+
+  test("an unverified map says so in words, inside the same row budget", async () => {
+    const { app, screen } = await withMap(true);
+    expect(screen()[1]).toContain("map unverified · read the cards");
+    expect(firstCard(screen()) - 1).toBeLessThanOrEqual(cap);
+    expect(marked(screen())).toEqual(["+  runDispatch → Result<Dispatch>"]);
+    app.unmount();
+  });
+
+  test("m hides the map and shows it again", async () => {
+    const { app, screen } = await withMap();
+    await press(app, "m");
+    expect(firstCard(screen())).toBe(1);
+    expect(screen().join("\n")).not.toContain("runDispatch");
+    await press(app, "m");
+    expect(screen()[1]!.slice(2).trimEnd()).toBe(" main");
+    app.unmount();
+  });
+
+  test("without a map the stack opens as before: the first card right under the header", async () => {
+    const { screen } = await mount("review-a", columns, rows);
+    expect(firstCard(screen())).toBe(1);
+    expect(marked(screen())).toEqual([]);
+  });
+});

@@ -105,7 +105,7 @@ export function parseSketch(text: string): string {
 }
 
 // One-letter names (i, m) say nothing a gate could check.
-const identifiers = (text: string): string[] => (text.match(/[A-Za-z_$][\w$]*/g) ?? []).filter((w) => w.length > 1);
+export const identifiers = (text: string): string[] => (text.match(/[A-Za-z_$][\w$]*/g) ?? []).filter((w) => w.length > 1);
 // A lowercase word in angle brackets (`<id>`, `<uuid>`) is a placeholder; `<Config>` names a type and must be in the edits.
 const placeholders = (line: string): string[] => [...line.matchAll(/<([a-z]+)>/g)].map((m) => m[1]!);
 
@@ -113,9 +113,9 @@ const placeholders = (line: string): string[] => [...line.matchAll(/<([a-z]+)>/g
  * The rules half of the sketch gate, pure: the offending lines, each with its reason; empty means the
  * sketch passes. (a) every name is in the edits or their context lines; (b) a `+` line names something
  * from an added line and a `-` line something from a removed line, so a removal cannot be drawn as an
- * addition; (c) at most 12 lines of at most 100 characters.
+ * addition; (c) at most `maxLines` lines (12 for a card) of at most `maxWidth` characters (100).
  */
-export function sketchProblems(sketch: string, source: SketchSource): string[] {
+export function sketchProblems(sketch: string, source: SketchSource, maxLines = SKETCH_MAX_LINES, maxWidth = SKETCH_MAX_WIDTH): string[] {
   const known = new Set(identifiers(source.edits));
   const added = new Set(identifiers(source.added));
   const removed = new Set(identifiers(source.removed));
@@ -130,10 +130,28 @@ export function sketchProblems(sketch: string, source: SketchSource): string[] {
       out.push(`\`${line.trim()}\` is marked + but names nothing an added line names`);
     if (mark === "-" && !identifiers(line).some((w) => removed.has(w)))
       out.push(`\`${line.trim()}\` is marked - but names nothing a removed line names`);
-    if (line.length > SKETCH_MAX_WIDTH) out.push(`\`${line.trim().slice(0, 40)}…\` is longer than ${SKETCH_MAX_WIDTH} characters`);
+    if (line.length > maxWidth) out.push(`\`${line.trim().slice(0, 40)}…\` is longer than ${maxWidth} characters`);
     return out;
   });
-  return lines.length > SKETCH_MAX_LINES ? [`the sketch has ${lines.length} lines; at most ${SKETCH_MAX_LINES}`, ...problems] : problems;
+  return lines.length > maxLines ? [`the sketch has ${lines.length} lines; at most ${maxLines}`, ...problems] : problems;
+}
+
+/**
+ * The writer, and the Decisions model for the consistency check when one resolves (else the gate is
+ * rules only). Shared by card sketches and the change map.
+ */
+export function resolveSketchModels(
+  opts: SketchOptions,
+): { ok: true; writer: LanguageModel; check?: AttentionModel } | { ok: false; reason: string } {
+  const env = opts.env ?? process.env;
+  const language = opts.writer ? { ok: true as const, model: opts.writer } : resolveWriter(opts.modelSpec, env);
+  if (!language.ok) return language;
+  const decision = opts.model
+    ? { ok: true as const, model: opts.model }
+    : opts.checkSpec
+      ? resolveAttentionModel(opts.checkSpec, env)
+      : { ok: false as const, reason: "no check model" };
+  return decision.ok ? { ok: true, writer: language.model, check: decision.model } : { ok: true, writer: language.model };
 }
 
 /**
@@ -149,15 +167,9 @@ export async function sketchCards(
 ): Promise<{ warning?: string }> {
   const todo = cards.filter((c) => !c.fixed && !c.mechanical && !c.sketch && c.blockIds.length > 2);
   if (!todo.length) return {};
-  const env = opts.env ?? process.env;
-  const language = opts.writer ? { ok: true as const, model: opts.writer } : resolveWriter(opts.modelSpec, env);
-  if (!language.ok) return { warning: `No card sketches: ${language.reason}.` };
-  const decision = opts.model
-    ? { ok: true as const, model: opts.model }
-    : opts.checkSpec
-      ? resolveAttentionModel(opts.checkSpec, env)
-      : { ok: false as const, reason: "no check model" };
-  const check = decision.ok ? decision.model : undefined;
+  const models = resolveSketchModels(opts);
+  if (!models.ok) return { warning: `No card sketches: ${models.reason}.` };
+  const check = models.check;
   const cache = opts.cache ?? new RankCache();
   let warning: string | undefined;
   let touched = false;
@@ -168,7 +180,7 @@ export async function sketchCards(
       const cached = cache.get(opts.modelSpec, key, isSketch);
       const result = cached
         ? { ok: true as const, value: cached }
-        : await attemptAsync(() => drawSketch(language.model, check, sketchPrompt(changeSet, card), sketchSource(changeSet, card)));
+        : await attemptAsync(() => drawSketch(models.writer, check, sketchPrompt(changeSet, card), sketchSource(changeSet, card)));
       if (!result.ok) {
         warning ??= `Some card sketches failed: ${result.error}`;
         return;
@@ -186,38 +198,72 @@ export async function sketchCards(
   return warning ? { warning } : {};
 }
 
+/** A draft after the gate: the one that passed, or the last one that still fails. */
+export interface Gated {
+  text: string;
+  check?: number;
+  /** Rule problems the final draft still has; empty when it passed or only the check failed. */
+  problems: string[];
+  /** The final draft failed the rules or the check. */
+  failed: boolean;
+  /** The rewrite call itself failed, so the draft never got its second chance. */
+  rewriteError?: string;
+}
+
 /**
- * Rules first (free, and the rewrite can quote the offending lines), then Decisions. Both share one
- * rewrite; still failing, the sketch is kept but unverified. A failed check call leaves it ungated.
+ * Draw, gate, rewrite once; shared by card sketches and the change map. Rules first (free, and the
+ * rewrite can quote the offending lines), then the Decisions check; both share one rewrite. A failed
+ * check call leaves the draft ungated. `undefined` when the writer returned nothing.
  */
+export async function gateDraft(
+  first: string,
+  rules: (text: string) => string[],
+  check: ((text: string) => Promise<number>) | undefined,
+  rewrite: (previous: string, problems: string[]) => Promise<string>,
+): Promise<Gated | undefined> {
+  let text = first;
+  if (!text) return undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const problems = rules(text);
+    const checked = problems.length || !check ? undefined : await attemptAsync(() => check(text));
+    const scored = checked?.ok ? { check: checked.value } : {};
+    const failed = problems.length > 0 || (checked?.ok === true && checked.value < SKETCH_GATE);
+    if (!failed || attempt === 1) return { text, ...scored, problems, failed };
+    const next = await attemptAsync(() => rewrite(text, problems));
+    if (!next.ok) return { text, ...scored, problems, failed, rewriteError: next.error };
+    if (!next.value) return { text, ...scored, problems, failed };
+    text = next.value;
+  }
+  throw new Error("rewrite budget exceeded");
+}
+
+/** Still failing after the rewrite, the sketch is kept but unverified. */
 async function drawSketch(
   writer: LanguageModel,
   check: AttentionModel | undefined,
   prompt: string,
   source: SketchSource,
 ): Promise<Sketch | undefined> {
-  let sketch = parseSketch(await writeText(writer, prompt));
-  if (!sketch) return undefined;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const problems = sketchProblems(sketch, source);
-    const checked =
-      problems.length || !check ? undefined : await attemptAsync(() => checkAnswerWithModel(check, source.edits, QUESTION, sketch));
-    if (!problems.length && (!checked?.ok || checked.value >= SKETCH_GATE))
-      return { sketch, ...(checked?.ok ? { sketchCheck: checked.value } : {}) };
-    const failed: Sketch = { sketch, ...(checked?.ok ? { sketchCheck: checked.value } : {}), sketchUnverified: true };
-    if (attempt === 1) return failed;
-    const why = problems.length
-      ? `A checker rejected these lines:\n${problems.map((p) => `- ${p}`).join("\n")}`
-      : "A checker could not verify that every line follows from the edits.";
-    const rewrite = await attemptAsync(() =>
-      writeText(
-        writer,
-        `${prompt}\n\n${why}\nRedraw it in at most ${SKETCH_MAX_LINES} lines: drop or correct those lines, and merge or drop context lines to fit. Previous sketch:\n${sketch}`,
-      ),
-    );
-    const next = rewrite.ok ? parseSketch(rewrite.value) : "";
-    if (!next) return failed;
-    sketch = next;
-  }
-  throw new Error("sketch rewrite budget exceeded");
+  const gated = await gateDraft(
+    parseSketch(await writeText(writer, prompt)),
+    (sketch) => sketchProblems(sketch, source),
+    check ? (sketch) => checkAnswerWithModel(check, source.edits, QUESTION, sketch) : undefined,
+    async (previous, problems) => {
+      const why = problems.length
+        ? `A checker rejected these lines:\n${problems.map((p) => `- ${p}`).join("\n")}`
+        : "A checker could not verify that every line follows from the edits.";
+      return parseSketch(
+        await writeText(
+          writer,
+          `${prompt}\n\n${why}\nRedraw it in at most ${SKETCH_MAX_LINES} lines: drop or correct those lines, and merge or drop context lines to fit. Previous sketch:\n${previous}`,
+        ),
+      );
+    },
+  );
+  if (!gated) return undefined;
+  return {
+    sketch: gated.text,
+    ...(gated.check !== undefined ? { sketchCheck: gated.check } : {}),
+    ...(gated.failed ? { sketchUnverified: true } : {}),
+  };
 }
