@@ -253,6 +253,60 @@ describe.each([
   [80, 24],
   [140, 45],
 ])("sketches at %dx%d", (columns, rows) => {
+  test("only the selected sketch is shown; j and k move it between cards", async () => {
+    const { app, session, screen } = await mount("review-map", columns, rows);
+    await press(app, "m");
+    const cards = session.snapshot().cards;
+    const check = (selected: number) => {
+      const stack = screen();
+      cards.forEach((card, index) => {
+        const sketch = card.sketch!.split("\n");
+        sketch.forEach((row) => {
+          const rendered = stack.filter((line) => line.slice(2).trimEnd() === row);
+          expect(rendered).toHaveLength(index === selected ? 1 : 0);
+          if (index === selected) expect(rendered[0]).toStartWith("█ ");
+        });
+        expect(stack.join("\n")).not.toContain(card.paragraph!);
+      });
+      expect(stack.filter((line) => /^█ (RED|AMBER|GREEN|GREY)/.test(line))).toHaveLength(1);
+      expect(widest(stack)).toBeLessThanOrEqual(columns);
+    };
+    check(0);
+    await press(app, "j");
+    check(1);
+    await press(app, "k");
+    check(0);
+    app.unmount();
+  });
+
+  test.each([false, true])("only the selected paragraph is shown when there is no sketch (unverified=%s)", async (unverified) => {
+    const review = await loadReview("review-map");
+    review.cards = review.cards.slice(0, 2).map((card, index) => ({
+      ...card,
+      sketch: undefined,
+      paragraph: index === 0 ? "The recall score follows the card's risk." : "The local script runs review recall.",
+      unverified,
+    }));
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    await press(app, "m");
+    const check = (selected: number) => {
+      const stack = lines(app.lastFrame());
+      review.cards.forEach((card, index) => {
+        expect(stack.some((line) => line.includes(card.paragraph!))).toBe(index === selected);
+      });
+      expect(stack.filter((line) => line.includes("paragraph unverified"))).toHaveLength(unverified ? 1 : 0);
+    };
+    check(0);
+    await press(app, "j");
+    check(1);
+    await press(app, "k");
+    check(0);
+    app.unmount();
+  });
+
   test("the stack shows the sketch instead of the paragraph; expanded shows sketch, diff, then paragraph; unverified has a word label", async () => {
     const review = await loadReview("review-a");
     const small = review.cards.find((c) => c.id === "4c078e0cac32")!;
@@ -282,13 +336,16 @@ describe.each([
     const title = stack.findIndex((l) => l.includes("Sketched change"));
     expect(stack.slice(title + 1, title + 4).map((l) => l.slice(2).trimEnd())).toEqual([" runDispatch", "+  spawnAgent", "-  oldSpawn"]);
     expect(stack.join("\n")).not.toContain("The paragraph words.");
-    const unchecked = stack.findIndex((l) => l.includes("Unchecked sketch"));
-    expect(stack[unchecked + 1]).toContain("sketch unverified · read the diff");
+    expect(stack.join("\n")).not.toContain("inventedCall");
+    await press(app, "j");
+    const selected = lines(app.lastFrame());
+    const unchecked = selected.findIndex((l) => l.includes("Unchecked sketch"));
+    expect(selected[unchecked + 1]).toContain("sketch unverified · read the diff");
     // A long line is cut with an ellipsis on one row, never wrapped onto the next.
-    expect(stack[unchecked + 3]).toMatch(/wideCall.*…$/);
-    expect(stack[unchecked + 4] ?? "").not.toContain("wideCall");
-    expect(widest(stack)).toBeLessThanOrEqual(columns);
-    await press(app, "\r");
+    expect(selected[unchecked + 3]).toMatch(/wideCall.*…$/);
+    expect(selected[unchecked + 4] ?? "").not.toContain("wideCall");
+    expect(widest(selected)).toBeLessThanOrEqual(columns);
+    await press(app, "k", "\r");
     const expanded = lines(app.lastFrame());
     const at = (frame: string[], text: string) => frame.findIndex((l) => l.includes(text));
     expect(at(expanded, "+  spawnAgent")).toBeGreaterThan(0);
@@ -298,6 +355,35 @@ describe.each([
     await press(app, "G");
     const bottom = lines(app.lastFrame());
     expect(at(bottom, "The paragraph words.")).toBeGreaterThan(Math.max(at(bottom, "@@"), at(bottom, "dispatch/runner.ts")));
+    app.unmount();
+  });
+});
+
+describe.each([
+  [80, 24],
+  [140, 45],
+])("stack risk density at %dx%d", (columns, rows) => {
+  test.each([false, true])("risk fits one row; expanded keeps the full sentence (unverified=%s)", async (unverified) => {
+    const review = await loadReview("review-map");
+    const card = review.cards[0]!;
+    card.riskUnverified = unverified;
+    const session = new FixtureSession(review);
+    sessions.push(session);
+    const app = render(<App session={session} size={{ columns, rows }} frame={0} throttleMs={0} />);
+    await painted(app);
+    await press(app, "m");
+    const stack = lines(app.lastFrame());
+    const title = stack.findIndex((line) => line.includes(card.title));
+    expect(stack[title + 1]).toMatch(new RegExp(`^█ risk${unverified ? " unverified" : ""}: .*…$`));
+    expect(stack[title + 2]?.slice(2).trimEnd()).toBe("+ scorePr");
+    expect(stack.join("\n")).not.toContain("verified risk line.");
+    expect(widest(stack)).toBeLessThanOrEqual(columns);
+    await press(app, "\r");
+    const expanded = lines(app.lastFrame());
+    const start = expanded.findIndex((line) => line.includes(card.title)) + 1;
+    const riskRows = expanded.slice(start, start + (columns === 80 ? (unverified ? 4 : 3) : 2));
+    expect(riskRows.map((line) => line.slice(2).trim()).join(" ")).toBe(`risk${unverified ? " unverified" : ""}: ${card.risk}`);
+    expect(widest(expanded)).toBeLessThanOrEqual(columns);
     app.unmount();
   });
 });

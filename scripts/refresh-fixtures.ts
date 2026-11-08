@@ -37,7 +37,18 @@ for await (const f of new Glob("*.json").scan(dir)) {
       return {
         ...c,
         ...inherited,
-        ...(exact ? { title: exact.title, paragraph: exact.paragraph } : {}),
+        ...(exact
+          ? {
+              title: exact.title,
+              paragraph: exact.paragraph,
+              risk: exact.risk,
+              riskCheck: exact.riskCheck,
+              riskUnverified: exact.riskUnverified,
+              sketch: exact.sketch,
+              sketchCheck: exact.sketchCheck,
+              sketchUnverified: exact.sketchUnverified,
+            }
+          : {}),
       };
     }),
   );
