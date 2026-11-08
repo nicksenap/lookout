@@ -1,4 +1,17 @@
-import type { Card, Claim, Classification, Dispatch, Door, Exchange, Finding, Progress, Radius, Review, Verdict } from "./types.ts";
+import type {
+  Card,
+  ChangeMap,
+  Claim,
+  Classification,
+  Dispatch,
+  Door,
+  Exchange,
+  Finding,
+  Progress,
+  Radius,
+  Review,
+  Verdict,
+} from "./types.ts";
 
 /** Patches, not snapshots: a 40-card review streaming paragraphs never re-sends the whole Review. */
 export type ReviewEvent =
@@ -18,6 +31,8 @@ export type ReviewEvent =
   /** A reviewer asked; then the answer (or failure) landed. */
   | { type: "exchange.added"; exchange: Exchange }
   | { type: "exchange.updated"; id: string; patch: Partial<Exchange> }
+  /** The change map passed its gate; never sent without one. */
+  | { type: "map.updated"; map: ChangeMap }
   /** Pipeline progress for a bar; `undefined` clears it. */
   | { type: "progress"; progress?: Progress }
   /** The ranking pipeline has finished (with or without the model). */

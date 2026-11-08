@@ -298,6 +298,18 @@ export interface PrSummary {
   target: string;
 }
 
+/** One diff-shaped sketch of the whole change whose nodes are the cards; absent when no map passed the rules gate. */
+export interface ChangeMap {
+  /** At most 20 lines; `+`/`-` in the first column as in a card sketch. */
+  text: string;
+  /** Decisions' probability that every line follows from the cards. */
+  check?: number;
+  /** The consistency check failed twice: shown dimmed and labelled. */
+  unverified?: boolean;
+  /** Card id → index of the map line that is its node; the TUI marks the selected card's. */
+  nodes: Record<string, number>;
+}
+
 export interface Review {
   changeSet: ChangeSet;
   classification: Classification;
@@ -319,6 +331,8 @@ export interface Review {
   evidence: boolean;
   /** Reviewer questions answered from the diff, newest last. */
   exchanges: Exchange[];
+  /** The change map, once the cards' titles, risk lines and sketches have landed. */
+  map?: ChangeMap;
   /** Present while the pipeline runs; removed on done. */
   progress?: Progress;
   warning?: string;

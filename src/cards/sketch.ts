@@ -105,7 +105,7 @@ export function parseSketch(text: string): string {
 }
 
 // One-letter names (i, m) say nothing a gate could check.
-const identifiers = (text: string): string[] => (text.match(/[A-Za-z_$][\w$]*/g) ?? []).filter((w) => w.length > 1);
+export const identifiers = (text: string): string[] => (text.match(/[A-Za-z_$][\w$]*/g) ?? []).filter((w) => w.length > 1);
 // A lowercase word in angle brackets (`<id>`, `<uuid>`) is a placeholder; `<Config>` names a type and must be in the edits.
 const placeholders = (line: string): string[] => [...line.matchAll(/<([a-z]+)>/g)].map((m) => m[1]!);
 
@@ -113,9 +113,9 @@ const placeholders = (line: string): string[] => [...line.matchAll(/<([a-z]+)>/g
  * The rules half of the sketch gate, pure: the offending lines, each with its reason; empty means the
  * sketch passes. (a) every name is in the edits or their context lines; (b) a `+` line names something
  * from an added line and a `-` line something from a removed line, so a removal cannot be drawn as an
- * addition; (c) at most 12 lines of at most 100 characters.
+ * addition; (c) at most `maxLines` lines (12 for a card) of at most 100 characters.
  */
-export function sketchProblems(sketch: string, source: SketchSource): string[] {
+export function sketchProblems(sketch: string, source: SketchSource, maxLines = SKETCH_MAX_LINES): string[] {
   const known = new Set(identifiers(source.edits));
   const added = new Set(identifiers(source.added));
   const removed = new Set(identifiers(source.removed));
@@ -133,7 +133,25 @@ export function sketchProblems(sketch: string, source: SketchSource): string[] {
     if (line.length > SKETCH_MAX_WIDTH) out.push(`\`${line.trim().slice(0, 40)}…\` is longer than ${SKETCH_MAX_WIDTH} characters`);
     return out;
   });
-  return lines.length > SKETCH_MAX_LINES ? [`the sketch has ${lines.length} lines; at most ${SKETCH_MAX_LINES}`, ...problems] : problems;
+  return lines.length > maxLines ? [`the sketch has ${lines.length} lines; at most ${maxLines}`, ...problems] : problems;
+}
+
+/**
+ * The writer, and the Decisions model for the consistency check when one resolves (else the gate is
+ * rules only). Shared by card sketches and the change map.
+ */
+export function resolveSketchModels(
+  opts: SketchOptions,
+): { ok: true; writer: LanguageModel; check?: AttentionModel } | { ok: false; reason: string } {
+  const env = opts.env ?? process.env;
+  const language = opts.writer ? { ok: true as const, model: opts.writer } : resolveWriter(opts.modelSpec, env);
+  if (!language.ok) return language;
+  const decision = opts.model
+    ? { ok: true as const, model: opts.model }
+    : opts.checkSpec
+      ? resolveAttentionModel(opts.checkSpec, env)
+      : { ok: false as const, reason: "no check model" };
+  return decision.ok ? { ok: true, writer: language.model, check: decision.model } : { ok: true, writer: language.model };
 }
 
 /**
@@ -149,15 +167,9 @@ export async function sketchCards(
 ): Promise<{ warning?: string }> {
   const todo = cards.filter((c) => !c.fixed && !c.mechanical && !c.sketch && c.blockIds.length > 2);
   if (!todo.length) return {};
-  const env = opts.env ?? process.env;
-  const language = opts.writer ? { ok: true as const, model: opts.writer } : resolveWriter(opts.modelSpec, env);
-  if (!language.ok) return { warning: `No card sketches: ${language.reason}.` };
-  const decision = opts.model
-    ? { ok: true as const, model: opts.model }
-    : opts.checkSpec
-      ? resolveAttentionModel(opts.checkSpec, env)
-      : { ok: false as const, reason: "no check model" };
-  const check = decision.ok ? decision.model : undefined;
+  const models = resolveSketchModels(opts);
+  if (!models.ok) return { warning: `No card sketches: ${models.reason}.` };
+  const check = models.check;
   const cache = opts.cache ?? new RankCache();
   let warning: string | undefined;
   let touched = false;
@@ -168,7 +180,7 @@ export async function sketchCards(
       const cached = cache.get(opts.modelSpec, key, isSketch);
       const result = cached
         ? { ok: true as const, value: cached }
-        : await attemptAsync(() => drawSketch(language.model, check, sketchPrompt(changeSet, card), sketchSource(changeSet, card)));
+        : await attemptAsync(() => drawSketch(models.writer, check, sketchPrompt(changeSet, card), sketchSource(changeSet, card)));
       if (!result.ok) {
         warning ??= `Some card sketches failed: ${result.error}`;
         return;
