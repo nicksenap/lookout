@@ -30,12 +30,12 @@
     "hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.96",
-    "@ai-sdk/google": "4.0.111",
-    "@ai-sdk/openai": "4.0.108",
-    "@ai-sdk/perplexity": "5.0.26",
-    "@ai-sdk/typesafe-ai": "3.0.33",
-    "ai": "7.0.162",
+    "@ai-sdk/anthropic": "4.0.99",
+    "@ai-sdk/google": "4.0.114",
+    "@ai-sdk/openai": "4.0.111",
+    "@ai-sdk/perplexity": "5.0.28",
+    "@ai-sdk/typesafe-ai": "3.0.35",
+    "ai": "7.0.165",
     "ink": "8.0.0",
     "react": "19.3.1"
   },
